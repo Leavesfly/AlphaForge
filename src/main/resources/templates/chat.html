@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI问股 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>🤖 AI问股</h1></header>
+        <section class="chat-container">
+            <div id="chatMessages" class="chat-messages">
+                <div class="message system">你好！我是股票分析AI助手，你可以问我任何关于股票分析、市场走势、投资策略的问题。</div>
+            </div>
+            <form id="chatForm" class="chat-input-form" onsubmit="sendMessage(event)">
+                <input type="text" id="chatInput" placeholder="输入问题，例如: 分析一下贵州茅台" class="input-lg" autocomplete="off">
+                <button type="submit" class="btn btn-primary">发送</button>
+            </form>
+        </section>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+async function sendMessage(e) {
+    e.preventDefault();
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    
+    // 显示用户消息
+    appendMessage('user', msg);
+    input.value = '';
+    
+    // 显示加载
+    const loadingId = appendMessage('assistant', '⏳ 分析中...');
+    
+    try {
+        const res = await fetch('/api/v1/agent/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: msg, session_id: 'web_' + Date.now()})
+        });
+        const data = await res.json();
+        updateMessage(loadingId, data.response || data.reply || '分析完成');
+    } catch (err) {
+        updateMessage(loadingId, '❌ 请求失败: ' + err.message);
+    }
+}
+
+function appendMessage(role, text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+    div.id = 'msg_' + Date.now();
+    div.innerHTML = text.replace(/\n/g, '<br>');
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div.id;
+}
+
+function updateMessage(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = text.replace(/\n/g, '<br>');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+# 放量突破策略
+name: volume_breakout
+label: 放量突破
+description: 成交量超过20日均量2倍且涨幅>3%时买入
+category: momentum
+risk_level: high
+
+parameters:
+  volume_multiple: 2.0
+  min_change_pct: 3.0
+  ma_period: 20
+
+entry_conditions:
+  - type: volume_breakout
+    multiple: 2.0
+    min_change: 3.0
+
+exit_conditions:
+  - type: change_below
+    pct: -5
+  - type: stop_loss
+    pct: -10
+  - type: take_profit
+    pct: 15
+
+position_size: 80%
+---
+# 牛趋势策略
+name: bull_trend
+label: 牛趋势
+description: 股价在MA10和MA30之上持有，跌破MA30清仓
+category: trend_following
+risk_level: medium
+
+parameters:
+  short_ma: 10
+  long_ma: 30
+
+entry_conditions:
+  - type: price_above_ma
+    ma: [10, 30]
+  - type: ma_arrangement
+    direction: bullish
+
+exit_conditions:
+  - type: price_below_ma
+    ma: 30
+
+position_size: 90%
+---
+# 缩量回调策略
+name: shrink_pullback
+label: 缩量回调
+description: 上升趋势中缩量回调至支撑位附近买入
+category: pullback
+risk_level: medium
+
+parameters:
+  trend_ma: 60
+  support_ma: 20
+  volume_shrink_ratio: 0.5
+
+entry_conditions:
+  - type: trend_above
+    ma: 60
+  - type: pullback_to
+    ma: 20
+  - type: volume_shrink
+    ratio: 0.5
+
+exit_conditions:
+  - type: price_below_ma
+    ma: 60
+  - type: stop_loss
+    pct: -7
+
+position_size: 85%
+---
+# 箱体震荡策略
+name: box_oscillation
+label: 箱体震荡
+description: 识别箱体整理形态，在箱体下沿买入上沿卖出
+category: mean_reversion
+risk_level: low
+
+parameters:
+  lookback_days: 20
+  box_threshold_pct: 10
+
+entry_conditions:
+  - type: near_box_low
+    tolerance_pct: 2
+
+exit_conditions:
+  - type: near_box_high
+    tolerance_pct: 2
+  - type: box_break_down
+    pct: -3
+
+position_size: 70%

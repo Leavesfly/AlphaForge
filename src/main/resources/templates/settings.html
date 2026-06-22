@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
+</head><body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>⚙️ 系统设置</h1></header>
+        <section class="section">
+            <div class="card" style="max-width:600px">
+                <h3>当前配置</h3>
+                <table class="data-table" style="box-shadow:none">
+                    <tr><td>LLM模型</td><td th:text="${llmModel}">-</td></tr>
+                    <tr><td>数据源</td><td th:text="${dataProvider}">-</td></tr>
+                    <tr><td>目标市场</td><td th:text="${market}">-</td></tr>
+                </table>
+                <p class="hint" style="margin-top:12px">配置项通过.env环境变量管理，修改后需重启服务生效。</p>
+            </div>
+        </section>
+    </main>
+</div></body></html>

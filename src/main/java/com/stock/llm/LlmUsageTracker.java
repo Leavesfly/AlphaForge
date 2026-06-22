@@ -1,0 +1,135 @@
+package com.stock.llm;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * LLM Token使用量追踪
+ * 
+ * 对应Python版本的 src/llm/usage.py
+ * 统计Token消耗、API调用次数、费用估算
+ */
+@Component
+public class LlmUsageTracker {
+
+    private static final Logger log = LoggerFactory.getLogger(LlmUsageTracker.class);
+
+    /** 日维度统计 */
+    private final Map<String, DailyUsage> dailyUsages = new ConcurrentHashMap<>();
+    
+    /** 模型维度统计 */
+    private final Map<String, ModelUsage> modelUsages = new ConcurrentHashMap<>();
+
+    /** 总调用次数 */
+    private final AtomicInteger totalCalls = new AtomicInteger(0);
+    /** 总Token数 */
+    private final AtomicLong totalTokens = new AtomicLong(0);
+
+    /**
+     * 记录一次LLM调用
+     */
+    public void recordUsage(String model, int promptTokens, int completionTokens, long durationMs) {
+        int total = promptTokens + completionTokens;
+        totalCalls.incrementAndGet();
+        totalTokens.addAndGet(total);
+
+        // 日统计
+        String today = LocalDate.now().toString();
+        DailyUsage daily = dailyUsages.computeIfAbsent(today, k -> new DailyUsage());
+        daily.calls.incrementAndGet();
+        daily.promptTokens.addAndGet(promptTokens);
+        daily.completionTokens.addAndGet(completionTokens);
+        daily.totalDurationMs.addAndGet(durationMs);
+
+        // 模型统计
+        ModelUsage modelUsage = modelUsages.computeIfAbsent(model, k -> new ModelUsage());
+        modelUsage.calls.incrementAndGet();
+        modelUsage.totalTokens.addAndGet(total);
+
+        log.debug("LLM用量记录: model={}, tokens={}, duration={}ms", model, total, durationMs);
+    }
+
+    /**
+     * 获取今日用量统计
+     */
+    public Map<String, Object> getTodayUsage() {
+        String today = LocalDate.now().toString();
+        DailyUsage daily = dailyUsages.get(today);
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (daily == null) {
+            result.put("date", today);
+            result.put("calls", 0);
+            result.put("prompt_tokens", 0);
+            result.put("completion_tokens", 0);
+            result.put("total_tokens", 0);
+            result.put("estimated_cost", "$0.00");
+            return result;
+        }
+        result.put("date", today);
+        result.put("calls", daily.calls.get());
+        result.put("prompt_tokens", daily.promptTokens.get());
+        result.put("completion_tokens", daily.completionTokens.get());
+        result.put("total_tokens", daily.promptTokens.get() + daily.completionTokens.get());
+        result.put("avg_duration_ms", daily.calls.get() > 0 ? daily.totalDurationMs.get() / daily.calls.get() : 0);
+        result.put("estimated_cost", estimateCost(daily.promptTokens.get(), daily.completionTokens.get()));
+        return result;
+    }
+
+    /**
+     * 获取总体统计
+     */
+    public Map<String, Object> getOverallStats() {
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("total_calls", totalCalls.get());
+        stats.put("total_tokens", totalTokens.get());
+        stats.put("daily_records", dailyUsages.size());
+        stats.put("models_used", modelUsages.keySet());
+        stats.put("today", getTodayUsage());
+        return stats;
+    }
+
+    /**
+     * 获取按模型的用量分布
+     */
+    public Map<String, Object> getModelBreakdown() {
+        Map<String, Object> breakdown = new LinkedHashMap<>();
+        for (Map.Entry<String, ModelUsage> entry : modelUsages.entrySet()) {
+            breakdown.put(entry.getKey(), Map.of(
+                    "calls", entry.getValue().calls.get(),
+                    "tokens", entry.getValue().totalTokens.get()
+            ));
+        }
+        return breakdown;
+    }
+
+    /**
+     * 估算费用(基于OpenAI GPT-4o定价)
+     */
+    private String estimateCost(long promptTokens, long completionTokens) {
+        // GPT-4o: $2.5/1M input, $10/1M output
+        double cost = (promptTokens * 2.5 + completionTokens * 10.0) / 1000000.0;
+        return String.format("$%.4f", cost);
+    }
+
+    /** 日用量统计 */
+    private static class DailyUsage {
+        final AtomicInteger calls = new AtomicInteger(0);
+        final AtomicLong promptTokens = new AtomicLong(0);
+        final AtomicLong completionTokens = new AtomicLong(0);
+        final AtomicLong totalDurationMs = new AtomicLong(0);
+    }
+
+    /** 模型用量统计 */
+    private static class ModelUsage {
+        final AtomicInteger calls = new AtomicInteger(0);
+        final AtomicLong totalTokens = new AtomicLong(0);
+    }
+}

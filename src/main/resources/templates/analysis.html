@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票分析 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>📈 股票分析</h1></header>
+
+        <!-- 分析输入表单 -->
+        <section class="section">
+            <form class="analysis-form" action="/web/analysis" method="get">
+                <input type="text" name="code" th:value="${stockCode}" placeholder="输入股票代码，如: 600519, AAPL, hk00700" class="input-lg">
+                <button type="submit" class="btn btn-primary">开始分析</button>
+            </form>
+            <p class="hint">支持A股(6位代码)、港股(hk开头)、美股(英文代码)</p>
+        </section>
+
+        <!-- 分析结果 -->
+        <section class="section" th:if="${reports != null and !reports.isEmpty()}">
+            <h2 th:text="'分析结果: ' + ${stockCode}">分析结果</h2>
+            <div th:each="report : ${reports}" class="report-card">
+                <div class="report-header">
+                    <h3 th:text="${report.stockName} + '(' + ${report.stockCode} + ')'">股票名</h3>
+                    <span class="signal-badge" th:classappend="${report.signal}" th:text="${report.signal}">信号</span>
+                </div>
+                <div class="report-metrics">
+                    <div class="metric"><label>评分</label><span th:text="${report.totalScore} + '/100'">-</span></div>
+                    <div class="metric"><label>价格</label><span th:text="${report.currentPrice}">-</span></div>
+                    <div class="metric"><label>涨跌</label><span th:classappend="${report.changePct >= 0} ? 'positive' : 'negative'" th:text="${report.changePct} + '%'">-</span></div>
+                </div>
+                <div class="report-body" th:if="${report.fullReport != null}">
+                    <pre th:text="${report.fullReport}">详细报告</pre>
+                </div>
+                <div class="report-footer">
+                    <small th:text="'模型: ' + ${report.llmModel} + ' | 耗时: ' + ${report.durationSeconds} + '秒'">元信息</small>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>

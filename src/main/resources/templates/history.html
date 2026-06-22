@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分析历史 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
+</head><body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>📋 分析历史</h1></header>
+        <section class="section">
+            <table class="data-table">
+                <thead><tr><th>股票</th><th>信号</th><th>评分</th><th>价格</th><th>涨跌</th><th>模型</th><th>时间</th></tr></thead>
+                <tbody>
+                <tr th:each="r : ${reports}">
+                    <td><a th:href="@{/web/analysis(code=${r.stockCode})}" th:text="${r.stockName} + '(' + ${r.stockCode} + ')'">-</a></td>
+                    <td><span class="signal-badge" th:classappend="${r.signal}" th:text="${r.signal}">-</span></td>
+                    <td th:text="${r.totalScore}">-</td>
+                    <td th:text="${r.currentPrice}">-</td>
+                    <td th:classappend="${r.changePct != null and r.changePct >= 0} ? 'positive' : 'negative'" th:text="${r.changePct != null} ? ${r.changePct} + '%' : '-'">-</td>
+                    <td th:text="${r.llmModel}">-</td>
+                    <td th:text="${#temporals.format(r.analysisDate, 'yyyy-MM-dd HH:mm')}">-</td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(reports)}"><td colspan="7" class="empty">暂无历史记录</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </main>
+</div></body></html>
