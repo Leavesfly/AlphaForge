@@ -14,5 +14,6 @@ public interface AlertRuleRepository extends JpaRepository<AlertRule, Long> {
     List<AlertRule> findByEnabledTrueOrderByCreatedAtDesc();
     List<AlertRule> findByAlertTypeOrderByCreatedAtDesc(String alertType);
     List<AlertRule> findByTriggeredFalseAndEnabledTrue();
+    List<AlertRule> findByEnabled(Boolean enabled);
     long countByEnabledTrue();
 }

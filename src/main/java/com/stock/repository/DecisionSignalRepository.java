@@ -3,6 +3,7 @@ package com.stock.repository;
 import com.stock.model.entity.DecisionSignal;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -14,4 +15,6 @@ public interface DecisionSignalRepository extends JpaRepository<DecisionSignal, 
     List<DecisionSignal> findByStatusOrderByCreatedAtDesc(String status);
     List<DecisionSignal> findBySignalTypeAndStatusOrderByCreatedAtDesc(String signalType, String status);
     List<DecisionSignal> findTop20ByOrderByCreatedAtDesc();
+    List<DecisionSignal> findByStockCodeAndCreatedAtAfter(String stockCode, LocalDateTime after);
+    List<DecisionSignal> findByCreatedAtAfter(LocalDateTime after);
 }
