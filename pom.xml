@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.leavesfly.stock</groupId>
-    <artifactId>daily-stock-analysis</artifactId>
+    <artifactId>j_daily-stock-analysis</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
     <name>Daily Stock Analysis</name>
