@@ -70,6 +70,21 @@ public class AnalysisReport {
     /** 是否为干运行 */
     private Boolean isDryRun = false;
 
+    /** 报告语言 */
+    private String reportLanguage;
+
+    /** 使用的skills */
+    private String skills;
+
+    /** 分析阶段 */
+    private String analysisPhase;
+
+    /** 股票来源 */
+    private String selectionSource;
+
+    /** 关联任务ID */
+    private String taskId;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 
@@ -116,6 +131,16 @@ public class AnalysisReport {
     public void setTokenUsage(Integer tokenUsage) { this.tokenUsage = tokenUsage; }
     public Boolean getIsDryRun() { return isDryRun; }
     public void setIsDryRun(Boolean isDryRun) { this.isDryRun = isDryRun; }
+    public String getReportLanguage() { return reportLanguage; }
+    public void setReportLanguage(String reportLanguage) { this.reportLanguage = reportLanguage; }
+    public String getSkills() { return skills; }
+    public void setSkills(String skills) { this.skills = skills; }
+    public String getAnalysisPhase() { return analysisPhase; }
+    public void setAnalysisPhase(String analysisPhase) { this.analysisPhase = analysisPhase; }
+    public String getSelectionSource() { return selectionSource; }
+    public void setSelectionSource(String selectionSource) { this.selectionSource = selectionSource; }
+    public String getTaskId() { return taskId; }
+    public void setTaskId(String taskId) { this.taskId = taskId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.AlertTriggerRepository">
+
+    <resultMap id="triggerMap" type="io.leavesfly.stock.domain.model.entity.AlertTrigger">
+        <id property="id" column="id"/>
+        <result property="ruleId" column="rule_id"/>
+        <result property="target" column="target"/>
+        <result property="displayTarget" column="display_target"/>
+        <result property="status" column="status"/>
+        <result property="observedValue" column="observed_value"/>
+        <result property="thresholdValue" column="threshold_value"/>
+        <result property="message" column="message"/>
+        <result property="triggeredAt" column="triggered_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO alert_triggers (rule_id, target, display_target, status, observed_value, threshold_value, message, triggered_at)
+        VALUES (#{ruleId}, #{target}, #{displayTarget}, #{status}, #{observedValue}, #{thresholdValue}, #{message}, #{triggeredAt})
+    </insert>
+
+    <select id="findById" resultMap="triggerMap">
+        SELECT * FROM alert_triggers WHERE id = #{id}
+    </select>
+
+    <select id="findByRuleId" resultMap="triggerMap">
+        SELECT * FROM alert_triggers WHERE rule_id = #{ruleId} ORDER BY triggered_at DESC
+    </select>
+
+    <select id="findAll" resultMap="triggerMap">
+        SELECT * FROM alert_triggers ORDER BY triggered_at DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM alert_triggers
+    </select>
+
+    <select id="findByTarget" resultMap="triggerMap">
+        SELECT * FROM alert_triggers WHERE target = #{target} ORDER BY triggered_at DESC
+    </select>
+
+    <select id="findByStatus" resultMap="triggerMap">
+        SELECT * FROM alert_triggers WHERE status = #{status} ORDER BY triggered_at DESC
+    </select>
+
+</mapper>

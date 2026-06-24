@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.StockDailyDataRepository">
+
+    <resultMap id="dailyDataMap" type="io.leavesfly.stock.domain.model.entity.StockDailyData">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="openPrice" column="open_price"/>
+        <result property="highPrice" column="high_price"/>
+        <result property="lowPrice" column="low_price"/>
+        <result property="closePrice" column="close_price"/>
+        <result property="volume" column="volume"/>
+        <result property="amount" column="amount"/>
+        <result property="changePct" column="change_pct"/>
+        <result property="changeAmount" column="change_amount"/>
+        <result property="turnoverRate" column="turnover_rate"/>
+        <result property="amplitude" column="amplitude"/>
+        <result property="dataSource" column="data_source"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO stock_daily_data (stock_code, stock_name, trade_date, open_price, high_price, low_price, close_price, volume, amount, change_pct, change_amount, turnover_rate, amplitude, data_source, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{tradeDate}, #{openPrice}, #{highPrice}, #{lowPrice}, #{closePrice}, #{volume}, #{amount}, #{changePct}, #{changeAmount}, #{turnoverRate}, #{amplitude}, #{dataSource}, CURRENT_TIMESTAMP)
+    </insert>
+
+    <insert id="batchInsert">
+        INSERT INTO stock_daily_data (stock_code, stock_name, trade_date, open_price, high_price, low_price, close_price, volume, amount, change_pct, change_amount, turnover_rate, amplitude, data_source, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.stockCode}, #{item.stockName}, #{item.tradeDate}, #{item.openPrice}, #{item.highPrice}, #{item.lowPrice}, #{item.closePrice}, #{item.volume}, #{item.amount}, #{item.changePct}, #{item.changeAmount}, #{item.turnoverRate}, #{item.amplitude}, #{item.dataSource}, CURRENT_TIMESTAMP)
+        </foreach>
+    </insert>
+
+    <select id="findByStockCodeAndDateRange" resultMap="dailyDataMap">
+        SELECT * FROM stock_daily_data WHERE stock_code=#{stockCode} AND trade_date BETWEEN #{fromDate} AND #{toDate} ORDER BY trade_date ASC
+    </select>
+
+    <select id="findLatest" resultMap="dailyDataMap">
+        SELECT * FROM stock_daily_data WHERE stock_code=#{stockCode} ORDER BY trade_date DESC LIMIT 1
+    </select>
+
+    <select id="findMaxTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM stock_daily_data WHERE stock_code=#{stockCode}
+    </select>
+
+    <delete id="deleteByStockCodeAndDateRange">
+        DELETE FROM stock_daily_data WHERE stock_code=#{stockCode} AND trade_date BETWEEN #{fromDate} AND #{toDate}
+    </delete>
+
+    <select id="countByStockCode" resultType="int">
+        SELECT COUNT(*) FROM stock_daily_data WHERE stock_code=#{stockCode}
+    </select>
+
+</mapper>

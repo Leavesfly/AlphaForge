@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.AnalysisTaskRepository">
+
+    <resultMap id="taskMap" type="io.leavesfly.stock.domain.model.entity.AnalysisTask">
+        <id property="id" column="id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockCodes" column="stock_codes"/>
+        <result property="taskType" column="task_type"/>
+        <result property="status" column="status"/>
+        <result property="progress" column="progress"/>
+        <result property="message" column="message"/>
+        <result property="result" column="result"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="skills" column="skills"/>
+        <result property="analysisPhase" column="analysis_phase"/>
+        <result property="reportLanguage" column="report_language"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="completedAt" column="completed_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_tasks (task_id, stock_code, stock_codes, task_type, status, progress, message, result, error_message, skills, analysis_phase, report_language, created_at, started_at, completed_at)
+        VALUES (#{taskId}, #{stockCode}, #{stockCodes}, #{taskType}, #{status}, #{progress}, #{message}, #{result}, #{errorMessage}, #{skills}, #{analysisPhase}, #{reportLanguage}, #{createdAt}, #{startedAt}, #{completedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE analysis_tasks SET stock_code=#{stockCode}, stock_codes=#{stockCodes}, task_type=#{taskType}, status=#{status}, progress=#{progress}, message=#{message}, result=#{result}, error_message=#{errorMessage}, skills=#{skills}, analysis_phase=#{analysisPhase}, report_language=#{reportLanguage}, started_at=#{startedAt}, completed_at=#{completedAt}
+        WHERE task_id=#{taskId}
+    </update>
+
+    <select id="findByTaskId" resultMap="taskMap">
+        SELECT * FROM analysis_tasks WHERE task_id = #{taskId}
+    </select>
+
+    <select id="findByStatus" resultMap="taskMap">
+        SELECT * FROM analysis_tasks WHERE status = #{status} ORDER BY created_at DESC
+    </select>
+
+    <select id="findRecent" resultMap="taskMap">
+        SELECT * FROM analysis_tasks ORDER BY created_at DESC LIMIT #{limit}
+    </select>
+
+    <delete id="deleteByTaskId">
+        DELETE FROM analysis_tasks WHERE task_id = #{taskId}
+    </delete>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM analysis_tasks
+    </select>
+
+    <update id="updateStatus">
+        UPDATE analysis_tasks SET status=#{status}, progress=#{progress}, message=#{message} WHERE task_id=#{taskId}
+    </update>
+
+    <update id="updateCompleted">
+        UPDATE analysis_tasks SET status=#{status}, progress=#{progress}, result=#{result}, error_message=#{errorMessage}, completed_at=#{completedAt} WHERE task_id=#{taskId}
+    </update>
+
+</mapper>

@@ -3,6 +3,7 @@ package io.leavesfly.stock.presentation.api.controller;
 import io.leavesfly.stock.domain.model.entity.*;
 import io.leavesfly.stock.application.service.PortfolioService;
 import io.leavesfly.stock.application.service.PortfolioExtService;
+import io.leavesfly.stock.application.service.CsvImportService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,10 +20,12 @@ public class PortfolioController {
 
     private final PortfolioService portfolioService;
     private final PortfolioExtService extService;
+    private final CsvImportService csvImportService;
 
-    public PortfolioController(PortfolioService portfolioService, PortfolioExtService extService) {
+    public PortfolioController(PortfolioService portfolioService, PortfolioExtService extService, CsvImportService csvImportService) {
         this.portfolioService = portfolioService;
         this.extService = extService;
+        this.csvImportService = csvImportService;
     }
 
     // ========== 账户管理 ==========
@@ -246,15 +249,8 @@ public class PortfolioController {
     public ResponseEntity<Map<String, Object>> parseCsvImport(
             @RequestParam String broker,
             @RequestParam("file") MultipartFile file) {
-        // 简化实现: 返回解析结果框架
-        return ResponseEntity.ok(Map.of(
-            "broker", broker,
-            "file_name", file.getOriginalFilename() != null ? file.getOriginalFilename() : "unknown",
-            "total_rows", 0,
-            "valid_rows", 0,
-            "preview", List.of(),
-            "errors", List.of()
-        ));
+        Map<String, Object> result = csvImportService.parseCsv(broker, file);
+        return ResponseEntity.ok(result);
     }
 
     /** 提交CSV导入 */
@@ -264,14 +260,8 @@ public class PortfolioController {
             @RequestParam String broker,
             @RequestParam(defaultValue = "false", name = "dry_run") boolean dryRun,
             @RequestParam("file") MultipartFile file) {
-        return ResponseEntity.ok(Map.of(
-            "status", dryRun ? "dry_run" : "committed",
-            "account_id", accountId,
-            "broker", broker,
-            "imported_trades", 0,
-            "imported_cash", 0,
-            "skipped", 0
-        ));
+        Map<String, Object> result = csvImportService.commitCsv(accountId, broker, file, dryRun, extService);
+        return ResponseEntity.ok(result);
     }
 
     // ========== 旧端点兼容 ==========

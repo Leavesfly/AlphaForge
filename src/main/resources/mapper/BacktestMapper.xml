@@ -25,16 +25,28 @@
         <result property="alphaPct" column="alpha_pct"/>
         <result property="tradeDetails" column="trade_details"/>
         <result property="parameters" column="parameters"/>
+        <result property="signalId" column="signal_id"/>
+        <result property="marketPhase" column="market_phase"/>
+        <result property="marketPhaseSummary" column="market_phase_summary"/>
+        <result property="action" column="action"/>
+        <result property="directionExpected" column="direction_expected"/>
+        <result property="actualMovement" column="actual_movement"/>
+        <result property="outcome" column="outcome"/>
+        <result property="evalStatus" column="eval_status"/>
+        <result property="evalWindowDays" column="eval_window_days"/>
+        <result property="returnPct" column="return_pct"/>
+        <result property="analysisDate" column="analysis_date"/>
+        <result property="diagnostics" column="diagnostics"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO backtest_records (stock_code, stock_name, strategy_name, start_date, end_date, initial_capital, final_capital, total_return_pct, annual_return_pct, max_drawdown_pct, sharpe_ratio, win_rate_pct, total_trades, winning_trades, losing_trades, avg_holding_days, profit_loss_ratio, benchmark_return_pct, alpha_pct, trade_details, parameters, created_at)
-        VALUES (#{stockCode}, #{stockName}, #{strategyName}, #{startDate}, #{endDate}, #{initialCapital}, #{finalCapital}, #{totalReturnPct}, #{annualReturnPct}, #{maxDrawdownPct}, #{sharpeRatio}, #{winRatePct}, #{totalTrades}, #{winningTrades}, #{losingTrades}, #{avgHoldingDays}, #{profitLossRatio}, #{benchmarkReturnPct}, #{alphaPct}, #{tradeDetails}, #{parameters}, #{createdAt})
+        INSERT INTO backtest_records (stock_code, stock_name, strategy_name, start_date, end_date, initial_capital, final_capital, total_return_pct, annual_return_pct, max_drawdown_pct, sharpe_ratio, win_rate_pct, total_trades, winning_trades, losing_trades, avg_holding_days, profit_loss_ratio, benchmark_return_pct, alpha_pct, trade_details, parameters, signal_id, market_phase, market_phase_summary, action, direction_expected, actual_movement, outcome, eval_status, eval_window_days, return_pct, analysis_date, diagnostics, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{strategyName}, #{startDate}, #{endDate}, #{initialCapital}, #{finalCapital}, #{totalReturnPct}, #{annualReturnPct}, #{maxDrawdownPct}, #{sharpeRatio}, #{winRatePct}, #{totalTrades}, #{winningTrades}, #{losingTrades}, #{avgHoldingDays}, #{profitLossRatio}, #{benchmarkReturnPct}, #{alphaPct}, #{tradeDetails}, #{parameters}, #{signalId}, #{marketPhase}, #{marketPhaseSummary}, #{action}, #{directionExpected}, #{actualMovement}, #{outcome}, #{evalStatus}, #{evalWindowDays}, #{returnPct}, #{analysisDate}, #{diagnostics}, #{createdAt})
     </insert>
 
     <update id="update">
-        UPDATE backtest_records SET stock_code=#{stockCode}, stock_name=#{stockName}, strategy_name=#{strategyName}, start_date=#{startDate}, end_date=#{endDate}, initial_capital=#{initialCapital}, final_capital=#{finalCapital}, total_return_pct=#{totalReturnPct}, annual_return_pct=#{annualReturnPct}, max_drawdown_pct=#{maxDrawdownPct}, sharpe_ratio=#{sharpeRatio}, win_rate_pct=#{winRatePct}, total_trades=#{totalTrades}, winning_trades=#{winningTrades}, losing_trades=#{losingTrades}, avg_holding_days=#{avgHoldingDays}, profit_loss_ratio=#{profitLossRatio}, benchmark_return_pct=#{benchmarkReturnPct}, alpha_pct=#{alphaPct}, trade_details=#{tradeDetails}, parameters=#{parameters}
+        UPDATE backtest_records SET stock_code=#{stockCode}, stock_name=#{stockName}, strategy_name=#{strategyName}, start_date=#{startDate}, end_date=#{endDate}, initial_capital=#{initialCapital}, final_capital=#{finalCapital}, total_return_pct=#{totalReturnPct}, annual_return_pct=#{annualReturnPct}, max_drawdown_pct=#{maxDrawdownPct}, sharpe_ratio=#{sharpeRatio}, win_rate_pct=#{winRatePct}, total_trades=#{totalTrades}, winning_trades=#{winningTrades}, losing_trades=#{losingTrades}, avg_holding_days=#{avgHoldingDays}, profit_loss_ratio=#{profitLossRatio}, benchmark_return_pct=#{benchmarkReturnPct}, alpha_pct=#{alphaPct}, trade_details=#{tradeDetails}, parameters=#{parameters}, signal_id=#{signalId}, market_phase=#{marketPhase}, market_phase_summary=#{marketPhaseSummary}, action=#{action}, direction_expected=#{directionExpected}, actual_movement=#{actualMovement}, outcome=#{outcome}, eval_status=#{evalStatus}, eval_window_days=#{evalWindowDays}, return_pct=#{returnPct}, analysis_date=#{analysisDate}, diagnostics=#{diagnostics}
         WHERE id=#{id}
     </update>
 

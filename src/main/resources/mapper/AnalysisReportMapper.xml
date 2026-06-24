@@ -24,16 +24,21 @@
         <result property="durationSeconds" column="duration_seconds"/>
         <result property="tokenUsage" column="token_usage"/>
         <result property="isDryRun" column="is_dry_run"/>
+        <result property="reportLanguage" column="report_language"/>
+        <result property="skills" column="skills"/>
+        <result property="analysisPhase" column="analysis_phase"/>
+        <result property="selectionSource" column="selection_source"/>
+        <result property="taskId" column="task_id"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO analysis_report (stock_code, stock_name, analysis_date, market, current_price, change_pct, total_score, signal, confidence, summary, technical_analysis, fundamental_analysis, news_analysis, full_report, llm_response, agent_mode, llm_model, duration_seconds, token_usage, is_dry_run, created_at)
-        VALUES (#{stockCode}, #{stockName}, #{analysisDate}, #{market}, #{currentPrice}, #{changePct}, #{totalScore}, #{signal}, #{confidence}, #{summary}, #{technicalAnalysis}, #{fundamentalAnalysis}, #{newsAnalysis}, #{fullReport}, #{llmResponse}, #{agentMode}, #{llmModel}, #{durationSeconds}, #{tokenUsage}, #{isDryRun}, #{createdAt})
+        INSERT INTO analysis_report (stock_code, stock_name, analysis_date, market, current_price, change_pct, total_score, signal, confidence, summary, technical_analysis, fundamental_analysis, news_analysis, full_report, llm_response, agent_mode, llm_model, duration_seconds, token_usage, is_dry_run, report_language, skills, analysis_phase, selection_source, task_id, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{analysisDate}, #{market}, #{currentPrice}, #{changePct}, #{totalScore}, #{signal}, #{confidence}, #{summary}, #{technicalAnalysis}, #{fundamentalAnalysis}, #{newsAnalysis}, #{fullReport}, #{llmResponse}, #{agentMode}, #{llmModel}, #{durationSeconds}, #{tokenUsage}, #{isDryRun}, #{reportLanguage}, #{skills}, #{analysisPhase}, #{selectionSource}, #{taskId}, #{createdAt})
     </insert>
 
     <update id="update">
-        UPDATE analysis_report SET stock_code=#{stockCode}, stock_name=#{stockName}, analysis_date=#{analysisDate}, market=#{market}, current_price=#{currentPrice}, change_pct=#{changePct}, total_score=#{totalScore}, signal=#{signal}, confidence=#{confidence}, summary=#{summary}, technical_analysis=#{technicalAnalysis}, fundamental_analysis=#{fundamentalAnalysis}, news_analysis=#{newsAnalysis}, full_report=#{fullReport}, llm_response=#{llmResponse}, agent_mode=#{agentMode}, llm_model=#{llmModel}, duration_seconds=#{durationSeconds}, token_usage=#{tokenUsage}, is_dry_run=#{isDryRun}
+        UPDATE analysis_report SET stock_code=#{stockCode}, stock_name=#{stockName}, analysis_date=#{analysisDate}, market=#{market}, current_price=#{currentPrice}, change_pct=#{changePct}, total_score=#{totalScore}, signal=#{signal}, confidence=#{confidence}, summary=#{summary}, technical_analysis=#{technicalAnalysis}, fundamental_analysis=#{fundamentalAnalysis}, news_analysis=#{newsAnalysis}, full_report=#{fullReport}, llm_response=#{llmResponse}, agent_mode=#{agentMode}, llm_model=#{llmModel}, duration_seconds=#{durationSeconds}, token_usage=#{tokenUsage}, is_dry_run=#{isDryRun}, report_language=#{reportLanguage}, skills=#{skills}, analysis_phase=#{analysisPhase}, selection_source=#{selectionSource}, task_id=#{taskId}
         WHERE id=#{id}
     </update>
 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>回测分析 - 股票智能分析系统</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -15,10 +16,15 @@
 
         <!-- 绩效概览 -->
         <div class="card-grid" id="perfCards">
-            <div class="card"><h3>总胜率</h3><p class="card-value" id="perfWinRate">--</p></div>
-            <div class="card"><h3>总信号数</h3><p class="card-value" id="perfTotal">--</p></div>
-            <div class="card"><h3>盈亏比</h3><p class="card-value" id="perfPLRatio">--</p></div>
-            <div class="card"><h3>平均收益</h3><p class="card-value" id="perfAvgReturn">--</p></div>
+            <div class="card"><h3 data-i18n="backtest.winRate">总胜率</h3><p class="card-value" id="perfWinRate">--</p></div>
+            <div class="card"><h3 data-i18n="backtest.totalSignals">总信号数</h3><p class="card-value" id="perfTotal">--</p></div>
+            <div class="card"><h3 data-i18n="backtest.plRatio">盈亏比</h3><p class="card-value" id="perfPLRatio">--</p></div>
+            <div class="card"><h3 data-i18n="backtest.avgReturn">平均收益</h3><p class="card-value" id="perfAvgReturn">--</p></div>
+        </div>
+
+        <!-- 回测绩效图表 -->
+        <div class="card mb-4">
+            <div class="chart-container"><canvas id="btPerfChart"></canvas></div>
         </div>
 
         <!-- 筛选 -->
@@ -56,6 +62,12 @@ async function loadPerformance() {
             document.getElementById('perfTotal').textContent = data.total || '--';
             document.getElementById('perfPLRatio').textContent = data.profit_loss_ratio != null ? formatNumber(data.profit_loss_ratio) : '--';
             document.getElementById('perfAvgReturn').textContent = data.avg_return_pct != null ? formatPct(data.avg_return_pct) : '--';
+            // 绘制绩效图表
+            if (typeof Chart !== 'undefined' && data.total > 0) {
+                const winCount = Math.round((data.win_rate || 0) / 100 * (data.total || 0));
+                const lossCount = (data.total || 0) - winCount;
+                createPieChart('btPerfChart', ['盈利', '亏损'], [winCount, lossCount], '信号胜负分布');
+            }
         }
     } catch(e) {}
 }
@@ -98,58 +110,3 @@ loadResults();
 </script>
 </body>
 </html>
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>策略回测 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
-</head><body>
-<div class="layout">
-    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
-    <main class="content">
-        <header class="page-header"><h1>🔄 策略回测</h1></header>
-        <section class="section">
-            <form id="backtestForm" class="analysis-form" onsubmit="runBacktest(event)">
-                <input type="text" id="btCode" placeholder="股票代码" class="input-lg" style="max-width:200px">
-                <select id="btStrategy" class="input-lg" style="max-width:200px">
-                    <option value="ma_golden_cross">均线金叉</option>
-                    <option value="volume_breakout">放量突破</option>
-                    <option value="bull_trend">牛趋势</option>
-                    <option value="shrink_pullback">缩量回调</option>
-                    <option value="box_oscillation">箱体震荡</option>
-                </select>
-                <input type="number" id="btDays" value="180" placeholder="回测天数" class="input-lg" style="max-width:120px">
-                <button type="submit" class="btn btn-primary">开始回测</button>
-            </form>
-        </section>
-        <section class="section" id="btResult" style="display:none">
-            <h2>回测结果</h2>
-            <div class="card-grid" id="btMetrics"></div>
-        </section>
-    </main>
-</div>
-<script th:src="@{/js/app.js}"></script>
-<script>
-async function runBacktest(e) {
-    e.preventDefault();
-    const code = document.getElementById('btCode').value;
-    const strategy = document.getElementById('btStrategy').value;
-    const days = document.getElementById('btDays').value;
-    if (!code) { showToast('请输入股票代码'); return; }
-    try {
-        const data = await apiRequest('/backtest/run', {
-            method: 'POST',
-            body: JSON.stringify({stock_code: code, strategy: strategy, days: parseInt(days)})
-        });
-        document.getElementById('btResult').style.display = 'block';
-        document.getElementById('btMetrics').innerHTML = `
-            <div class="card"><h3>总收益</h3><p class="card-value ${data.totalReturnPct>=0?'positive':'negative'}">${data.totalReturnPct?.toFixed(2)}%</p></div>
-            <div class="card"><h3>最大回撤</h3><p class="card-value">${data.maxDrawdownPct?.toFixed(2)}%</p></div>
-            <div class="card"><h3>胜率</h3><p class="card-value">${data.winRatePct?.toFixed(1)}%</p></div>
-            <div class="card"><h3>夏普比率</h3><p class="card-value">${data.sharpeRatio?.toFixed(2)}</p></div>
-            <div class="card"><h3>交易次数</h3><p class="card-value">${data.totalTrades}</p></div>
-            <div class="card"><h3>年化收益</h3><p class="card-value">${data.annualReturnPct?.toFixed(2)}%</p></div>
-        `;
-    } catch(err) { showToast('回测失败: ' + err.message, 'error'); }
-}
-</script>
-</body></html>

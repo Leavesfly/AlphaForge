@@ -1,5 +1,6 @@
 package io.leavesfly.stock.presentation.api.controller;
 
+import io.leavesfly.stock.application.service.AlphaSiftScreeningEngine;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
@@ -13,7 +14,12 @@ import java.util.concurrent.CompletableFuture;
 @RequestMapping("/api/v1/alphasift")
 public class AlphaSiftController {
 
+    private final AlphaSiftScreeningEngine screeningEngine;
     private final Map<String, Map<String, Object>> tasks = new ConcurrentHashMap<>();
+
+    public AlphaSiftController(AlphaSiftScreeningEngine screeningEngine) {
+        this.screeningEngine = screeningEngine;
+    }
 
     /** 获取AlphaSift状态 */
     @GetMapping("/status")
@@ -59,31 +65,45 @@ public class AlphaSiftController {
     /** 同步选股 */
     @PostMapping("/screen")
     public ResponseEntity<Map<String, Object>> screen(@RequestBody Map<String, Object> request) {
-        return ResponseEntity.ok(Map.of("candidates", List.of(), "total", 0));
+        String market = (String) request.getOrDefault("market", "cn");
+        String strategy = (String) request.getOrDefault("strategy", "dual_low");
+        int maxResults = request.get("max_results") != null ? ((Number) request.get("max_results")).intValue() : 10;
+        List<Map<String, Object>> candidates = screeningEngine.screen(strategy, market, maxResults);
+        return ResponseEntity.ok(Map.of("candidates", candidates, "total", candidates.size()));
     }
 
     /** 异步选股任务 */
     @PostMapping("/screen/task")
     public ResponseEntity<Map<String, Object>> startScreenTask(@RequestBody Map<String, Object> request) {
         String taskId = UUID.randomUUID().toString().substring(0, 12);
+        String market = (String) request.getOrDefault("market", "cn");
+        String strategy = (String) request.getOrDefault("strategy", "dual_low");
+        int maxResults = request.get("max_results") != null ? ((Number) request.get("max_results")).intValue() : 10;
+
         Map<String, Object> task = new ConcurrentHashMap<>();
         task.put("task_id", taskId);
         task.put("status", "pending");
         task.put("progress", 0);
-        task.put("market", request.getOrDefault("market", "cn"));
-        task.put("strategy", request.getOrDefault("strategy", "dual_low"));
+        task.put("market", market);
+        task.put("strategy", strategy);
         tasks.put(taskId, task);
 
         CompletableFuture.runAsync(() -> {
             try {
                 task.put("status", "running");
-                for (int i = 1; i <= 10; i++) {
-                    Thread.sleep(500);
-                    task.put("progress", i * 10);
-                }
-                task.put("status", "completed");
+                task.put("progress", 10);
+                Thread.sleep(500);
+                task.put("progress", 30);
+                Thread.sleep(500);
+                task.put("progress", 60);
+
+                // 执行实际选股逻辑
+                List<Map<String, Object>> result = screeningEngine.screen(strategy, market, maxResults);
+
                 task.put("progress", 100);
-                task.put("result", List.of()); // 实际结果需要接入选股引擎
+                task.put("status", "completed");
+                task.put("result", result);
+                task.put("total", result.size());
             } catch (Exception e) {
                 task.put("status", "failed");
                 task.put("error_message", e.getMessage());

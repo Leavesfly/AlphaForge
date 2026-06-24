@@ -83,18 +83,29 @@ async function loadSignals() {
 async function openSignalDetail(id) {
     try {
         const signal = await api.get(`/decision-signals/${id}`);
+        const outcomes = await api.get(`/decision-signals/${id}/outcomes`).catch(() => ({items:[]}));
+        const feedback = await api.get(`/decision-signals/${id}/feedback`).catch(() => ({}));
         openDrawer(`信号详情 - ${signal.stock_code}`, (body) => {
             body.innerHTML = `
-                <div class="mb-3"><strong>${signal.stock_name||''}(${signal.stock_code})</strong></div>
+                <div class="mb-3"><strong>${signal.stock_name||''}(${signal.stock_code})</strong>
+                    <span class="badge badge-info" style="margin-left:8px;">${signal.market||''}</span></div>
                 <div class="card-grid" style="grid-template-columns:1fr 1fr;">
                     <div><span class="text-sm text-muted">动作</span><br><span class="badge badge-primary">${ACTION_LABELS[signal.action]||signal.action}</span></div>
                     <div><span class="text-sm text-muted">状态</span><br><span class="badge badge-info">${STATUS_LABELS[signal.status]||signal.status}</span></div>
                     <div><span class="text-sm text-muted">置信度</span><br><strong>${signal.confidence!=null?(signal.confidence*100).toFixed(0)+'%':'--'}</strong></div>
+                    <div><span class="text-sm text-muted">评分</span><br><strong>${signal.score!=null?signal.score:'--'}</strong></div>
                     <div><span class="text-sm text-muted">来源</span><br>${signal.source_type||'--'}</div>
+                    <div><span class="text-sm text-muted">周期</span><br>${signal.horizon||'--'}</div>
+                    ${signal.entry_low!=null?`<div><span class="text-sm text-muted">建仓区间</span><br>${formatNumber(signal.entry_low)}-${formatNumber(signal.entry_high)}</div>`:''}
+                    ${signal.stop_loss!=null?`<div><span class="text-sm text-muted">止损</span><br>${formatNumber(signal.stop_loss)}</div>`:''}
+                    ${signal.target_price!=null?`<div><span class="text-sm text-muted">目标价</span><br>${formatNumber(signal.target_price)}</div>`:''}
                 </div>
                 <div class="mt-4"><h4 class="mb-2">分析理由</h4><p class="text-sm">${signal.reason||'无'}</p></div>
                 ${signal.risk_summary?`<div class="mt-4"><h4 class="mb-2">风险摘要</h4><p class="text-sm">${signal.risk_summary}</p></div>`:''}
                 ${signal.catalyst_summary?`<div class="mt-4"><h4 class="mb-2">催化剂</h4><p class="text-sm">${signal.catalyst_summary}</p></div>`:''}
+                ${signal.watch_conditions?`<div class="mt-4"><h4 class="mb-2">观察条件</h4><p class="text-sm">${signal.watch_conditions}</p></div>`:''}
+                ${renderOutcomes(outcomes.items||[])}
+                ${renderFeedback(id, feedback)}
                 <div class="mt-4 btn-group">
                     <button class="btn btn-sm btn-secondary" onclick="updateSignalStatus(${id},'closed')">关闭</button>
                     <button class="btn btn-sm btn-secondary" onclick="updateSignalStatus(${id},'invalidated')">失效</button>
@@ -102,6 +113,41 @@ async function openSignalDetail(id) {
                 </div>`;
         });
     } catch(e) { showToast('加载失败','error'); }
+}
+
+function renderOutcomes(items) {
+    if (items.length === 0) return '';
+    return `<div class="mt-4"><h4 class="mb-2">结果评估</h4>
+        <div class="table-wrapper"><table class="data-table">
+            <thead><tr><th>周期</th><th>结果</th><th>回报(%)</th><th>状态</th><th>评估时间</th></tr></thead>
+            <tbody>${items.map(o => `<tr>
+                <td>${o.horizon||'--'}</td>
+                <td><span class="badge ${o.outcome==='win'?'badge-success':o.outcome==='loss'?'badge-danger':'badge-default'}">${o.outcome||'--'}</span></td>
+                <td>${o.return_pct!=null?formatNumber(o.return_pct)+'%':'--'}</td>
+                <td>${o.eval_status||'--'}</td>
+                <td>${o.evaluated_at?formatDateShort(o.evaluated_at):'--'}</td>
+            </tr>`).join('')}</tbody>
+        </table></div></div>`;
+}
+
+function renderFeedback(signalId, fb) {
+    const val = fb.feedback_value || '';
+    return `<div class="mt-4"><h4 class="mb-2">我的反馈</h4>
+        <div class="btn-group">
+            <button class="btn btn-sm ${val==='agree'?'btn-primary':'btn-secondary'}" onclick="submitFeedback(${signalId},'agree')">👍 认同</button>
+            <button class="btn btn-sm ${val==='disagree'?'btn-primary':'btn-secondary'}" onclick="submitFeedback(${signalId},'disagree')">👎 不认同</button>
+            <button class="btn btn-sm ${val==='partial'?'btn-primary':'btn-secondary'}" onclick="submitFeedback(${signalId},'partial')">🤔 部分认同</button>
+        </div>
+        ${fb.note?`<p class="text-sm text-muted mt-2">备注: ${fb.note}</p>`:''}
+    </div>`;
+}
+
+async function submitFeedback(signalId, value) {
+    try {
+        await api.put(`/decision-signals/${signalId}/feedback`, { feedback_value: value, source: 'web' });
+        showToast('反馈已保存','success');
+        openSignalDetail(signalId); // 刷新详情
+    } catch(e) { showToast(e.message,'error'); }
 }
 
 async function updateSignalStatus(id, status) {

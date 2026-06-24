@@ -2,8 +2,12 @@ package io.leavesfly.stock.application.service;
 
 import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
 import io.leavesfly.stock.domain.model.entity.AlertRule;
+import io.leavesfly.stock.domain.model.entity.AlertTrigger;
+import io.leavesfly.stock.domain.model.entity.AlertNotification;
 import io.leavesfly.stock.infrastructure.notification.NotificationService;
 import io.leavesfly.stock.infrastructure.persistence.AlertRuleRepository;
+import io.leavesfly.stock.infrastructure.persistence.AlertTriggerRepository;
+import io.leavesfly.stock.infrastructure.persistence.AlertNotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,12 +30,17 @@ public class AlertService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertService.class);
     private final AlertRuleRepository alertRepo;
+    private final AlertTriggerRepository triggerRepo;
+    private final AlertNotificationRepository notifRepo;
     private final DataFetcherManager dataFetcher;
     private final NotificationService notificationService;
 
-    public AlertService(AlertRuleRepository alertRepo, DataFetcherManager dataFetcher,
+    public AlertService(AlertRuleRepository alertRepo, AlertTriggerRepository triggerRepo,
+                       AlertNotificationRepository notifRepo, DataFetcherManager dataFetcher,
                        NotificationService notificationService) {
         this.alertRepo = alertRepo;
+        this.triggerRepo = triggerRepo;
+        this.notifRepo = notifRepo;
         this.dataFetcher = dataFetcher;
         this.notificationService = notificationService;
     }
@@ -99,13 +108,42 @@ public class AlertService {
 
     /** 获取触发历史 */
     public List<Map<String, Object>> getTriggerHistory(int page, int pageSize) {
-        // 简化实现: 返回空列表，待接入实际存储
-        return List.of();
+        int offset = (page - 1) * pageSize;
+        List<AlertTrigger> triggers = triggerRepo.findAll(pageSize, offset);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (AlertTrigger t : triggers) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", t.getId());
+            m.put("rule_id", t.getRuleId());
+            m.put("target", t.getTarget());
+            m.put("display_target", t.getDisplayTarget());
+            m.put("status", t.getStatus());
+            m.put("observed_value", t.getObservedValue());
+            m.put("threshold_value", t.getThresholdValue());
+            m.put("message", t.getMessage());
+            m.put("triggered_at", t.getTriggeredAt());
+            result.add(m);
+        }
+        return result;
     }
 
     /** 获取通知日志 */
     public List<Map<String, Object>> getNotificationHistory(int page, int pageSize) {
-        return List.of();
+        int offset = (page - 1) * pageSize;
+        List<AlertNotification> notifs = notifRepo.findAll(pageSize, offset);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (AlertNotification n : notifs) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", n.getId());
+            m.put("trigger_id", n.getTriggerId());
+            m.put("channel", n.getChannel());
+            m.put("success", n.getSuccess());
+            m.put("error_code", n.getErrorCode());
+            m.put("error_message", n.getErrorMessage());
+            m.put("sent_at", n.getSentAt());
+            result.add(m);
+        }
+        return result;
     }
 
     /**
@@ -169,7 +207,17 @@ public class AlertService {
      */
     private void triggerAlert(AlertRule rule) {
         log.info("告警触发: {} - {} - 阈值: {}", rule.getStockCode(), rule.getAlertType(), rule.getThresholdValue());
-        
+
+        // 持久化触发记录
+        AlertTrigger trigger = new AlertTrigger();
+        trigger.setRuleId(rule.getId());
+        trigger.setTarget(rule.getStockCode());
+        trigger.setDisplayTarget(rule.getStockName() != null ? rule.getStockName() + "(" + rule.getStockCode() + ")" : rule.getStockCode());
+        trigger.setStatus("triggered");
+        trigger.setThresholdValue(rule.getThresholdValue());
+        trigger.setMessage(String.format("%s %s", rule.getAlertType(), rule.getThresholdValue()));
+        triggerRepo.save(trigger);
+
         rule.setTriggered(true);
         rule.setLastTriggeredAt(LocalDateTime.now());
         if (Boolean.TRUE.equals(rule.getOneShot())) {
@@ -177,11 +225,24 @@ public class AlertService {
         }
         alertRepo.save(rule);
 
-        // 推送通知
+        // 推送通知并记录
         String title = String.format("⚠️ 告警: %s(%s)", rule.getStockName(), rule.getStockCode());
         String content = String.format("触发条件: %s %s\n阈值: %s\n备注: %s",
                 rule.getAlertType(), rule.getThresholdValue(),
                 rule.getThresholdValue(), rule.getNote() != null ? rule.getNote() : "");
-        notificationService.sendMessage(title, content);
+        boolean success = true;
+        try {
+            notificationService.sendMessage(title, content);
+        } catch (Exception e) {
+            success = false;
+            log.warn("告警通知发送失败: {}", e.getMessage());
+        }
+
+        // 持久化通知记录
+        AlertNotification notif = new AlertNotification();
+        notif.setTriggerId(trigger.getId());
+        notif.setChannel(rule.getNotifyChannels() != null ? rule.getNotifyChannels() : "default");
+        notif.setSuccess(success);
+        notifRepo.save(notif);
     }
 }

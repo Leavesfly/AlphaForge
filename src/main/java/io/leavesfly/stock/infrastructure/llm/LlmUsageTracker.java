@@ -1,5 +1,6 @@
 package io.leavesfly.stock.infrastructure.llm;
 
+import io.leavesfly.stock.infrastructure.persistence.LlmUsageDailyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -12,35 +13,44 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * LLM Token使用量追踪
- * 
- * 对应Python版本的 src/llm/usage.py
- * 统计Token消耗、API调用次数、费用估算
+ * 内存快速统计 + 异步持久化到 llm_usage_daily 表
  */
 @Component
 public class LlmUsageTracker {
 
     private static final Logger log = LoggerFactory.getLogger(LlmUsageTracker.class);
 
-    /** 日维度统计 */
-    private final Map<String, DailyUsage> dailyUsages = new ConcurrentHashMap<>();
-    
-    /** 模型维度统计 */
-    private final Map<String, ModelUsage> modelUsages = new ConcurrentHashMap<>();
+    private final LlmUsageDailyRepository usageRepository;
 
+    /** 日维度内存统计 */
+    private final Map<String, DailyUsage> dailyUsages = new ConcurrentHashMap<>();
+    /** 模型维度内存统计 */
+    private final Map<String, ModelUsage> modelUsages = new ConcurrentHashMap<>();
     /** 总调用次数 */
     private final AtomicInteger totalCalls = new AtomicInteger(0);
     /** 总Token数 */
     private final AtomicLong totalTokens = new AtomicLong(0);
 
+    public LlmUsageTracker(LlmUsageDailyRepository usageRepository) {
+        this.usageRepository = usageRepository;
+    }
+
     /**
      * 记录一次LLM调用
      */
     public void recordUsage(String model, int promptTokens, int completionTokens, long durationMs) {
+        recordUsage(model, null, promptTokens, completionTokens, durationMs);
+    }
+
+    /**
+     * 记录一次LLM调用(含provider)
+     */
+    public void recordUsage(String model, String provider, int promptTokens, int completionTokens, long durationMs) {
         int total = promptTokens + completionTokens;
         totalCalls.incrementAndGet();
         totalTokens.addAndGet(total);
 
-        // 日统计
+        // 内存统计
         String today = LocalDate.now().toString();
         DailyUsage daily = dailyUsages.computeIfAbsent(today, k -> new DailyUsage());
         daily.calls.incrementAndGet();
@@ -48,17 +58,22 @@ public class LlmUsageTracker {
         daily.completionTokens.addAndGet(completionTokens);
         daily.totalDurationMs.addAndGet(durationMs);
 
-        // 模型统计
         ModelUsage modelUsage = modelUsages.computeIfAbsent(model, k -> new ModelUsage());
         modelUsage.calls.incrementAndGet();
         modelUsage.totalTokens.addAndGet(total);
 
+        // 持久化到DB
+        try {
+            double cost = estimateCostValue(promptTokens, completionTokens);
+            usageRepository.recordUsage(LocalDate.now(), model, provider != null ? provider : "unknown", promptTokens, completionTokens, cost);
+        } catch (Exception e) {
+            log.warn("LLM用量持久化失败(不影响功能): {}", e.getMessage());
+        }
+
         log.debug("LLM用量记录: model={}, tokens={}, duration={}ms", model, total, durationMs);
     }
 
-    /**
-     * 获取今日用量统计
-     */
+    /** 获取今日用量统计 */
     public Map<String, Object> getTodayUsage() {
         String today = LocalDate.now().toString();
         DailyUsage daily = dailyUsages.get(today);
@@ -82,9 +97,7 @@ public class LlmUsageTracker {
         return result;
     }
 
-    /**
-     * 获取总体统计
-     */
+    /** 获取总体统计 */
     public Map<String, Object> getOverallStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("total_calls", totalCalls.get());
@@ -95,9 +108,7 @@ public class LlmUsageTracker {
         return stats;
     }
 
-    /**
-     * 获取按模型的用量分布
-     */
+    /** 获取按模型的用量分布 */
     public Map<String, Object> getModelBreakdown() {
         Map<String, Object> breakdown = new LinkedHashMap<>();
         for (Map.Entry<String, ModelUsage> entry : modelUsages.entrySet()) {
@@ -109,16 +120,16 @@ public class LlmUsageTracker {
         return breakdown;
     }
 
-    /**
-     * 估算费用(基于OpenAI GPT-4o定价)
-     */
+    /** 估算费用(基于OpenAI GPT-4o定价) */
     private String estimateCost(long promptTokens, long completionTokens) {
-        // GPT-4o: $2.5/1M input, $10/1M output
-        double cost = (promptTokens * 2.5 + completionTokens * 10.0) / 1000000.0;
-        return String.format("$%.4f", cost);
+        return String.format("$%.4f", estimateCostValue(promptTokens, completionTokens));
     }
 
-    /** 日用量统计 */
+    private double estimateCostValue(long promptTokens, long completionTokens) {
+        // GPT-4o: $2.5/1M input, $10/1M output
+        return (promptTokens * 2.5 + completionTokens * 10.0) / 1000000.0;
+    }
+
     private static class DailyUsage {
         final AtomicInteger calls = new AtomicInteger(0);
         final AtomicLong promptTokens = new AtomicLong(0);
@@ -126,7 +137,6 @@ public class LlmUsageTracker {
         final AtomicLong totalDurationMs = new AtomicLong(0);
     }
 
-    /** 模型用量统计 */
     private static class ModelUsage {
         final AtomicInteger calls = new AtomicInteger(0);
         final AtomicLong totalTokens = new AtomicLong(0);

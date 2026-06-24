@@ -6,6 +6,128 @@
         <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
         <result property="stockName" column="stock_name"/>
+        <result property="market" column="market"/>
+        <result property="sourceType" column="source_type"/>
+        <result property="sourceAgent" column="source_agent"/>
+        <result property="sourceReportId" column="source_report_id"/>
+        <result property="traceId" column="trace_id"/>
+        <result property="marketPhase" column="market_phase"/>
+        <result property="triggerSource" column="trigger_source"/>
+        <result property="action" column="action"/>
+        <result property="actionLabel" column="action_label"/>
+        <result property="confidence" column="confidence"/>
+        <result property="score" column="score"/>
+        <result property="horizon" column="horizon"/>
+        <result property="entryLow" column="entry_low"/>
+        <result property="entryHigh" column="entry_high"/>
+        <result property="stopLoss" column="stop_loss"/>
+        <result property="targetPrice" column="target_price"/>
+        <result property="invalidation" column="invalidation"/>
+        <result property="watchConditions" column="watch_conditions"/>
+        <result property="reason" column="reason"/>
+        <result property="riskSummary" column="risk_summary"/>
+        <result property="catalystSummary" column="catalyst_summary"/>
+        <result property="evidence" column="evidence"/>
+        <result property="dataQualitySummary" column="data_quality_summary"/>
+        <result property="planQuality" column="plan_quality"/>
+        <result property="status" column="status"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="metadata" column="metadata"/>
+        <result property="reportLanguage" column="report_language"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO decision_signals (stock_code, stock_name, market, source_type, source_agent, source_report_id, trace_id, market_phase, trigger_source, action, action_label, confidence, score, horizon, entry_low, entry_high, stop_loss, target_price, invalidation, watch_conditions, reason, risk_summary, catalyst_summary, evidence, data_quality_summary, plan_quality, status, expires_at, metadata, report_language, created_at, updated_at)
+        VALUES (#{stockCode}, #{stockName}, #{market}, #{sourceType}, #{sourceAgent}, #{sourceReportId}, #{traceId}, #{marketPhase}, #{triggerSource}, #{action}, #{actionLabel}, #{confidence}, #{score}, #{horizon}, #{entryLow}, #{entryHigh}, #{stopLoss}, #{targetPrice}, #{invalidation}, #{watchConditions}, #{reason}, #{riskSummary}, #{catalystSummary}, #{evidence}, #{dataQualitySummary}, #{planQuality}, #{status}, #{expiresAt}, #{metadata}, #{reportLanguage}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE decision_signals SET stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, source_type=#{sourceType}, source_agent=#{sourceAgent}, source_report_id=#{sourceReportId}, trace_id=#{traceId}, market_phase=#{marketPhase}, trigger_source=#{triggerSource}, action=#{action}, action_label=#{actionLabel}, confidence=#{confidence}, score=#{score}, horizon=#{horizon}, entry_low=#{entryLow}, entry_high=#{entryHigh}, stop_loss=#{stopLoss}, target_price=#{targetPrice}, invalidation=#{invalidation}, watch_conditions=#{watchConditions}, reason=#{reason}, risk_summary=#{riskSummary}, catalyst_summary=#{catalystSummary}, evidence=#{evidence}, data_quality_summary=#{dataQualitySummary}, plan_quality=#{planQuality}, status=#{status}, expires_at=#{expiresAt}, metadata=#{metadata}, report_language=#{reportLanguage}, updated_at=#{updatedAt}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals ORDER BY created_at DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM decision_signals WHERE id = #{id}
+    </delete>
+
+    <select id="findByStockCodeOrderByCreatedAtDesc" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE stock_code = #{stockCode} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByStatusOrderByCreatedAtDesc" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE status = #{status} ORDER BY created_at DESC
+    </select>
+
+    <select id="findTop20ByOrderByCreatedAtDesc" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals ORDER BY created_at DESC LIMIT 20
+    </select>
+
+    <select id="findByStockCodeAndCreatedAtAfter" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE stock_code = #{stockCode} AND created_at > #{after} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByCreatedAtAfter" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE created_at > #{after} ORDER BY created_at DESC
+    </select>
+
+    <!-- 多条件筛选查询 -->
+    <select id="findFiltered" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals
+        <where>
+            <if test="market != null and market != ''">AND market = #{market}</if>
+            <if test="stockCode != null and stockCode != ''">AND stock_code = #{stockCode}</if>
+            <if test="action != null and action != ''">AND action = #{action}</if>
+            <if test="marketPhase != null and marketPhase != ''">AND market_phase = #{marketPhase}</if>
+            <if test="sourceType != null and sourceType != ''">AND source_type = #{sourceType}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="createdFrom != null">AND created_at >= #{createdFrom}</if>
+            <if test="createdTo != null">AND created_at &lt;= #{createdTo}</if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countFiltered" resultType="int">
+        SELECT COUNT(*) FROM decision_signals
+        <where>
+            <if test="market != null and market != ''">AND market = #{market}</if>
+            <if test="stockCode != null and stockCode != ''">AND stock_code = #{stockCode}</if>
+            <if test="action != null and action != ''">AND action = #{action}</if>
+            <if test="marketPhase != null and marketPhase != ''">AND market_phase = #{marketPhase}</if>
+            <if test="sourceType != null and sourceType != ''">AND source_type = #{sourceType}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="createdFrom != null">AND created_at >= #{createdFrom}</if>
+            <if test="createdTo != null">AND created_at &lt;= #{createdTo}</if>
+        </where>
+    </select>
+
+    <select id="findByLatestStockCode" resultMap="decisionSignalMap">
+        SELECT * FROM decision_signals WHERE stock_code = #{stockCode} ORDER BY created_at DESC LIMIT #{limit}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE decision_signals SET status = #{status}, updated_at = #{updatedAt} WHERE id = #{id}
+    </update>
+
+</mapper>
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.DecisionSignalRepository">
+
+    <resultMap id="decisionSignalMap" type="io.leavesfly.stock.domain.model.entity.DecisionSignal">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
         <result property="signalType" column="signal_type"/>
         <result property="strength" column="strength"/>
         <result property="source" column="source"/>

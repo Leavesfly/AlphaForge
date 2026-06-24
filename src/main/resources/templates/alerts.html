@@ -123,39 +123,3 @@ loadRules(); loadTriggers(); loadNotifications();
 </script>
 </body>
 </html>
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>告警管理 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
-</head><body>
-<div class="layout">
-    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
-    <main class="content">
-        <header class="page-header"><h1>⚠️ 告警管理</h1></header>
-        <section class="section">
-            <table class="data-table">
-                <thead><tr><th>股票</th><th>类型</th><th>阈值</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
-                <tbody>
-                <tr th:each="alert : ${alerts}">
-                    <td th:text="${alert.stockName} + '(' + ${alert.stockCode} + ')'">-</td>
-                    <td th:text="${alert.alertType}">-</td>
-                    <td th:text="${alert.thresholdValue}">-</td>
-                    <td><span th:text="${alert.triggered} ? '已触发' : '监控中'">-</span></td>
-                    <td th:text="${alert.note}">-</td>
-                    <td><button class="btn btn-secondary" onclick="deleteAlert(this)" th:data-id="${alert.id}">删除</button></td>
-                </tr>
-                <tr th:if="${#lists.isEmpty(alerts)}"><td colspan="6" class="empty">暂无告警规则</td></tr>
-                </tbody>
-            </table>
-        </section>
-    </main>
-</div>
-<script th:src="@{/js/app.js}"></script>
-<script>
-function deleteAlert(btn) {
-    const id = btn.dataset.id;
-    if (!confirm('确定删除?')) return;
-    fetch('/api/v1/alerts/' + id, {method:'DELETE'}).then(() => location.reload());
-}
-</script>
-</body></html>

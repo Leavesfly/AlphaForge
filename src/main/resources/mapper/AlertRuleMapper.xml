@@ -4,6 +4,80 @@
 
     <resultMap id="alertRuleMap" type="io.leavesfly.stock.domain.model.entity.AlertRule">
         <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="alertType" column="alert_type"/>
+        <result property="targetScope" column="target_scope"/>
+        <result property="target" column="target"/>
+        <result property="severity" column="severity"/>
+        <result property="thresholdValue" column="threshold_value"/>
+        <result property="conditionExpr" column="condition_expr"/>
+        <result property="parameters" column="parameters"/>
+        <result property="enabled" column="enabled"/>
+        <result property="triggered" column="triggered"/>
+        <result property="lastTriggeredAt" column="last_triggered_at"/>
+        <result property="oneShot" column="one_shot"/>
+        <result property="notifyChannels" column="notify_channels"/>
+        <result property="source" column="source"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO alert_rules (name, stock_code, stock_name, alert_type, target_scope, target, severity, threshold_value, condition_expr, parameters, enabled, triggered, last_triggered_at, one_shot, notify_channels, source, note, created_at, updated_at)
+        VALUES (#{name}, #{stockCode}, #{stockName}, #{alertType}, #{targetScope}, #{target}, #{severity}, #{thresholdValue}, #{conditionExpr}, #{parameters}, #{enabled}, #{triggered}, #{lastTriggeredAt}, #{oneShot}, #{notifyChannels}, #{source}, #{note}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE alert_rules SET name=#{name}, stock_code=#{stockCode}, stock_name=#{stockName}, alert_type=#{alertType}, target_scope=#{targetScope}, target=#{target}, severity=#{severity}, threshold_value=#{thresholdValue}, condition_expr=#{conditionExpr}, parameters=#{parameters}, enabled=#{enabled}, triggered=#{triggered}, last_triggered_at=#{lastTriggeredAt}, one_shot=#{oneShot}, notify_channels=#{notifyChannels}, source=#{source}, note=#{note}, updated_at=#{updatedAt}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules ORDER BY created_at DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM alert_rules WHERE id = #{id}
+    </delete>
+
+    <select id="findByStockCodeAndEnabledTrue" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE stock_code = #{stockCode} AND enabled = 1
+    </select>
+
+    <select id="findByEnabledTrueOrderByCreatedAtDesc" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE enabled = 1 ORDER BY created_at DESC
+    </select>
+
+    <select id="findByAlertTypeOrderByCreatedAtDesc" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE alert_type = #{alertType} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByTriggeredFalseAndEnabledTrue" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE triggered = 0 AND enabled = 1
+    </select>
+
+    <select id="findByEnabled" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE enabled = #{enabled}
+    </select>
+
+    <select id="countByEnabledTrue" resultType="long">
+        SELECT COUNT(*) FROM alert_rules WHERE enabled = 1
+    </select>
+
+</mapper>
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.AlertRuleRepository">
+
+    <resultMap id="alertRuleMap" type="io.leavesfly.stock.domain.model.entity.AlertRule">
+        <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
         <result property="stockName" column="stock_name"/>
         <result property="alertType" column="alert_type"/>

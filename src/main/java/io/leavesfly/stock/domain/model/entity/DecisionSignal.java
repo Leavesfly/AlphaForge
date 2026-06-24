@@ -4,55 +4,45 @@ import java.time.LocalDateTime;
 
 /**
  * 决策信号实体
- * 对应Python版本的 decision_signal_repo.py
+ * 对齐 schema.sql decision_signals 表全部字段
  */
 public class DecisionSignal {
 
     private Long id;
-
-    /** 股票代码 */
     private String stockCode;
-
-    /** 股票名称 */
     private String stockName;
-
-    /** 信号类型: buy/sell/hold */
-    private String signalType;
-
-    /** 信号强度(0-100) */
-    private Integer strength;
-
-    /** 信号来源: technical/fundamental/news/agent */
-    private String source;
-
-    /** 目标价格 */
-    private Double targetPrice;
-
-    /** 止损价格 */
-    private Double stopLossPrice;
-
-    /** 信号触发时价格 */
-    private Double triggerPrice;
-
-    /** 推荐仓位(%) */
-    private Double positionPct;
-
-    /** 理由说明 */
-    private String reasoning;
-
-    /** 置信度(0-1) */
+    private String market;
+    private String sourceType;
+    private String sourceAgent;
+    private Long sourceReportId;
+    private String traceId;
+    private String marketPhase;
+    private String triggerSource;
+    private String action;
+    private String actionLabel;
     private Double confidence;
-
-    /** 信号状态: active/expired/executed/cancelled */
-    private String status = "active";
-
-    /** 有效期截止 */
-    private LocalDateTime validUntil;
-
-    /** 关联的分析报告ID */
-    private Long reportId;
-
+    private Integer score;
+    private String horizon;
+    private Double entryLow;
+    private Double entryHigh;
+    private Double stopLoss;
+    private Double targetPrice;
+    private String invalidation;
+    private String watchConditions;
+    private String reason;
+    private String riskSummary;
+    private String catalystSummary;
+    /** JSON格式证据 */
+    private String evidence;
+    private String dataQualitySummary;
+    private String planQuality;
+    private String status;
+    private LocalDateTime expiresAt;
+    /** JSON格式元数据 */
+    private String metadata;
+    private String reportLanguage;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     // Getters & Setters
     public Long getId() { return id; }
@@ -61,30 +51,64 @@ public class DecisionSignal {
     public void setStockCode(String stockCode) { this.stockCode = stockCode; }
     public String getStockName() { return stockName; }
     public void setStockName(String stockName) { this.stockName = stockName; }
-    public String getSignalType() { return signalType; }
-    public void setSignalType(String signalType) { this.signalType = signalType; }
-    public Integer getStrength() { return strength; }
-    public void setStrength(Integer strength) { this.strength = strength; }
-    public String getSource() { return source; }
-    public void setSource(String source) { this.source = source; }
-    public Double getTargetPrice() { return targetPrice; }
-    public void setTargetPrice(Double targetPrice) { this.targetPrice = targetPrice; }
-    public Double getStopLossPrice() { return stopLossPrice; }
-    public void setStopLossPrice(Double stopLossPrice) { this.stopLossPrice = stopLossPrice; }
-    public Double getTriggerPrice() { return triggerPrice; }
-    public void setTriggerPrice(Double triggerPrice) { this.triggerPrice = triggerPrice; }
-    public Double getPositionPct() { return positionPct; }
-    public void setPositionPct(Double positionPct) { this.positionPct = positionPct; }
-    public String getReasoning() { return reasoning; }
-    public void setReasoning(String reasoning) { this.reasoning = reasoning; }
+    public String getMarket() { return market; }
+    public void setMarket(String market) { this.market = market; }
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+    public String getSourceAgent() { return sourceAgent; }
+    public void setSourceAgent(String sourceAgent) { this.sourceAgent = sourceAgent; }
+    public Long getSourceReportId() { return sourceReportId; }
+    public void setSourceReportId(Long sourceReportId) { this.sourceReportId = sourceReportId; }
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+    public String getMarketPhase() { return marketPhase; }
+    public void setMarketPhase(String marketPhase) { this.marketPhase = marketPhase; }
+    public String getTriggerSource() { return triggerSource; }
+    public void setTriggerSource(String triggerSource) { this.triggerSource = triggerSource; }
+    public String getAction() { return action; }
+    public void setAction(String action) { this.action = action; }
+    public String getActionLabel() { return actionLabel; }
+    public void setActionLabel(String actionLabel) { this.actionLabel = actionLabel; }
     public Double getConfidence() { return confidence; }
     public void setConfidence(Double confidence) { this.confidence = confidence; }
+    public Integer getScore() { return score; }
+    public void setScore(Integer score) { this.score = score; }
+    public String getHorizon() { return horizon; }
+    public void setHorizon(String horizon) { this.horizon = horizon; }
+    public Double getEntryLow() { return entryLow; }
+    public void setEntryLow(Double entryLow) { this.entryLow = entryLow; }
+    public Double getEntryHigh() { return entryHigh; }
+    public void setEntryHigh(Double entryHigh) { this.entryHigh = entryHigh; }
+    public Double getStopLoss() { return stopLoss; }
+    public void setStopLoss(Double stopLoss) { this.stopLoss = stopLoss; }
+    public Double getTargetPrice() { return targetPrice; }
+    public void setTargetPrice(Double targetPrice) { this.targetPrice = targetPrice; }
+    public String getInvalidation() { return invalidation; }
+    public void setInvalidation(String invalidation) { this.invalidation = invalidation; }
+    public String getWatchConditions() { return watchConditions; }
+    public void setWatchConditions(String watchConditions) { this.watchConditions = watchConditions; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+    public String getRiskSummary() { return riskSummary; }
+    public void setRiskSummary(String riskSummary) { this.riskSummary = riskSummary; }
+    public String getCatalystSummary() { return catalystSummary; }
+    public void setCatalystSummary(String catalystSummary) { this.catalystSummary = catalystSummary; }
+    public String getEvidence() { return evidence; }
+    public void setEvidence(String evidence) { this.evidence = evidence; }
+    public String getDataQualitySummary() { return dataQualitySummary; }
+    public void setDataQualitySummary(String dataQualitySummary) { this.dataQualitySummary = dataQualitySummary; }
+    public String getPlanQuality() { return planQuality; }
+    public void setPlanQuality(String planQuality) { this.planQuality = planQuality; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-    public LocalDateTime getValidUntil() { return validUntil; }
-    public void setValidUntil(LocalDateTime validUntil) { this.validUntil = validUntil; }
-    public Long getReportId() { return reportId; }
-    public void setReportId(Long reportId) { this.reportId = reportId; }
+    public LocalDateTime getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+    public String getMetadata() { return metadata; }
+    public void setMetadata(String metadata) { this.metadata = metadata; }
+    public String getReportLanguage() { return reportLanguage; }
+    public void setReportLanguage(String reportLanguage) { this.reportLanguage = reportLanguage; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

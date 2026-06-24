@@ -4,6 +4,7 @@
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>投资组合 - 股票智能分析系统</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -32,6 +33,10 @@
             <!-- 持仓概览 -->
             <div class="tab-content active" id="tabPositions">
                 <div class="card-grid" id="riskCards"></div>
+                <!-- 持仓分布图表 -->
+                <div class="card mb-4" id="positionChartCard" style="display:none;">
+                    <div class="chart-container-sm"><canvas id="positionPieChart"></canvas></div>
+                </div>
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead><tr><th>股票</th><th>数量</th><th>成本</th><th>现价</th><th>盈亏</th><th>盈亏%</th><th>占比</th><th>操作</th></tr></thead>
@@ -120,6 +125,13 @@ async function loadPortfolio() {
                 <div class="card"><h3>总盈亏</h3><p class="card-value ${(risk.total_pnl||0)>=0?'positive':'negative'}">${formatMoney(risk.total_pnl)}</p></div>
                 <div class="card"><h3>集中度</h3><p class="card-value">${formatPct(risk.concentration)}</p></div>
                 <div class="card"><h3>持仓数</h3><p class="card-value">${positions.length}</p></div>`;
+        }
+        // 持仓分布饼图
+        if (positions.length > 0 && typeof Chart !== 'undefined') {
+            document.getElementById('positionChartCard').style.display = 'block';
+            const labels = positions.slice(0, 8).map(p => p.symbol || p.stock_code);
+            const data = positions.slice(0, 8).map(p => Math.abs(p.market_value || p.quantity * (p.current_price || p.market_price || 0)));
+            createPieChart('positionPieChart', labels, data, '持仓分布');
         }
     } catch(e) { document.getElementById('positionsBody').innerHTML = '<tr><td colspan="8" class="empty">加载失败</td></tr>'; }
 }

@@ -175,6 +175,73 @@ public class LlmService {
     }
 
     /**
+     * Vision API调用 - 支持图片输入
+     * 通过OpenAI兼容格式的多模态接口识别图片内容
+     *
+     * @param prompt 文本提示
+     * @param base64Image Base64编码的图片
+     * @param mimeType 图片MIME类型
+     * @return LLM回复
+     */
+    public String chatWithVision(String prompt, String base64Image, String mimeType) {
+        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        if (channels.isEmpty()) return "[错误] 未配置LLM服务";
+
+        AppConfig.LlmChannelConfig channel = channels.get(currentChannelIndex % channels.size());
+        String apiUrl = resolveApiUrl(channel);
+
+        try {
+            // 构建多模态请求体 (OpenAI Vision兼容格式)
+            ObjectNode requestBody = objectMapper.createObjectNode();
+            requestBody.put("model", channel.getModel());
+            requestBody.put("max_tokens", 2000);
+
+            ArrayNode messagesArray = requestBody.putArray("messages");
+            ObjectNode userMsg = messagesArray.addObject();
+            userMsg.put("role", "user");
+
+            ArrayNode contentArray = userMsg.putArray("content");
+            // 文本部分
+            ObjectNode textPart = contentArray.addObject();
+            textPart.put("type", "text");
+            textPart.put("text", prompt);
+            // 图片部分
+            ObjectNode imagePart = contentArray.addObject();
+            imagePart.put("type", "image_url");
+            ObjectNode imageUrl = imagePart.putObject("image_url");
+            imageUrl.put("url", "data:" + mimeType + ";base64," + base64Image);
+
+            RequestBody body = RequestBody.create(
+                    objectMapper.writeValueAsString(requestBody),
+                    MediaType.get("application/json"));
+
+            Request request = new Request.Builder()
+                    .url(apiUrl)
+                    .header("Authorization", "Bearer " + channel.getApiKey())
+                    .header("Content-Type", "application/json")
+                    .post(body)
+                    .build();
+
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    throw new RuntimeException("Vision API返回错误: " + response.code() + " - " + errorBody);
+                }
+                String responseBody = response.body().string();
+                JsonNode root = objectMapper.readTree(responseBody);
+                JsonNode choices = root.path("choices");
+                if (choices.isArray() && !choices.isEmpty()) {
+                    return choices.get(0).path("message").path("content").asText("");
+                }
+                return "[]";
+            }
+        } catch (Exception e) {
+            log.error("Vision API调用失败: {}", e.getMessage());
+            return "[错误] Vision API调用失败: " + e.getMessage();
+        }
+    }
+
+    /**
      * 流式对话接口 - 支持SSE逐字输出
      *
      * @param messages 消息列表

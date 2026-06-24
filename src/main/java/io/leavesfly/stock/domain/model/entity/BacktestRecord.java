@@ -73,6 +73,42 @@ public class BacktestRecord {
     /** 回测参数JSON */
     private String parameters;
 
+    /** 关联信号ID */
+    private Long signalId;
+
+    /** 市场阶段 */
+    private String marketPhase;
+
+    /** 市场阶段总结 */
+    private String marketPhaseSummary;
+
+    /** 信号动作 */
+    private String action;
+
+    /** 预期方向 */
+    private String directionExpected;
+
+    /** 实际变动 */
+    private String actualMovement;
+
+    /** 回测结果 */
+    private String outcome;
+
+    /** 评估状态 */
+    private String evalStatus;
+
+    /** 评估窗口天数 */
+    private Integer evalWindowDays;
+
+    /** 回报率(%) */
+    private Double returnPct;
+
+    /** 分析日期 */
+    private LocalDateTime analysisDate;
+
+    /** 诊断信息JSON */
+    private String diagnostics;
+
     private LocalDateTime createdAt;
 
     // Getters & Setters
@@ -120,6 +156,30 @@ public class BacktestRecord {
     public void setTradeDetails(String tradeDetails) { this.tradeDetails = tradeDetails; }
     public String getParameters() { return parameters; }
     public void setParameters(String parameters) { this.parameters = parameters; }
+    public Long getSignalId() { return signalId; }
+    public void setSignalId(Long signalId) { this.signalId = signalId; }
+    public String getMarketPhase() { return marketPhase; }
+    public void setMarketPhase(String marketPhase) { this.marketPhase = marketPhase; }
+    public String getMarketPhaseSummary() { return marketPhaseSummary; }
+    public void setMarketPhaseSummary(String marketPhaseSummary) { this.marketPhaseSummary = marketPhaseSummary; }
+    public String getAction() { return action; }
+    public void setAction(String action) { this.action = action; }
+    public String getDirectionExpected() { return directionExpected; }
+    public void setDirectionExpected(String directionExpected) { this.directionExpected = directionExpected; }
+    public String getActualMovement() { return actualMovement; }
+    public void setActualMovement(String actualMovement) { this.actualMovement = actualMovement; }
+    public String getOutcome() { return outcome; }
+    public void setOutcome(String outcome) { this.outcome = outcome; }
+    public String getEvalStatus() { return evalStatus; }
+    public void setEvalStatus(String evalStatus) { this.evalStatus = evalStatus; }
+    public Integer getEvalWindowDays() { return evalWindowDays; }
+    public void setEvalWindowDays(Integer evalWindowDays) { this.evalWindowDays = evalWindowDays; }
+    public Double getReturnPct() { return returnPct; }
+    public void setReturnPct(Double returnPct) { this.returnPct = returnPct; }
+    public LocalDateTime getAnalysisDate() { return analysisDate; }
+    public void setAnalysisDate(LocalDateTime analysisDate) { this.analysisDate = analysisDate; }
+    public String getDiagnostics() { return diagnostics; }
+    public void setDiagnostics(String diagnostics) { this.diagnostics = diagnostics; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

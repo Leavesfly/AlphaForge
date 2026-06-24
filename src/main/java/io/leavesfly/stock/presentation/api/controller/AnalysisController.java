@@ -2,8 +2,10 @@ package io.leavesfly.stock.presentation.api.controller;
 
 import io.leavesfly.stock.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.stock.domain.model.entity.AnalysisReport;
+import io.leavesfly.stock.domain.model.entity.AnalysisTask;
 import io.leavesfly.stock.application.service.AnalysisHistoryService;
 import io.leavesfly.stock.application.service.TaskQueueService;
+import io.leavesfly.stock.infrastructure.persistence.AnalysisTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -11,13 +13,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 分析API控制器
  * 对应Python版本的 api/v1/endpoints/analysis.py
+ * 使用 AnalysisTaskRepository 持久化任务状态
  */
 @RestController
 @RequestMapping("/api/v1/analysis")
@@ -27,15 +30,14 @@ public class AnalysisController {
     private final StockAnalysisPipeline pipeline;
     private final AnalysisHistoryService historyService;
     private final TaskQueueService taskQueueService;
-
-    /** 任务状态存储 */
-    private final Map<String, Map<String, Object>> taskStore = new ConcurrentHashMap<>();
+    private final AnalysisTaskRepository taskRepository;
 
     public AnalysisController(StockAnalysisPipeline pipeline, AnalysisHistoryService historyService,
-                              TaskQueueService taskQueueService) {
+                              TaskQueueService taskQueueService, AnalysisTaskRepository taskRepository) {
         this.pipeline = pipeline;
         this.historyService = historyService;
         this.taskQueueService = taskQueueService;
+        this.taskRepository = taskRepository;
     }
 
     /**
@@ -49,6 +51,7 @@ public class AnalysisController {
         List<String> stockCodes = (List<String>) request.get("stock_codes");
         boolean asyncMode = Boolean.TRUE.equals(request.get("async_mode"));
         String analysisPhase = (String) request.getOrDefault("analysis_phase", "auto");
+        String reportLanguage = (String) request.getOrDefault("report_language", "zh");
         @SuppressWarnings("unchecked")
         List<String> skills = (List<String>) request.get("skills");
 
@@ -62,33 +65,34 @@ public class AnalysisController {
 
         if (asyncMode) {
             String taskId = UUID.randomUUID().toString().substring(0, 12);
-            Map<String, Object> task = new ConcurrentHashMap<>();
-            task.put("task_id", taskId);
-            task.put("stock_code", code);
-            task.put("status", "pending");
-            task.put("progress", 0);
-            task.put("created_at", new Date().toString());
-            taskStore.put(taskId, task);
+            // 持久化任务记录
+            AnalysisTask task = new AnalysisTask();
+            task.setTaskId(taskId);
+            task.setStockCode(code);
+            task.setStockCodes(stockCodes != null ? String.join(",", stockCodes) : code);
+            task.setTaskType("analysis");
+            task.setStatus("pending");
+            task.setProgress(0);
+            task.setAnalysisPhase(analysisPhase);
+            task.setReportLanguage(reportLanguage);
+            task.setSkills(skills != null ? String.join(",", skills) : null);
+            task.setCreatedAt(LocalDateTime.now());
+            taskRepository.save(task);
 
             final String finalCode = code;
             CompletableFuture.runAsync(() -> {
                 try {
-                    task.put("status", "running");
-                    task.put("progress", 10);
+                    taskRepository.updateStatus(taskId, "running", 10, "开始分析...");
                     AnalysisReport report = pipeline.analyzeSingleStock(finalCode, false, false);
-                    task.put("status", "completed");
-                    task.put("progress", 100);
-                    if (report != null) task.put("result", report);
+                    taskRepository.updateCompleted(taskId, "completed", 100,
+                            report != null ? String.valueOf(report.getId()) : null, null, LocalDateTime.now());
                 } catch (Exception e) {
-                    task.put("status", "failed");
-                    task.put("error_message", e.getMessage());
+                    taskRepository.updateCompleted(taskId, "failed", 0, null, e.getMessage(), LocalDateTime.now());
                 }
             });
 
             return ResponseEntity.status(202).body(Map.of(
-                    "status", "accepted",
-                    "task_id", taskId,
-                    "stock_code", code));
+                    "status", "accepted", "task_id", taskId, "stock_code", code));
         } else {
             try {
                 AnalysisReport report = pipeline.analyzeSingleStock(code, false, false);
@@ -109,23 +113,21 @@ public class AnalysisController {
     @PostMapping("/market-review")
     public ResponseEntity<Map<String, Object>> marketReview(@RequestBody(required = false) Map<String, Object> request) {
         String taskId = UUID.randomUUID().toString().substring(0, 12);
-        Map<String, Object> task = new ConcurrentHashMap<>();
-        task.put("task_id", taskId);
-        task.put("task_type", "market_review");
-        task.put("status", "pending");
-        task.put("progress", 0);
-        task.put("created_at", new Date().toString());
-        taskStore.put(taskId, task);
+        AnalysisTask task = new AnalysisTask();
+        task.setTaskId(taskId);
+        task.setTaskType("market_review");
+        task.setStatus("pending");
+        task.setProgress(0);
+        task.setCreatedAt(LocalDateTime.now());
+        taskRepository.save(task);
 
         CompletableFuture.runAsync(() -> {
             try {
-                task.put("status", "running");
+                taskRepository.updateStatus(taskId, "running", 10, "开始大盘复盘...");
                 pipeline.runMarketReview();
-                task.put("status", "completed");
-                task.put("progress", 100);
+                taskRepository.updateCompleted(taskId, "completed", 100, null, null, LocalDateTime.now());
             } catch (Exception e) {
-                task.put("status", "failed");
-                task.put("error_message", e.getMessage());
+                taskRepository.updateCompleted(taskId, "failed", 0, null, e.getMessage(), LocalDateTime.now());
             }
         });
 
@@ -138,11 +140,9 @@ public class AnalysisController {
      */
     @GetMapping("/status/{taskId}")
     public ResponseEntity<?> getTaskStatus(@PathVariable String taskId) {
-        Map<String, Object> task = taskStore.get(taskId);
-        if (task == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(task);
+        AnalysisTask task = taskRepository.findByTaskId(taskId);
+        if (task == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(taskToMap(task));
     }
 
     /**
@@ -153,13 +153,17 @@ public class AnalysisController {
     public ResponseEntity<Map<String, Object>> getTasks(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "20") int limit) {
-        List<Map<String, Object>> tasks = new ArrayList<>(taskStore.values());
+        List<AnalysisTask> tasks;
         if (status != null && !status.isEmpty()) {
-            tasks.removeIf(t -> !status.equals(t.get("status")));
+            tasks = taskRepository.findByStatus(status);
+        } else {
+            tasks = taskRepository.findRecent(limit);
         }
-        tasks.sort((a, b) -> String.valueOf(b.get("created_at")).compareTo(String.valueOf(a.get("created_at"))));
-        if (tasks.size() > limit) tasks = tasks.subList(0, limit);
-        return ResponseEntity.ok(Map.of("tasks", tasks, "total", taskStore.size()));
+        List<Map<String, Object>> taskList = new ArrayList<>();
+        for (AnalysisTask t : tasks) {
+            taskList.add(taskToMap(t));
+        }
+        return ResponseEntity.ok(Map.of("tasks", taskList, "total", taskRepository.count()));
     }
 
     /**
@@ -168,9 +172,9 @@ public class AnalysisController {
      */
     @GetMapping("/tasks/{taskId}/flow")
     public ResponseEntity<?> getTaskFlow(@PathVariable String taskId) {
-        Map<String, Object> task = taskStore.get(taskId);
+        AnalysisTask task = taskRepository.findByTaskId(taskId);
         if (task == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(Map.of("task_id", taskId, "steps", List.of(), "status", task.getOrDefault("status", "unknown")));
+        return ResponseEntity.ok(Map.of("task_id", taskId, "steps", List.of(), "status", task.getStatus()));
     }
 
     /**
@@ -180,12 +184,14 @@ public class AnalysisController {
     @GetMapping(value = "/tasks/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter taskStream() {
         SseEmitter emitter = new SseEmitter(300_000L);
-        // 简单实现：定时发送当前任务状态
         CompletableFuture.runAsync(() -> {
             try {
                 for (int i = 0; i < 60; i++) {
                     Thread.sleep(5000);
-                    emitter.send(SseEmitter.event().name("tasks").data(Map.of("tasks", new ArrayList<>(taskStore.values()))));
+                    List<AnalysisTask> running = taskRepository.findByStatus("running");
+                    List<Map<String, Object>> data = new ArrayList<>();
+                    for (AnalysisTask t : running) data.add(taskToMap(t));
+                    emitter.send(SseEmitter.event().name("tasks").data(Map.of("tasks", data)));
                 }
                 emitter.complete();
             } catch (Exception e) {
@@ -242,4 +248,20 @@ public class AnalysisController {
         return ResponseEntity.ok(Map.of("status", "deleted", "id", id));
     }
 
+    /** 任务实体转Map */
+    private Map<String, Object> taskToMap(AnalysisTask task) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("task_id", task.getTaskId());
+        map.put("stock_code", task.getStockCode());
+        map.put("task_type", task.getTaskType());
+        map.put("status", task.getStatus());
+        map.put("progress", task.getProgress());
+        map.put("message", task.getMessage());
+        map.put("result", task.getResult());
+        map.put("error_message", task.getErrorMessage());
+        map.put("created_at", task.getCreatedAt() != null ? task.getCreatedAt().toString() : null);
+        map.put("started_at", task.getStartedAt() != null ? task.getStartedAt().toString() : null);
+        map.put("completed_at", task.getCompletedAt() != null ? task.getCompletedAt().toString() : null);
+        return map;
+    }
 }

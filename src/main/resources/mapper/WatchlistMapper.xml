@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.WatchlistRepository">
+
+    <resultMap id="watchlistMap" type="io.leavesfly.stock.domain.model.entity.WatchlistItem">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="market" column="market"/>
+        <result property="addedAt" column="added_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO watchlist (stock_code, stock_name, market, added_at)
+        VALUES (#{stockCode}, #{stockName}, #{market}, CURRENT_TIMESTAMP)
+    </insert>
+
+    <delete id="deleteByStockCode">
+        DELETE FROM watchlist WHERE stock_code = #{stockCode}
+    </delete>
+
+    <select id="findByStockCode" resultMap="watchlistMap">
+        SELECT * FROM watchlist WHERE stock_code = #{stockCode}
+    </select>
+
+    <select id="findAll" resultMap="watchlistMap">
+        SELECT * FROM watchlist ORDER BY added_at DESC
+    </select>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM watchlist
+    </select>
+
+    <select id="existsByStockCode" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM watchlist WHERE stock_code = #{stockCode}
+    </select>
+
+</mapper>

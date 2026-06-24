@@ -27,7 +27,19 @@
     --text: #f1f5f9; --text-secondary: #cbd5e1; --text-muted: #64748b;
     --border: #334155; --border-focus: #60a5fa;
     --shadow: 0 1px 3px rgba(0,0,0,.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+    --sidebar-bg: #020617;
 }
+[data-theme="dark"] .data-table th { background: #0f172a; }
+[data-theme="dark"] .md-content pre { background: #0f172a; }
+[data-theme="dark"] .signal-badge.strong_buy, [data-theme="dark"] .signal-badge.buy { background: rgba(239,68,68,.15); }
+[data-theme="dark"] .signal-badge.sell, [data-theme="dark"] .signal-badge.strong_sell { background: rgba(16,185,129,.15); }
+[data-theme="dark"] .autocomplete-list { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .toast-success { background: #065f46; }
+[data-theme="dark"] .toast-error { background: #7f1d1d; }
+[data-theme="dark"] .modal { background: #1e293b; }
+[data-theme="dark"] .drawer { background: #1e293b; }
+[data-theme="dark"] .login-card { background: #1e293b; }
 
 /* ========== 重置 ========== */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -269,21 +281,46 @@ input, select, textarea { font-family: inherit; font-size: inherit; }
 .login-card h1 { font-size: 1.5rem; margin-bottom: 8px; }
 .login-card p { color: var(--text-muted); margin-bottom: 24px; font-size: .9rem; }
 
+/* ========== Chart Container ========== */
+.chart-container { position: relative; width: 100%; height: 280px; margin-bottom: 16px; }
+.chart-container-sm { height: 200px; }
+.chart-container-lg { height: 400px; }
+
 /* ========== Responsive ========== */
 @media (max-width: 1024px) {
     .content { padding: 20px; }
     .chat-sidebar { width: 200px; }
     .drawer { width: 380px; }
+    .card-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 }
 @media (max-width: 768px) {
     .sidebar { width: 64px; }
     .sidebar .logo span { display: none; }
-    .nav-list li a span { display: none; }
-    .content { margin-left: 64px; padding: 16px; }
-    .card-grid { grid-template-columns: repeat(2, 1fr); }
+    .nav-list li a span:last-child { display: none; }
+    .nav-bottom a span:last-child { display: none; }
+    .content { margin-left: 64px; padding: 12px; }
+    .card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .chat-sidebar { display: none; }
+    .chat-layout { height: calc(100vh - 60px); }
     .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-bar .form-select, .filter-bar .form-input { width: 100%; min-width: auto; }
     .drawer { width: 100vw; max-width: 100vw; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .page-header .actions { width: 100%; flex-wrap: wrap; }
+    .form-inline { flex-direction: column; align-items: stretch; }
+    .form-row { flex-direction: column; }
+    .table-wrapper { font-size: .8rem; }
+    .data-table th, .data-table td { padding: 8px 10px; }
+    .tabs { overflow-x: auto; }
+    .tab-item { white-space: nowrap; padding: 8px 14px; font-size: .8rem; }
+    .chart-container { height: 220px; }
+}
+@media (max-width: 480px) {
+    .sidebar { width: 0; display: none; }
+    .content { margin-left: 0; padding: 10px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .card-value { font-size: 1.4rem; }
+    .btn { padding: 6px 12px; font-size: .8rem; }
 }
 
 /* ========== Utilities ========== */

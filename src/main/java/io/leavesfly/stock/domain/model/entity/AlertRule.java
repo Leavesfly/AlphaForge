@@ -9,56 +9,50 @@ import java.time.LocalDateTime;
 public class AlertRule {
 
     private Long id;
-
-    /** 股票代码 */
+    private String name;
     private String stockCode;
-
-    /** 股票名称 */
     private String stockName;
-
-    /** 告警类型: price_above/price_below/change_pct_above/change_pct_below/volume_above/custom */
     private String alertType;
-
-    /** 触发条件值 */
+    private String targetScope;
+    private String target;
+    private String severity;
     private Double thresholdValue;
-
-    /** 自定义条件表达式(JSON) */
     private String conditionExpr;
-
-    /** 是否启用 */
+    /** JSON格式参数 */
+    private String parameters;
     private Boolean enabled = true;
-
-    /** 是否已触发 */
     private Boolean triggered = false;
-
-    /** 上次触发时间 */
     private LocalDateTime lastTriggeredAt;
-
-    /** 触发后是否自动禁用(一次性告警) */
     private Boolean oneShot = false;
-
-    /** 通知渠道(逗号分隔) */
     private String notifyChannels;
-
-    /** 备注 */
+    private String source;
     private String note;
-
-    /** 创建时间 */
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     // Getters & Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getStockCode() { return stockCode; }
     public void setStockCode(String stockCode) { this.stockCode = stockCode; }
     public String getStockName() { return stockName; }
     public void setStockName(String stockName) { this.stockName = stockName; }
     public String getAlertType() { return alertType; }
     public void setAlertType(String alertType) { this.alertType = alertType; }
+    public String getTargetScope() { return targetScope; }
+    public void setTargetScope(String targetScope) { this.targetScope = targetScope; }
+    public String getTarget() { return target; }
+    public void setTarget(String target) { this.target = target; }
+    public String getSeverity() { return severity; }
+    public void setSeverity(String severity) { this.severity = severity; }
     public Double getThresholdValue() { return thresholdValue; }
     public void setThresholdValue(Double thresholdValue) { this.thresholdValue = thresholdValue; }
     public String getConditionExpr() { return conditionExpr; }
     public void setConditionExpr(String conditionExpr) { this.conditionExpr = conditionExpr; }
+    public String getParameters() { return parameters; }
+    public void setParameters(String parameters) { this.parameters = parameters; }
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
     public Boolean getTriggered() { return triggered; }
@@ -69,8 +63,12 @@ public class AlertRule {
     public void setOneShot(Boolean oneShot) { this.oneShot = oneShot; }
     public String getNotifyChannels() { return notifyChannels; }
     public void setNotifyChannels(String notifyChannels) { this.notifyChannels = notifyChannels; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

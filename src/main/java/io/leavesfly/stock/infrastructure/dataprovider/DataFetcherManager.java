@@ -4,6 +4,7 @@ import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.DataProviderType;
 import io.leavesfly.stock.domain.model.enums.MarketType;
+import io.leavesfly.stock.infrastructure.persistence.StockDailyDataRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,7 @@ public class DataFetcherManager {
 
     private final AppConfig config;
     private final List<BaseDataFetcher> fetchers;
+    private final StockDailyDataRepository dailyDataRepo;
     
     /** 熔断器状态: 数据源名称 -> 熔断信息 */
     private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
@@ -39,17 +41,21 @@ public class DataFetcherManager {
     /** 数据源优先级排序(根据市场类型) */
     private final Map<MarketType, List<DataProviderType>> marketProviderOrder;
 
+    /** 缓存有效期(天) */
+    private static final int CACHE_EXPIRE_DAYS = 1;
+
     @Autowired
-    public DataFetcherManager(AppConfig config, List<BaseDataFetcher> fetchers) {
+    public DataFetcherManager(AppConfig config, List<BaseDataFetcher> fetchers, StockDailyDataRepository dailyDataRepo) {
         this.config = config;
         this.fetchers = fetchers;
+        this.dailyDataRepo = dailyDataRepo;
         this.marketProviderOrder = initMarketProviderOrder();
         log.info("数据源管理器初始化完成, 已注册 {} 个数据源", fetchers.size());
     }
 
     // 测试用构造器(无Spring环境)
     public DataFetcherManager(List<BaseDataFetcher> fetchers, AppConfig config) {
-        this(config, fetchers);
+        this(config, fetchers, null);
     }
 
     /**
@@ -61,6 +67,13 @@ public class DataFetcherManager {
      * @return 日K线数据列表
      */
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate) {
+        // 先查缓存
+        List<StockDailyData> cached = getFromCache(stockCode, startDate, endDate);
+        if (cached != null && !cached.isEmpty()) {
+            log.debug("命中缓存: {} ({} 条数据)", stockCode, cached.size());
+            return cached;
+        }
+
         MarketType market = MarketType.detectFromCode(stockCode);
         List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
         
@@ -80,6 +93,8 @@ public class DataFetcherManager {
                 if (data != null && !data.isEmpty()) {
                     // 记录成功
                     recordSuccess(fetcherName);
+                    // 写入缓存
+                    saveToCache(data);
                     log.info("数据源 {} 成功获取 {} 条历史数据: {}", fetcherName, data.size(), stockCode);
                     return data;
                 }
@@ -274,5 +289,37 @@ public class DataFetcherManager {
         public int getFailureCount() { return failureCount.get(); }
         public long getRecoveryTime() { return recoveryTime; }
         public int getBackoffSeconds() { return backoffSeconds; }
+    }
+
+    // ========== 缓存层 ==========
+
+    /** 从缓存获取历史数据 */
+    private List<StockDailyData> getFromCache(String stockCode, LocalDate startDate, LocalDate endDate) {
+        if (dailyDataRepo == null) return null;
+        try {
+            LocalDate maxDate = dailyDataRepo.findMaxTradeDate(stockCode);
+            if (maxDate == null) return null;
+            // 如果缓存数据的最新日期在 CACHE_EXPIRE_DAYS 内，认为有效
+            if (maxDate.plusDays(CACHE_EXPIRE_DAYS).isBefore(LocalDate.now()) && endDate.isAfter(maxDate)) {
+                return null; // 缓存过期
+            }
+            List<StockDailyData> cached = dailyDataRepo.findByStockCodeAndDateRange(stockCode, startDate, endDate);
+            // 至少要有一定比例的数据才认为缓存有效
+            if (cached != null && cached.size() > 0) return cached;
+        } catch (Exception e) {
+            log.debug("缓存查询异常(忽略): {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /** 保存数据到缓存 */
+    private void saveToCache(List<StockDailyData> data) {
+        if (dailyDataRepo == null || data == null || data.isEmpty()) return;
+        try {
+            dailyDataRepo.batchInsert(data);
+        } catch (Exception e) {
+            // 可能是重复插入，忽略
+            log.debug("缓存写入异常(不影响功能): {}", e.getMessage());
+        }
     }
 }

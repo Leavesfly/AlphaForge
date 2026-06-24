@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.AlertNotificationRepository">
+
+    <resultMap id="notifMap" type="io.leavesfly.stock.domain.model.entity.AlertNotification">
+        <id property="id" column="id"/>
+        <result property="triggerId" column="trigger_id"/>
+        <result property="channel" column="channel"/>
+        <result property="success" column="success"/>
+        <result property="errorCode" column="error_code"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="sentAt" column="sent_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO alert_notifications (trigger_id, channel, success, error_code, error_message, sent_at)
+        VALUES (#{triggerId}, #{channel}, #{success}, #{errorCode}, #{errorMessage}, #{sentAt})
+    </insert>
+
+    <select id="findById" resultMap="notifMap">
+        SELECT * FROM alert_notifications WHERE id = #{id}
+    </select>
+
+    <select id="findByTriggerId" resultMap="notifMap">
+        SELECT * FROM alert_notifications WHERE trigger_id = #{triggerId} ORDER BY sent_at DESC
+    </select>
+
+    <select id="findAll" resultMap="notifMap">
+        SELECT * FROM alert_notifications ORDER BY sent_at DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM alert_notifications
+    </select>
+
+    <select id="findByChannel" resultMap="notifMap">
+        SELECT * FROM alert_notifications WHERE channel = #{channel} ORDER BY sent_at DESC
+    </select>
+
+</mapper>

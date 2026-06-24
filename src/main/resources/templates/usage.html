@@ -4,6 +4,128 @@
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Token统计 - 股票智能分析系统</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1 data-i18n="usage.title">Token 使用统计</h1>
+            <div class="actions">
+                <select class="form-select" id="periodSelect" onchange="loadDashboard()">
+                    <option value="today">今天</option>
+                    <option value="week">近7天</option>
+                    <option value="month" selected>近30天</option>
+                    <option value="all">全部</option>
+                </select>
+            </div>
+        </header>
+
+        <div class="card-grid" id="usageOverview">
+            <div class="card"><h3 data-i18n="usage.totalCalls">总请求数</h3><p class="card-value" id="totalRequests">--</p></div>
+            <div class="card"><h3 data-i18n="usage.totalTokens">总Token消耗</h3><p class="card-value" id="totalTokens">--</p></div>
+            <div class="card"><h3 data-i18n="usage.totalCost">估算费用</h3><p class="card-value" id="totalCost">--</p></div>
+            <div class="card"><h3 data-i18n="usage.analysisCount">分析报告数</h3><p class="card-value" id="analysisCount">--</p></div>
+        </div>
+
+        <!-- 用量趋势图 -->
+        <section class="section">
+            <h2 class="mb-3" data-i18n="usage.trend">用量趋势</h2>
+            <div class="card" id="chartCard" style="display:none;"><div class="chart-container-sm"><canvas id="usageChart"></canvas></div></div>
+        </section>
+
+        <section class="section">
+            <h2 class="mb-3" data-i18n="usage.daily">每日用量</h2>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead><tr><th>日期</th><th>请求数</th><th>输入Token</th><th>输出Token</th><th>总Token</th><th>费用</th></tr></thead>
+                    <tbody id="dailyUsageBody"><tr><td colspan="6" class="empty">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="mb-3" data-i18n="usage.byModel">按模型统计</h2>
+            <div id="modelStats" class="card-grid"></div>
+        </section>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+let usageChart = null;
+
+async function loadDashboard() {
+    const period = document.getElementById('periodSelect').value;
+    try {
+        const data = await api.get('/usage/dashboard', { period });
+        document.getElementById('totalRequests').textContent = (data.total_calls || 0).toLocaleString();
+        document.getElementById('totalTokens').textContent = (data.total_tokens || 0).toLocaleString();
+        document.getElementById('totalCost').textContent = data.total_cost != null ? '$' + Number(data.total_cost).toFixed(4) : '--';
+        document.getElementById('analysisCount').textContent = data.analysis_count || 0;
+
+        // 按模型统计
+        const models = data.by_model || [];
+        document.getElementById('modelStats').innerHTML = models.length === 0 ? '<div class="text-muted">暂无数据</div>' :
+            models.map(m => `<div class="card"><h3>${m.model || '未知'}</h3>
+                <p class="card-value">${Number(m.total_tokens||0).toLocaleString()}</p>
+                <p class="text-sm text-muted">${m.calls||0} 次请求</p></div>`).join('');
+
+        // 每日趋势图
+        const byDate = data.by_date || [];
+        if (byDate.length > 0) {
+            document.getElementById('chartCard').style.display = '';
+            renderUsageChart(byDate);
+        } else {
+            document.getElementById('chartCard').style.display = 'none';
+        }
+
+        // 每日表格
+        renderDailyTable(byDate);
+    } catch(e) { console.error(e); }
+}
+
+function renderDailyTable(items) {
+    document.getElementById('dailyUsageBody').innerHTML = items.length === 0 ? '<tr><td colspan="6" class="empty">暂无记录</td></tr>' :
+        items.map(d => `<tr>
+            <td>${d.date || d.usage_date || '--'}</td>
+            <td>${Number(d.calls||0).toLocaleString()}</td>
+            <td>${Number(d.prompt_tokens||0).toLocaleString()}</td>
+            <td>${Number(d.completion_tokens||0).toLocaleString()}</td>
+            <td>${Number(d.total_tokens||0).toLocaleString()}</td>
+            <td>${d.cost!=null?'$'+Number(d.cost).toFixed(4):'--'}</td>
+        </tr>`).join('');
+}
+
+function renderUsageChart(byDate) {
+    const labels = byDate.map(d => d.date || d.usage_date).reverse();
+    const tokens = byDate.map(d => Number(d.total_tokens || 0)).reverse();
+    const calls = byDate.map(d => Number(d.calls || 0)).reverse();
+
+    if (usageChart) usageChart.destroy();
+    const ctx = document.getElementById('usageChart').getContext('2d');
+    usageChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Token消耗', data: tokens, backgroundColor: 'rgba(59,130,246,.5)', yAxisID: 'y' },
+                { label: '请求数', data: calls, type: 'line', borderColor: '#f59e0b', yAxisID: 'y1', tension: .3 }
+            ]
+        },
+        options: { responsive: true, scales: { y: { position:'left' }, y1: { position:'right', grid:{drawOnChartArea:false} } } }
+    });
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token统计 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
 <div class="layout">

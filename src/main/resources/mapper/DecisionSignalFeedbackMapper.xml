@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.DecisionSignalFeedbackRepository">
+
+    <resultMap id="feedbackMap" type="io.leavesfly.stock.domain.model.entity.DecisionSignalFeedback">
+        <id property="id" column="id"/>
+        <result property="signalId" column="signal_id"/>
+        <result property="feedbackValue" column="feedback_value"/>
+        <result property="reasonCode" column="reason_code"/>
+        <result property="note" column="note"/>
+        <result property="source" column="source"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO decision_signal_feedback (signal_id, feedback_value, reason_code, note, source, created_at, updated_at)
+        VALUES (#{signalId}, #{feedbackValue}, #{reasonCode}, #{note}, #{source}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE decision_signal_feedback SET feedback_value=#{feedbackValue}, reason_code=#{reasonCode}, note=#{note}, source=#{source}, updated_at=#{updatedAt}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findBySignalId" resultMap="feedbackMap">
+        SELECT * FROM decision_signal_feedback WHERE signal_id = #{signalId}
+    </select>
+
+    <delete id="deleteBySignalId">
+        DELETE FROM decision_signal_feedback WHERE signal_id = #{signalId}
+    </delete>
+
+</mapper>

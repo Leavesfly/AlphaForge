@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.DecisionSignalOutcomeRepository">
+
+    <resultMap id="outcomeMap" type="io.leavesfly.stock.domain.model.entity.DecisionSignalOutcome">
+        <id property="id" column="id"/>
+        <result property="signalId" column="signal_id"/>
+        <result property="horizon" column="horizon"/>
+        <result property="engineVersion" column="engine_version"/>
+        <result property="evalStatus" column="eval_status"/>
+        <result property="outcome" column="outcome"/>
+        <result property="returnPct" column="return_pct"/>
+        <result property="entryPrice" column="entry_price"/>
+        <result property="exitPrice" column="exit_price"/>
+        <result property="actualMovement" column="actual_movement"/>
+        <result property="directionExpected" column="direction_expected"/>
+        <result property="unableReason" column="unable_reason"/>
+        <result property="evaluatedAt" column="evaluated_at"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO decision_signal_outcomes (signal_id, horizon, engine_version, eval_status, outcome, return_pct, entry_price, exit_price, actual_movement, direction_expected, unable_reason, evaluated_at, created_at)
+        VALUES (#{signalId}, #{horizon}, #{engineVersion}, #{evalStatus}, #{outcome}, #{returnPct}, #{entryPrice}, #{exitPrice}, #{actualMovement}, #{directionExpected}, #{unableReason}, #{evaluatedAt}, #{createdAt})
+    </insert>
+
+    <select id="findById" resultMap="outcomeMap">
+        SELECT * FROM decision_signal_outcomes WHERE id = #{id}
+    </select>
+
+    <select id="findBySignalId" resultMap="outcomeMap">
+        SELECT * FROM decision_signal_outcomes WHERE signal_id = #{signalId} ORDER BY created_at DESC
+    </select>
+
+    <select id="findAll" resultMap="outcomeMap">
+        SELECT * FROM decision_signal_outcomes
+        <where>
+            <if test="signalId != null">AND signal_id = #{signalId}</if>
+            <if test="horizon != null and horizon != ''">AND horizon = #{horizon}</if>
+            <if test="engineVersion != null and engineVersion != ''">AND engine_version = #{engineVersion}</if>
+            <if test="evalStatus != null and evalStatus != ''">AND eval_status = #{evalStatus}</if>
+            <if test="outcome != null and outcome != ''">AND outcome = #{outcome}</if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM decision_signal_outcomes
+        <where>
+            <if test="signalId != null">AND signal_id = #{signalId}</if>
+            <if test="horizon != null and horizon != ''">AND horizon = #{horizon}</if>
+            <if test="evalStatus != null and evalStatus != ''">AND eval_status = #{evalStatus}</if>
+            <if test="outcome != null and outcome != ''">AND outcome = #{outcome}</if>
+        </where>
+    </select>
+
+    <delete id="deleteBySignalId">
+        DELETE FROM decision_signal_outcomes WHERE signal_id = #{signalId}
+    </delete>
+
+    <select id="getOutcomeStats" resultType="map">
+        SELECT outcome, COUNT(*) as count,
+               AVG(return_pct) as avg_return_pct,
+               COUNT(CASE WHEN outcome = 'win' THEN 1 END) as win_count,
+               COUNT(CASE WHEN outcome = 'loss' THEN 1 END) as loss_count
+        FROM decision_signal_outcomes
+        WHERE eval_status = 'completed'
+        GROUP BY outcome
+    </select>
+
+    <select id="getStatsByHorizon" resultType="map">
+        SELECT horizon, outcome, COUNT(*) as count, AVG(return_pct) as avg_return_pct
+        FROM decision_signal_outcomes
+        WHERE eval_status = 'completed'
+        <if test="horizons != null and horizons.size() > 0">
+            AND horizon IN
+            <foreach item="h" collection="horizons" open="(" separator="," close=")">#{h}</foreach>
+        </if>
+        <if test="engineVersion != null and engineVersion != ''">AND engine_version = #{engineVersion}</if>
+        GROUP BY horizon, outcome
+    </select>
+
+</mapper>

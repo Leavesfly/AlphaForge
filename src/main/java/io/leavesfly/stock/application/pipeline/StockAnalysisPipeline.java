@@ -339,13 +339,13 @@ public class StockAnalysisPipeline {
         if ("neutral".equals(result.signal)) return;
 
         try {
-            String signalType = result.signal.contains("buy") ? "buy" : result.signal.contains("sell") ? "sell" : "hold";
-            int strength = result.score != null ? result.score : 50;
-            double confidence = result.confidence != null ? parseConfidence(result.confidence) : 0.5;
+            String action = result.signal.contains("buy") ? "buy" : result.signal.contains("sell") ? "sell" : "hold";
+            Integer score = result.score != null ? result.score : 50;
+            Double confidence = result.confidence != null ? parseConfidence(result.confidence) : 0.5;
 
             decisionSignalService.extractFromReport(
                     report.getId(), report.getStockCode(), report.getStockName(),
-                    signalType, strength, confidence,
+                    action, confidence, score,
                     result.targetPrice, result.stopLossPrice, result.operationAdvice);
         } catch (Exception e) {
             log.debug("[{}] 信号提取失败: {}", report.getStockCode(), e.getMessage());

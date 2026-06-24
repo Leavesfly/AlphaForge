@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.LlmUsageDailyRepository">
+
+    <resultMap id="usageMap" type="io.leavesfly.stock.domain.model.entity.LlmUsageDaily">
+        <id property="id" column="id"/>
+        <result property="usageDate" column="usage_date"/>
+        <result property="model" column="model"/>
+        <result property="provider" column="provider"/>
+        <result property="requestCount" column="request_count"/>
+        <result property="promptTokens" column="prompt_tokens"/>
+        <result property="completionTokens" column="completion_tokens"/>
+        <result property="totalTokens" column="total_tokens"/>
+        <result property="totalCost" column="total_cost"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO llm_usage_daily (usage_date, model, provider, request_count, prompt_tokens, completion_tokens, total_tokens, total_cost, created_at, updated_at)
+        VALUES (#{usageDate}, #{model}, #{provider}, #{requestCount}, #{promptTokens}, #{completionTokens}, #{totalTokens}, #{totalCost}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <update id="update">
+        UPDATE llm_usage_daily SET request_count=#{requestCount}, prompt_tokens=#{promptTokens}, completion_tokens=#{completionTokens}, total_tokens=#{totalTokens}, total_cost=#{totalCost}, updated_at=CURRENT_TIMESTAMP
+        WHERE id=#{id}
+    </update>
+
+    <select id="findByDateAndModel" resultMap="usageMap">
+        SELECT * FROM llm_usage_daily WHERE usage_date=#{usageDate} AND model=#{model}
+    </select>
+
+    <select id="findByDateRange" resultMap="usageMap">
+        SELECT * FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate} ORDER BY usage_date DESC, model
+    </select>
+
+    <select id="findByModel" resultMap="usageMap">
+        SELECT * FROM llm_usage_daily WHERE model=#{model} ORDER BY usage_date DESC LIMIT #{limit}
+    </select>
+
+    <select id="aggregateByDate" resultType="map">
+        SELECT usage_date AS date, SUM(request_count) AS calls, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(total_tokens) AS total_tokens, SUM(total_cost) AS cost
+        FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}
+        GROUP BY usage_date ORDER BY usage_date DESC
+    </select>
+
+    <select id="aggregateByModel" resultType="map">
+        SELECT model, SUM(request_count) AS calls, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(total_tokens) AS total_tokens, SUM(total_cost) AS cost
+        FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}
+        GROUP BY model ORDER BY total_tokens DESC
+    </select>
+
+    <select id="getTotalStats" resultType="map">
+        SELECT COALESCE(SUM(request_count),0) AS total_calls, COALESCE(SUM(prompt_tokens),0) AS total_prompt_tokens, COALESCE(SUM(completion_tokens),0) AS total_completion_tokens, COALESCE(SUM(total_tokens),0) AS total_tokens, COALESCE(SUM(total_cost),0) AS total_cost
+        FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+</mapper>
