@@ -1,6 +1,6 @@
 package io.leavesfly.stock.service;
 
-import io.leavesfly.stock.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.StockDailyData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 

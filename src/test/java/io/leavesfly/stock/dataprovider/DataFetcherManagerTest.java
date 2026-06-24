@@ -1,8 +1,10 @@
 package io.leavesfly.stock.dataprovider;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.model.entity.StockDailyData;
-import io.leavesfly.stock.model.enums.MarketType;
+import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.enums.MarketType;
+import io.leavesfly.stock.infrastructure.dataprovider.BaseDataFetcher;
+import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

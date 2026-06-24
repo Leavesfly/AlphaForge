@@ -1,6 +1,7 @@
 package io.leavesfly.stock.notification;
 
-import io.leavesfly.stock.model.enums.NotificationChannel;
+import io.leavesfly.stock.domain.model.enums.NotificationChannel;
+import io.leavesfly.stock.infrastructure.notification.NotificationRouter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;

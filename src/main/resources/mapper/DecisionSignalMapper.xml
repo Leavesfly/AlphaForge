@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.repository.DecisionSignalRepository">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.DecisionSignalRepository">
 
-    <resultMap id="decisionSignalMap" type="io.leavesfly.stock.model.entity.DecisionSignal">
+    <resultMap id="decisionSignalMap" type="io.leavesfly.stock.domain.model.entity.DecisionSignal">
         <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
         <result property="stockName" column="stock_name"/>

@@ -1,7 +1,7 @@
 package io.leavesfly.stock.config;
 
-import io.leavesfly.stock.model.enums.MarketType;
-import io.leavesfly.stock.model.enums.NotificationChannel;
+import io.leavesfly.stock.domain.model.enums.MarketType;
+import io.leavesfly.stock.domain.model.enums.NotificationChannel;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;

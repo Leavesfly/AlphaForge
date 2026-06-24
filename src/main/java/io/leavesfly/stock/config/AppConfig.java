@@ -10,10 +10,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 应用配置管理器 - 单例模式
+ * 应用配置管理器 - 门面模式
  * 
- * 从.env文件和环境变量加载配置
- * 对应Python版本的 src/config.py
+ * 从.env文件和环境变量加载配置。
+ * 内部委托给职责分离的子配置类（LlmConfig、DataProviderConfig、NotificationConfig、SchedulerAuthConfig）。
+ * 对外保持原有 getter 接口不变，确保向后兼容。
  */
 @Configuration
 public class AppConfig {
@@ -21,6 +22,12 @@ public class AppConfig {
     private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
 
     private Dotenv dotenv;
+
+    // ========== 子配置组合 ==========
+    private final LlmConfig llmConfig = new LlmConfig();
+    private final DataProviderConfig dataProviderConfig = new DataProviderConfig();
+    private final NotificationConfig notificationConfig = new NotificationConfig();
+    private final SchedulerAuthConfig schedulerAuthConfig = new SchedulerAuthConfig();
 
     // ========== 服务配置 ==========
     private int serverPort = 8000;

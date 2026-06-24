@@ -1,8 +1,8 @@
 package io.leavesfly.stock;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.core.StockAnalysisPipeline;
-import io.leavesfly.stock.scheduler.AnalysisScheduler;
+import io.leavesfly.stock.application.pipeline.StockAnalysisPipeline;
+import io.leavesfly.stock.presentation.scheduler.AnalysisScheduler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;

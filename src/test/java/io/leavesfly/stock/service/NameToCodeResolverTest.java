@@ -1,5 +1,6 @@
 package io.leavesfly.stock.service;
 
+import io.leavesfly.stock.application.service.NameToCodeResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 
