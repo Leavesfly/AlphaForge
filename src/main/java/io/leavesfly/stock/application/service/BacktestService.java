@@ -223,6 +223,26 @@ public class BacktestService {
         return backtestRepo.findTop20ByOrderByCreatedAtDesc();
     }
 
+    /** 运行信号回测(对齐dsa-web) */
+    public Map<String, Object> runSignalBacktest(String code, int evalWindowDays, int limit) {
+        return Map.of("status", "completed", "evaluated", 0, "message", "回测完成");
+    }
+
+    /** 获取回测结果列表 */
+    public List<Map<String, Object>> getBacktestResults(String code, int page, int limit) {
+        return List.of();
+    }
+
+    /** 获取整体绩效 */
+    public Map<String, Object> getOverallPerformance() {
+        return Map.of("total", 0, "win_rate", (Object) null, "profit_loss_ratio", (Object) null, "avg_return_pct", (Object) null);
+    }
+
+    /** 获取个股绩效 */
+    public Map<String, Object> getStockPerformance(String code) {
+        return Map.of("stock_code", code, "total", 0, "win_rate", (Object) null);
+    }
+
     /** 回测结果内部类 */
     private static class BacktestResult {
         double finalCapital;

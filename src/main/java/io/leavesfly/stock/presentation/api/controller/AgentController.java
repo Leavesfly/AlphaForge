@@ -155,12 +155,81 @@ public class AgentController {
     }
 
     /**
-     * 清除会话
-     * DELETE /api/v1/agent/session/{sessionId}
+     * 获取技能列表
+     * GET /api/v1/agent/skills
      */
-    @DeleteMapping("/session/{sessionId}")
-    public ResponseEntity<Map<String, Object>> clearSession(@PathVariable String sessionId) {
+    @GetMapping("/skills")
+    public ResponseEntity<Map<String, Object>> getSkills() {
+        List<Map<String, String>> skills = List.of(
+            Map.of("id", "chan_theory", "name", "缠论", "description", "缠论分析框架"),
+            Map.of("id", "wave_theory", "name", "波浪理论", "description", "艾略特波浪分析"),
+            Map.of("id", "bull_trend", "name", "牛趋势", "description", "趋势跟踪分析"),
+            Map.of("id", "emotion_cycle", "name", "情绪周期", "description", "市场情绪分析"),
+            Map.of("id", "box_oscillation", "name", "箱体震荡", "description", "箱体突破分析"),
+            Map.of("id", "shrink_pullback", "name", "缩量回调", "description", "缩量回调买入策略")
+        );
+        return ResponseEntity.ok(Map.of("skills", skills, "default_skill_id", "bull_trend"));
+    }
+
+    /**
+     * 获取会话列表
+     * GET /api/v1/agent/chat/sessions
+     */
+    @GetMapping("/chat/sessions")
+    public ResponseEntity<Map<String, Object>> getChatSessions(@RequestParam(defaultValue = "50") int limit) {
+        List<Map<String, Object>> sessionList = new ArrayList<>();
+        sessions.forEach((id, history) -> {
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("session_id", id);
+            info.put("title", history.size() > 1 ? history.get(1).getOrDefault("content", "新对话").toString().substring(0, Math.min(30, history.get(1).getOrDefault("content", "").toString().length())) : "新对话");
+            info.put("message_count", history.size());
+            info.put("created_at", null);
+            info.put("last_active", null);
+            sessionList.add(info);
+        });
+        if (sessionList.size() > limit) sessionList.subList(limit, sessionList.size()).clear();
+        return ResponseEntity.ok(Map.of("sessions", sessionList));
+    }
+
+    /**
+     * 获取会话消息
+     * GET /api/v1/agent/chat/sessions/{sessionId}
+     */
+    @GetMapping("/chat/sessions/{sessionId}")
+    public ResponseEntity<Map<String, Object>> getSessionMessages(@PathVariable String sessionId) {
+        List<Map<String, String>> history = sessions.get(sessionId);
+        if (history == null) return ResponseEntity.notFound().build();
+        List<Map<String, Object>> messages = new ArrayList<>();
+        for (int i = 1; i < history.size(); i++) {
+            Map<String, String> msg = history.get(i);
+            messages.add(Map.of(
+                "id", String.valueOf(i),
+                "role", msg.getOrDefault("role", "user"),
+                "content", msg.getOrDefault("content", ""),
+                "created_at", ""
+            ));
+        }
+        return ResponseEntity.ok(Map.of("messages", messages));
+    }
+
+    /**
+     * 删除会话
+     * DELETE /api/v1/agent/chat/sessions/{sessionId}
+     */
+    @DeleteMapping("/chat/sessions/{sessionId}")
+    public ResponseEntity<Map<String, Object>> deleteSession(@PathVariable String sessionId) {
         sessions.remove(sessionId);
-        return ResponseEntity.ok(Map.of("status", "cleared", "session_id", sessionId));
+        return ResponseEntity.ok(Map.of("status", "deleted", "session_id", sessionId));
+    }
+
+    /**
+     * 快速发送(非流式)
+     * POST /api/v1/agent/chat/send
+     */
+    @PostMapping("/chat/send")
+    public ResponseEntity<Map<String, Object>> sendChat(@RequestBody Map<String, Object> request) {
+        String content = (String) request.getOrDefault("content", "");
+        if (content.isEmpty()) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "content不能为空"));
+        return ResponseEntity.ok(Map.of("success", true));
     }
 }

@@ -68,6 +68,46 @@ public class AlertService {
         alertRepo.deleteById(id);
     }
 
+    /** 启用告警规则 */
+    public void enableAlert(Long id) {
+        alertRepo.findByIdOpt(id).ifPresent(rule -> {
+            rule.setEnabled(true);
+            alertRepo.save(rule);
+        });
+    }
+
+    /** 禁用告警规则 */
+    public void disableAlert(Long id) {
+        alertRepo.findByIdOpt(id).ifPresent(rule -> {
+            rule.setEnabled(false);
+            alertRepo.save(rule);
+        });
+    }
+
+    /** 测试告警规则 */
+    public Map<String, Object> testAlert(Long id) {
+        Optional<AlertRule> opt = alertRepo.findByIdOpt(id);
+        if (opt.isEmpty()) return Map.of("status", "not_found", "triggered", false, "message", "规则不存在");
+        AlertRule rule = opt.get();
+        try {
+            boolean triggered = evaluateAlert(rule);
+            return Map.of("status", "ok", "triggered", triggered, "message", triggered ? "规则触发" : "规则未触发");
+        } catch (Exception e) {
+            return Map.of("status", "evaluation_error", "triggered", false, "message", e.getMessage());
+        }
+    }
+
+    /** 获取触发历史 */
+    public List<Map<String, Object>> getTriggerHistory(int page, int pageSize) {
+        // 简化实现: 返回空列表，待接入实际存储
+        return List.of();
+    }
+
+    /** 获取通知日志 */
+    public List<Map<String, Object>> getNotificationHistory(int page, int pageSize) {
+        return List.of();
+    }
+
     /**
      * 告警工作线程 - 每分钟检查一次
      * 对应Python版本的alert_worker.py

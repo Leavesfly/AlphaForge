@@ -64,4 +64,37 @@ public class DecisionSignalOutcomeService {
                 .limit(10).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new)));
         return summary;
     }
+
+    /** 运行信号结果评估 */
+    public List<Map<String, Object>> runEvaluation(Map<String, Object> request) {
+        return List.of();
+    }
+
+    /** 获取结果列表 */
+    public List<Map<String, Object>> listOutcomes(Long signalId, int page, int pageSize) {
+        return List.of();
+    }
+
+    /** 获取统计数据 */
+    public Map<String, Object> getStats() {
+        Map<String, Object> stats = new LinkedHashMap<>();
+        List<DecisionSignal> all = signalRepo.findTop20ByOrderByCreatedAtDesc();
+        stats.put("total", all.size());
+        stats.put("win_count", 0);
+        stats.put("loss_count", 0);
+        stats.put("win_rate", null);
+        return stats;
+    }
+
+    /** 获取信号反馈 */
+    public Map<String, Object> getFeedback(Long signalId) {
+        return Map.of("signal_id", signalId, "feedback_value", "", "note", "");
+    }
+
+    /** 保存信号反馈 */
+    public Map<String, Object> saveFeedback(Long signalId, Map<String, Object> request) {
+        Map<String, Object> result = new LinkedHashMap<>(request);
+        result.put("signal_id", signalId);
+        return result;
+    }
 }

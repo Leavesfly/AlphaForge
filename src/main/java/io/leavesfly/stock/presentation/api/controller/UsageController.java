@@ -26,12 +26,24 @@ public class UsageController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getUsage() {
         Map<String, Object> usage = new LinkedHashMap<>();
-        usage.put("total_analyses", historyService.getTotalAnalysisCount());
+        usage.put("total_requests", historyService.getTotalAnalysisCount());
+        usage.put("total_tokens", 0);
+        usage.put("total_cost", 0.0);
+        usage.put("model_count", config.getLlmChannels().size());
         usage.put("llm_model", config.getLlmModel());
         usage.put("agent_mode", config.getAgentMode());
-        // Token统计(简化版)
-        usage.put("estimated_tokens_today", 0);
-        usage.put("estimated_cost_today", "$0.00");
+        // 按模型统计
+        List<Map<String, Object>> byModel = new ArrayList<>();
+        for (var ch : config.getLlmChannels()) {
+            byModel.add(Map.of("model", ch.getModel(), "total_tokens", 0, "request_count", 0));
+        }
+        usage.put("by_model", byModel);
         return ResponseEntity.ok(usage);
+    }
+
+    /** 每日用量统计 */
+    @GetMapping("/daily")
+    public ResponseEntity<Map<String, Object>> getDailyUsage() {
+        return ResponseEntity.ok(Map.of("items", List.of()));
     }
 }

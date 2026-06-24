@@ -464,6 +464,8 @@ public class AppConfig {
     public String getAuthSecret() { return authSecret; }
     public String getAuthPassword() { return authPassword; }
     public boolean isAuthEnabled() { return authEnabled; }
+    public void setAuthPasswordRuntime(String password) { this.authPassword = password; }
+    public void setAuthEnabledRuntime(boolean enabled) { this.authEnabled = enabled; }
     public String getScheduleCron() { return scheduleCron; }
     public String getTimezone() { return timezone; }
     public String getAgentMode() { return agentMode; }

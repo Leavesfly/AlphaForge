@@ -48,6 +48,19 @@ public class DecisionSignalService {
         return signalRepo.findTop20ByOrderByCreatedAtDesc();
     }
 
+    /** 获取信号详情 */
+    public Optional<DecisionSignal> getSignalById(Long id) {
+        return signalRepo.findByIdOpt(id);
+    }
+
+    /** 更新信号状态 */
+    public DecisionSignal updateSignalStatus(Long id, String status) {
+        return signalRepo.findByIdOpt(id).map(s -> {
+            s.setStatus(status);
+            return signalRepo.save(s);
+        }).orElse(null);
+    }
+
     /** 标记信号为已执行 */
     public DecisionSignal executeSignal(Long id) {
         return signalRepo.findByIdOpt(id).map(s -> {
