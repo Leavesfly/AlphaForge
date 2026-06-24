@@ -1,5 +1,257 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI问股 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content" style="padding:0;max-width:none;">
+        <div class="chat-layout">
+            <!-- 会话列表 -->
+            <div class="chat-sidebar">
+                <div class="chat-sidebar-header">
+                    <button class="btn btn-primary btn-sm w-full" onclick="newSession()">+ 新对话</button>
+                </div>
+                <div id="sessionList" class="chat-session-list"></div>
+            </div>
+            <!-- 主聊天区 -->
+            <div class="chat-main">
+                <!-- 技能选择 -->
+                <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span class="text-sm text-muted">技能:</span>
+                    <div id="skillTags" class="skill-tags" style="margin:0;"></div>
+                    <div style="margin-left:auto;">
+                        <button class="btn btn-sm btn-ghost" onclick="exportChat()">📥 导出</button>
+                    </div>
+                </div>
+                <!-- 消息区 -->
+                <div id="chatMessages" class="chat-messages">
+                    <div class="empty-state" id="chatEmpty">
+                        <div class="icon">🤖</div>
+                        <h4>AI问股助手</h4>
+                        <p>你可以问任何关于股票分析、市场走势、投资策略的问题</p>
+                        <div class="skill-tags mt-4" id="quickQuestions"></div>
+                    </div>
+                </div>
+                <!-- 输入 -->
+                <form class="chat-input-form" onsubmit="sendMessage(event)">
+                    <input type="text" id="chatInput" class="form-input" placeholder="输入问题，如: 用缠论分析茅台" autocomplete="off">
+                    <button type="submit" id="sendBtn" class="btn btn-primary">发送</button>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+marked.setOptions({ breaks: true, gfm: true, highlight: (code, lang) => {
+    if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang }).value;
+    return hljs.highlightAuto(code).value;
+}});
+
+const SKILLS = [
+    {id:'chan_theory',name:'缠论'},{id:'wave_theory',name:'波浪理论'},
+    {id:'bull_trend',name:'牛趋势'},{id:'emotion_cycle',name:'情绪周期'},
+    {id:'box_oscillation',name:'箱体震荡'},{id:'shrink_pullback',name:'缩量回调'},
+];
+const QUICK_QUESTIONS = [
+    {label:'用缠论分析茅台',skill:'chan_theory'},
+    {label:'波浪理论看宁德时代',skill:'wave_theory'},
+    {label:'分析比亚迪趋势',skill:'bull_trend'},
+    {label:'分析腾讯 hk00700',skill:'bull_trend'},
+];
+
+let currentSessionId = 'web_' + Date.now();
+let selectedSkills = [];
+let isStreaming = false;
+let sessions = [];
+
+// 初始化技能标签
+function renderSkillTags() {
+    const container = document.getElementById('skillTags');
+    container.innerHTML = SKILLS.map(s => 
+        `<span class="skill-tag ${selectedSkills.includes(s.id)?'selected':''}" onclick="toggleSkill('${s.id}')">${s.name}</span>`
+    ).join('');
+}
+function toggleSkill(id) {
+    if (selectedSkills.includes(id)) selectedSkills = selectedSkills.filter(s => s !== id);
+    else if (selectedSkills.length < 3) selectedSkills.push(id);
+    renderSkillTags();
+}
+
+// 快速问题
+function renderQuickQuestions() {
+    document.getElementById('quickQuestions').innerHTML = QUICK_QUESTIONS.map(q =>
+        `<span class="skill-tag" onclick="askQuick('${q.label}','${q.skill}')">${q.label}</span>`
+    ).join('');
+}
+
+function askQuick(label, skill) {
+    document.getElementById('chatInput').value = label;
+    if (!selectedSkills.includes(skill)) { selectedSkills = [skill]; renderSkillTags(); }
+    sendMessage(new Event('submit'));
+}
+
+// 发送消息
+async function sendMessage(e) {
+    e.preventDefault();
+    if (isStreaming) return;
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    document.getElementById('chatEmpty')?.remove();
+    appendMessage('user', msg);
+    input.value = '';
+    setStreaming(true);
+
+    const assistantDiv = createAssistantPlaceholder();
+    let fullText = '';
+
+    try {
+        const response = await fetch('/api/v1/agent/chat/stream', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, session_id: currentSessionId, skills: selectedSkills.length > 0 ? selectedSkills : undefined })
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (line.startsWith('event:') && line.includes('done')) break;
+                if (line.startsWith('data:')) { fullText += line.substring(5); renderMarkdown(assistantDiv, fullText); }
+            }
+        }
+        if (fullText) renderMarkdown(assistantDiv, fullText);
+        else assistantDiv.querySelector('.md-content').textContent = '✅ 完成';
+    } catch (err) {
+        assistantDiv.querySelector('.md-content').innerHTML = '<span style="color:var(--danger)">❌ 请求失败: ' + err.message + '</span>';
+    } finally { setStreaming(false); loadSessions(); }
+}
+
+function appendMessage(role, text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function createAssistantPlaceholder() {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    div.innerHTML = '<div class="md-content"><span class="typing-indicator">●●●</span></div>';
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div;
+}
+
+function renderMarkdown(el, text) {
+    const content = el.querySelector('.md-content');
+    content.innerHTML = marked.parse(text);
+    content.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+}
+
+function setStreaming(val) {
+    isStreaming = val;
+    document.getElementById('sendBtn').disabled = val;
+    document.getElementById('chatInput').disabled = val;
+    document.getElementById('sendBtn').textContent = val ? '生成中...' : '发送';
+}
+
+// 会话管理
+async function loadSessions() {
+    try {
+        const data = await api.get('/agent/chat/sessions', { limit: 30 });
+        sessions = data.sessions || [];
+        renderSessions();
+    } catch(e) { /* ignore */ }
+}
+
+function renderSessions() {
+    const container = document.getElementById('sessionList');
+    container.innerHTML = sessions.map(s => `
+        <div class="chat-session-item ${s.session_id === currentSessionId ? 'active' : ''}" onclick="switchSession('${s.session_id}')">
+            <span class="truncate" style="flex:1">${s.title || '新对话'}</span>
+            <button class="btn-ghost" style="font-size:.7rem;padding:2px 4px;" onclick="event.stopPropagation();deleteSession('${s.session_id}')">✕</button>
+        </div>
+    `).join('');
+}
+
+function newSession() {
+    currentSessionId = 'web_' + Date.now();
+    document.getElementById('chatMessages').innerHTML = '';
+    renderQuickQuestions();
+    document.getElementById('chatMessages').prepend(
+        el('div', { className: 'empty-state', id: 'chatEmpty', innerHTML: '<div class="icon">🤖</div><h4>AI问股助手</h4><p>开始新的对话</p>' })
+    );
+    renderSessions();
+}
+
+async function switchSession(sessionId) {
+    currentSessionId = sessionId;
+    renderSessions();
+    try {
+        const data = await api.get(`/agent/chat/sessions/${sessionId}`);
+        const messages = data.messages || [];
+        const container = document.getElementById('chatMessages');
+        container.innerHTML = '';
+        messages.forEach(m => {
+            const div = document.createElement('div');
+            div.className = 'message ' + m.role;
+            if (m.role === 'assistant') { div.innerHTML = '<div class="md-content">' + marked.parse(m.content) + '</div>'; }
+            else { div.textContent = m.content; }
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    } catch(e) { showToast('加载会话失败', 'error'); }
+}
+
+async function deleteSession(sessionId) {
+    if (!await confirmDialog('确认删除此会话？')) return;
+    try { await api.delete(`/agent/chat/sessions/${sessionId}`); loadSessions(); } catch(e) {}
+}
+
+function exportChat() {
+    const messages = document.querySelectorAll('#chatMessages .message');
+    let md = '# AI问股对话导出\n\n';
+    messages.forEach(m => {
+        if (m.classList.contains('user')) md += '**用户**: ' + m.textContent + '\n\n';
+        else if (m.classList.contains('assistant')) md += '**助手**: ' + (m.querySelector('.md-content')?.textContent || '') + '\n\n';
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `chat_${new Date().toISOString().slice(0,10)}.md`;
+    a.click();
+}
+
+// 初始化
+renderSkillTags();
+renderQuickQuestions();
+loadSessions();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI问股 - 股票智能分析系统</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">

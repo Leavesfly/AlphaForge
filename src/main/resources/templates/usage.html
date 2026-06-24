@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token统计 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>Token 使用统计</h1></header>
+
+        <div class="card-grid" id="usageOverview">
+            <div class="card"><h3>总请求数</h3><p class="card-value" id="totalRequests">--</p></div>
+            <div class="card"><h3>总Token消耗</h3><p class="card-value" id="totalTokens">--</p></div>
+            <div class="card"><h3>估算费用</h3><p class="card-value" id="totalCost">--</p></div>
+            <div class="card"><h3>活跃模型数</h3><p class="card-value" id="modelCount">--</p></div>
+        </div>
+
+        <section class="section">
+            <h2 class="mb-3">每日用量</h2>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead><tr><th>日期</th><th>模型</th><th>请求数</th><th>输入Token</th><th>输出Token</th><th>总Token</th><th>费用</th></tr></thead>
+                    <tbody id="dailyUsageBody"><tr><td colspan="7" class="empty">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="mb-3">按模型统计</h2>
+            <div id="modelStats" class="card-grid"></div>
+        </section>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+async function loadUsage() {
+    try {
+        const data = await api.get('/usage');
+        document.getElementById('totalRequests').textContent = data.total_requests || 0;
+        document.getElementById('totalTokens').textContent = (data.total_tokens || 0).toLocaleString();
+        document.getElementById('totalCost').textContent = data.total_cost != null ? '¥' + formatNumber(data.total_cost) : '--';
+        document.getElementById('modelCount').textContent = data.model_count || 0;
+
+        // 按模型统计
+        const models = data.by_model || [];
+        document.getElementById('modelStats').innerHTML = models.map(m => `
+            <div class="card"><h3>${m.model || '未知模型'}</h3>
+                <p class="card-value">${(m.total_tokens||0).toLocaleString()}</p>
+                <p class="text-sm text-muted">${m.request_count||0} 次请求</p>
+            </div>`).join('') || '<div class="text-muted">暂无数据</div>';
+    } catch(e) {}
+}
+
+async function loadDailyUsage() {
+    try {
+        const data = await api.get('/usage/daily');
+        const items = data.items || data || [];
+        document.getElementById('dailyUsageBody').innerHTML = items.length === 0 ? '<tr><td colspan="7" class="empty">暂无记录</td></tr>' :
+            items.map(d => `<tr>
+                <td>${d.usage_date || d.date}</td><td>${d.model||'--'}</td>
+                <td>${d.request_count||0}</td><td>${(d.prompt_tokens||0).toLocaleString()}</td>
+                <td>${(d.completion_tokens||0).toLocaleString()}</td><td>${(d.total_tokens||0).toLocaleString()}</td>
+                <td>${d.total_cost!=null?'¥'+formatNumber(d.total_cost):'--'}</td>
+            </tr>`).join('');
+    } catch(e) { document.getElementById('dailyUsageBody').innerHTML = '<tr><td colspan="7" class="empty">加载失败</td></tr>'; }
+}
+
+loadUsage();
+loadDailyUsage();
+</script>
+</body>
+</html>

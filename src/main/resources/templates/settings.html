@@ -1,5 +1,191 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>系统设置</h1>
+            <div class="actions">
+                <button class="btn btn-sm btn-secondary" onclick="exportConfig()">📤 导出配置</button>
+                <button class="btn btn-sm btn-secondary" onclick="importConfig()">📥 导入配置</button>
+            </div>
+        </header>
+
+        <div data-tabs>
+            <div class="tabs">
+                <div class="tab-item active" data-target="#tabLLM">LLM配置</div>
+                <div class="tab-item" data-target="#tabNotification">通知渠道</div>
+                <div class="tab-item" data-target="#tabAuth">认证管理</div>
+                <div class="tab-item" data-target="#tabScheduler">调度器</div>
+                <div class="tab-item" data-target="#tabSystem">系统信息</div>
+            </div>
+
+            <!-- LLM配置 -->
+            <div class="tab-content active" id="tabLLM">
+                <div class="card mb-4">
+                    <h3 class="mb-3">LLM 通道配置</h3>
+                    <div id="llmChannelsList"></div>
+                    <button class="btn btn-sm btn-secondary mt-2" onclick="testLLMChannel()">🧪 测试当前通道</button>
+                    <button class="btn btn-sm btn-secondary mt-2" onclick="discoverModels()">🔍 发现模型</button>
+                </div>
+                <div id="llmTestResult" class="hidden card mb-4"></div>
+            </div>
+
+            <!-- 通知渠道 -->
+            <div class="tab-content" id="tabNotification">
+                <div class="card mb-4">
+                    <h3 class="mb-3">通知渠道配置</h3>
+                    <div id="notifChannelsList"></div>
+                    <button class="btn btn-sm btn-secondary mt-2" onclick="testNotifChannel()">🧪 发送测试通知</button>
+                </div>
+            </div>
+
+            <!-- 认证管理 -->
+            <div class="tab-content" id="tabAuth">
+                <div class="card mb-4">
+                    <h3 class="mb-3">认证设置</h3>
+                    <div class="form-group">
+                        <label class="form-label">启用认证</label>
+                        <label class="toggle"><input type="checkbox" id="authEnabled"><span class="toggle-slider"></span></label>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="updateAuthSettings()">保存</button>
+                </div>
+                <div class="card">
+                    <h3 class="mb-3">修改密码</h3>
+                    <div class="form-group"><label class="form-label">当前密码</label><input type="password" class="form-input" id="currentPwd"></div>
+                    <div class="form-group"><label class="form-label">新密码</label><input type="password" class="form-input" id="newPwd"></div>
+                    <div class="form-group"><label class="form-label">确认密码</label><input type="password" class="form-input" id="confirmPwd"></div>
+                    <button class="btn btn-sm btn-primary" onclick="changePassword()">修改密码</button>
+                </div>
+            </div>
+
+            <!-- 调度器 -->
+            <div class="tab-content" id="tabScheduler">
+                <div class="card mb-4">
+                    <h3 class="mb-3">调度器状态</h3>
+                    <div id="schedulerStatus" class="mb-3"><div class="loading"><div class="spinner"></div></div></div>
+                    <button class="btn btn-sm btn-primary" onclick="runSchedulerNow()">▶ 立即执行</button>
+                </div>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="tab-content" id="tabSystem">
+                <div class="card">
+                    <h3 class="mb-3">系统信息</h3>
+                    <div class="data-table">
+                        <table class="data-table">
+                            <tbody>
+                                <tr><td class="font-bold">LLM模型</td><td th:text="${llmModel}">--</td></tr>
+                                <tr><td class="font-bold">数据源</td><td th:text="${dataProvider}">--</td></tr>
+                                <tr><td class="font-bold">市场</td><td th:text="${market}">--</td></tr>
+                                <tr><td class="font-bold">版本</td><td>1.0.0</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+async function loadConfig() {
+    try {
+        const data = await api.get('/system/config', { include_schema: true });
+        // LLM通道
+        const channels = data.llm_channels || [];
+        document.getElementById('llmChannelsList').innerHTML = channels.length === 0 ? '<p class="text-muted">未配置LLM通道</p>' :
+            channels.map((ch, i) => `<div class="report-card">
+                <div class="flex items-center justify-between">
+                    <div><strong>${ch.name || ch.model || '通道'+(i+1)}</strong><span class="text-sm text-muted" style="margin-left:8px;">${ch.protocol||ch.provider||''}</span></div>
+                    <span class="badge ${ch.enabled !== false ? 'badge-success':'badge-default'}">${ch.enabled !== false ?'启用':'禁用'}</span>
+                </div>
+                <p class="text-sm text-muted mt-2">模型: ${(ch.models||[ch.model]).join(', ')} | 端点: ${ch.base_url||ch.api||'默认'}</p>
+            </div>`).join('');
+        
+        // 认证状态
+        const authStatus = await api.get('/auth/status');
+        document.getElementById('authEnabled').checked = authStatus.auth_enabled || authStatus.authEnabled;
+    } catch(e) {}
+}
+
+async function loadSchedulerStatus() {
+    try {
+        const data = await api.get('/system/scheduler/status');
+        document.getElementById('schedulerStatus').innerHTML = `
+            <div class="card-grid" style="grid-template-columns:1fr 1fr;">
+                <div><span class="text-sm text-muted">状态</span><br><span class="badge badge-${data.running?'success':'default'}">${data.running?'运行中':'已停止'}</span></div>
+                <div><span class="text-sm text-muted">下次执行</span><br>${data.next_run||'--'}</div>
+                <div><span class="text-sm text-muted">Cron表达式</span><br>${data.cron||'--'}</div>
+                <div><span class="text-sm text-muted">上次执行</span><br>${data.last_run||'--'}</div>
+            </div>`;
+    } catch(e) { document.getElementById('schedulerStatus').innerHTML = '<p class="text-muted">加载失败</p>'; }
+}
+
+async function testLLMChannel() {
+    const result = document.getElementById('llmTestResult');
+    result.classList.remove('hidden');
+    result.innerHTML = '<div class="loading"><div class="spinner"></div>测试中...</div>';
+    try {
+        const data = await api.post('/system/config/llm/test-channel', {});
+        result.innerHTML = `<div class="badge badge-${data.success?'success':'danger'}">${data.success?'连接成功':'连接失败'}</div><p class="text-sm mt-2">${data.message||''}</p>`;
+    } catch(e) { result.innerHTML = `<div class="badge badge-danger">测试失败</div><p class="text-sm mt-2">${e.message}</p>`; }
+}
+
+async function discoverModels() {
+    try { const data = await api.post('/system/config/llm/discover-models', {}); showToast(`发现 ${data.models?.length||0} 个模型`, 'success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function testNotifChannel() {
+    try { await api.post('/system/config/notification/test-channel', { title: 'DSA测试', content: '这是一条测试通知' }); showToast('测试通知已发送','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function updateAuthSettings() {
+    const enabled = document.getElementById('authEnabled').checked;
+    try { await api.post('/auth/settings', { authEnabled: enabled }); showToast('认证设置已更新','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function changePassword() {
+    const current = document.getElementById('currentPwd').value;
+    const newPwd = document.getElementById('newPwd').value;
+    const confirm = document.getElementById('confirmPwd').value;
+    if (newPwd !== confirm) { showToast('新密码和确认密码不一致','warning'); return; }
+    try { await api.post('/auth/change-password', { currentPassword: current, newPassword: newPwd, newPasswordConfirm: confirm }); showToast('密码已修改','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function runSchedulerNow() {
+    try { await api.post('/system/scheduler/run-now', {}); showToast('调度器已触发','success'); loadSchedulerStatus(); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function exportConfig() {
+    try { const data = await api.get('/system/config/export'); const blob = new Blob([data.content||JSON.stringify(data,null,2)], {type:'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dsa_config.env'; a.click(); showToast('配置已导出','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+function importConfig() {
+    openDrawer('导入配置', (body) => {
+        body.innerHTML = `<p class="mb-3 text-muted">粘贴 .env 格式的配置内容</p>
+            <textarea class="form-textarea" id="importContent" rows="15" placeholder="KEY=VALUE..."></textarea>
+            <button class="btn btn-primary w-full mt-4" onclick="submitImportConfig()">导入</button>`;
+    });
+}
+async function submitImportConfig() {
+    const content = document.getElementById('importContent').value;
+    if (!content.trim()) { showToast('请输入配置内容','warning'); return; }
+    try { await api.post('/system/config/import', { content }); closeDrawer(); showToast('配置已导入，部分设置需重启生效','success'); loadConfig(); } catch(e) { showToast(e.message,'error'); }
+}
+
+loadConfig();
+loadSchedulerStatus();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>系统设置 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
 </head><body>

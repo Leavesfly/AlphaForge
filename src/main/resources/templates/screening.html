@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能选股 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>智能选股</h1></header>
+
+        <div class="card mb-4">
+            <div class="form-inline">
+                <select id="screenMarket" class="form-select" style="width:120px;"><option value="cn">A股</option></select>
+                <select id="screenStrategy" class="form-select" style="width:180px;">
+                    <option value="dual_low">双低策略</option>
+                    <option value="value_growth">价值成长</option>
+                    <option value="momentum">动量策略</option>
+                    <option value="dividend">高股息</option>
+                </select>
+                <input type="number" id="screenMaxResults" class="form-input" value="10" min="1" max="50" style="width:80px;" placeholder="数量">
+                <button class="btn btn-primary" onclick="startScreening()">开始选股</button>
+            </div>
+        </div>
+
+        <!-- 任务进度 -->
+        <div id="screenTaskProgress" class="card mb-4 hidden">
+            <div class="flex items-center justify-between mb-2">
+                <span class="font-bold">选股任务进行中...</span>
+                <span id="screenProgressText" class="text-sm text-muted">0%</span>
+            </div>
+            <div class="progress-bar"><div id="screenProgressBar" class="progress-bar-fill" style="width:0%"></div></div>
+        </div>
+
+        <!-- 热点追踪 -->
+        <section class="section">
+            <h2 class="mb-3">热点追踪</h2>
+            <div id="hotspotsContainer" class="card-grid"></div>
+        </section>
+
+        <!-- 选股结果 -->
+        <section class="section">
+            <h2 class="mb-3">选股结果</h2>
+            <div id="screenResults">
+                <div class="empty-state"><p>点击"开始选股"运行策略</p></div>
+            </div>
+        </section>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+let pollTimer = null;
+
+async function startScreening() {
+    const market = document.getElementById('screenMarket').value;
+    const strategy = document.getElementById('screenStrategy').value;
+    const maxResults = parseInt(document.getElementById('screenMaxResults').value) || 10;
+    try {
+        const data = await api.post('/alphasift/screen/task', { market, strategy, max_results: maxResults });
+        const taskId = data.task_id;
+        document.getElementById('screenTaskProgress').classList.remove('hidden');
+        pollTask(taskId);
+    } catch(e) { showToast(e.message || '启动失败', 'error'); }
+}
+
+function pollTask(taskId) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+        try {
+            const data = await api.get(`/alphasift/screen/task/${taskId}`);
+            const progress = data.progress || 0;
+            document.getElementById('screenProgressBar').style.width = progress + '%';
+            document.getElementById('screenProgressText').textContent = progress + '%';
+            if (data.status === 'completed') {
+                clearInterval(pollTimer);
+                document.getElementById('screenTaskProgress').classList.add('hidden');
+                renderResults(data.result || []);
+            } else if (data.status === 'failed') {
+                clearInterval(pollTimer);
+                document.getElementById('screenTaskProgress').classList.add('hidden');
+                showToast(data.error_message || '选股失败', 'error');
+            }
+        } catch(e) { clearInterval(pollTimer); }
+    }, 2000);
+}
+
+function renderResults(candidates) {
+    const container = document.getElementById('screenResults');
+    if (!candidates || candidates.length === 0) { container.innerHTML = '<div class="empty-state"><p>未找到符合条件的股票</p></div>'; return; }
+    container.innerHTML = `<div class="table-wrapper"><table class="data-table">
+        <thead><tr><th>#</th><th>股票</th><th>评分</th><th>价格</th><th>涨跌</th><th>操作</th></tr></thead>
+        <tbody>${candidates.map((c, i) => `<tr>
+            <td>${i+1}</td><td><strong>${c.code || c.stock_code}</strong> ${c.name || c.stock_name || ''}</td>
+            <td><span class="badge badge-primary">${c.score != null ? c.score : '--'}</span></td>
+            <td>${formatNumber(c.price || c.current_price)}</td>
+            <td class="${(c.change_pct||0)>=0?'text-danger':'text-success'}">${formatPct(c.change_pct)}</td>
+            <td><a href="/web/analysis?code=${c.code||c.stock_code}" class="btn btn-sm btn-ghost">分析</a></td>
+        </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function loadHotspots() {
+    try {
+        const data = await api.get('/alphasift/hotspots');
+        const items = data.items || data.hotspots || [];
+        document.getElementById('hotspotsContainer').innerHTML = items.length === 0 ? '<div class="text-muted">暂无热点数据</div>' :
+            items.map(h => `<div class="card"><h3>${h.name || h.title}</h3><p class="text-sm text-muted">${h.description || h.count + '只股票'}</p></div>`).join('');
+    } catch(e) { document.getElementById('hotspotsContainer').innerHTML = '<div class="text-muted">热点数据加载失败</div>'; }
+}
+
+loadHotspots();
+</script>
+</body>
+</html>

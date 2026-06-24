@@ -1,5 +1,26 @@
 <!-- 导航栏Fragment -->
 <nav class="sidebar" xmlns:th="http://www.thymeleaf.org" th:fragment="sidebar">
+    <div class="logo">📊 <span>DSA</span></div>
+    <ul class="nav-list">
+        <li><a th:href="@{/web/dashboard}"><span>🏠</span> <span>仪表盘</span></a></li>
+        <li><a th:href="@{/web/analysis}"><span>📈</span> <span>股票分析</span></a></li>
+        <li><a th:href="@{/web/chat}"><span>🤖</span> <span>AI问股</span></a></li>
+        <li><a th:href="@{/web/screening}"><span>🔍</span> <span>智能选股</span></a></li>
+        <li><a th:href="@{/web/portfolio}"><span>💼</span> <span>投资组合</span></a></li>
+        <li><a th:href="@{/web/decision-signals}"><span>🎯</span> <span>决策信号</span></a></li>
+        <li><a th:href="@{/web/backtest}"><span>🔄</span> <span>回测分析</span></a></li>
+        <li><a th:href="@{/web/alerts}"><span>⚠️</span> <span>告警管理</span></a></li>
+        <li><a th:href="@{/web/usage}"><span>📊</span> <span>Token统计</span></a></li>
+        <li><a th:href="@{/web/history}"><span>📋</span> <span>分析历史</span></a></li>
+        <li><a th:href="@{/web/settings}"><span>⚙️</span> <span>系统设置</span></a></li>
+    </ul>
+    <div class="nav-bottom">
+        <a href="javascript:void(0)" onclick="toggleTheme()"><span>🌓</span> <span>切换主题</span></a>
+        <a th:href="@{/web/logout}"><span>🚪</span> <span>退出登录</span></a>
+    </div>
+</nav>
+<!-- 导航栏Fragment -->
+<nav class="sidebar" xmlns:th="http://www.thymeleaf.org" th:fragment="sidebar">
     <div class="logo">📊 DSA</div>
     <ul class="nav-list">
         <li><a th:href="@{/web/dashboard}">🏠 仪表盘</a></li>

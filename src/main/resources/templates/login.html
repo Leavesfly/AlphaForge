@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <h1>📊 股票智能分析系统</h1>
+        <p>请输入密码以继续</p>
+        <div id="loginError" class="hidden" style="color:var(--danger);margin-bottom:16px;font-size:.85rem;"></div>
+        <form id="loginForm" onsubmit="doLogin(event)">
+            <div class="form-group">
+                <input type="password" id="password" class="form-input form-input-lg" placeholder="请输入密码" required autofocus>
+            </div>
+            <div id="confirmGroup" class="form-group hidden">
+                <input type="password" id="passwordConfirm" class="form-input form-input-lg" placeholder="确认密码">
+                <p class="form-hint">首次使用，请设置登录密码</p>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg w-full" id="loginBtn">登录</button>
+        </form>
+    </div>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+let setupState = 'enabled';
+
+async function checkAuthStatus() {
+    try {
+        const data = await api.get('/auth/status');
+        setupState = data.setup_state || data.setupState || 'enabled';
+        if (setupState === 'no_password') {
+            document.getElementById('confirmGroup').classList.remove('hidden');
+            document.getElementById('loginBtn').textContent = '设置密码并登录';
+        }
+        if (!data.auth_enabled && !data.authEnabled) {
+            window.location.href = '/web/dashboard';
+        }
+    } catch(e) { /* ignore */ }
+}
+
+async function doLogin(e) {
+    e.preventDefault();
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('passwordConfirm').value;
+    const errorEl = document.getElementById('loginError');
+    errorEl.classList.add('hidden');
+    
+    try {
+        const body = { password };
+        if (setupState === 'no_password' && confirm) body.passwordConfirm = confirm;
+        await api.post('/auth/login', body);
+        const params = new URLSearchParams(window.location.search);
+        window.location.href = params.get('redirect') || '/web/dashboard';
+    } catch(err) {
+        errorEl.textContent = err.data?.error || err.message || '登录失败';
+        errorEl.classList.remove('hidden');
+    }
+}
+
+checkAuthStatus();
+</script>
+</body>
+</html>

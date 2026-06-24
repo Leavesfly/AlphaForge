@@ -1,5 +1,214 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投资组合 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header">
+            <h1>投资组合</h1>
+            <div class="actions">
+                <select id="accountSelect" class="form-select" style="width:180px;" onchange="loadPortfolio()">
+                    <option value="">全部账户</option>
+                </select>
+                <button class="btn btn-sm btn-secondary" onclick="openImportModal()">📥 CSV导入</button>
+                <button class="btn btn-sm btn-primary" onclick="openTradeForm()">+ 新增交易</button>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div data-tabs>
+            <div class="tabs">
+                <div class="tab-item active" data-target="#tabPositions">持仓概览</div>
+                <div class="tab-item" data-target="#tabTrades">交易记录</div>
+                <div class="tab-item" data-target="#tabCash">现金流水</div>
+                <div class="tab-item" data-target="#tabCorporate">企业事件</div>
+            </div>
+
+            <!-- 持仓概览 -->
+            <div class="tab-content active" id="tabPositions">
+                <div class="card-grid" id="riskCards"></div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>股票</th><th>数量</th><th>成本</th><th>现价</th><th>盈亏</th><th>盈亏%</th><th>占比</th><th>操作</th></tr></thead>
+                        <tbody id="positionsBody"><tr><td colspan="8" class="empty">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 交易记录 -->
+            <div class="tab-content" id="tabTrades">
+                <div class="filter-bar">
+                    <input type="text" class="form-input" placeholder="股票代码" id="tradeFilterSymbol" style="width:120px;">
+                    <select class="form-select" id="tradeFilterSide"><option value="">全部</option><option value="buy">买入</option><option value="sell">卖出</option></select>
+                    <button class="btn btn-sm btn-secondary" onclick="loadTrades()">筛选</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>日期</th><th>股票</th><th>方向</th><th>数量</th><th>价格</th><th>费用</th><th>操作</th></tr></thead>
+                        <tbody id="tradesBody"></tbody>
+                    </table>
+                </div>
+                <div id="tradesPagination"></div>
+            </div>
+
+            <!-- 现金流水 -->
+            <div class="tab-content" id="tabCash">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>日期</th><th>方向</th><th>金额</th><th>币种</th><th>备注</th><th>操作</th></tr></thead>
+                        <tbody id="cashBody"></tbody>
+                    </table>
+                </div>
+                <div id="cashPagination"></div>
+            </div>
+
+            <!-- 企业事件 -->
+            <div class="tab-content" id="tabCorporate">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>日期</th><th>股票</th><th>类型</th><th>每股分红</th><th>拆股比例</th><th>操作</th></tr></thead>
+                        <tbody id="corporateBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+let currentAccountId = '';
+let tradePage = 1;
+
+async function loadAccounts() {
+    try {
+        const data = await api.get('/portfolio/accounts');
+        const accounts = data.accounts || data.items || [];
+        const select = document.getElementById('accountSelect');
+        accounts.forEach(a => { select.add(new Option(a.name || a.broker, a.id)); });
+    } catch(e) {}
+}
+
+async function loadPortfolio() {
+    currentAccountId = document.getElementById('accountSelect').value;
+    const params = currentAccountId ? { account_id: currentAccountId } : {};
+    try {
+        const snapshot = await api.get('/portfolio/snapshot', params);
+        const positions = snapshot.positions || [];
+        const tbody = document.getElementById('positionsBody');
+        if (positions.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无持仓</td></tr>'; return; }
+        tbody.innerHTML = positions.map(p => `<tr>
+            <td><strong>${p.symbol || p.stock_code}</strong><br><span class="text-sm text-muted">${p.stock_name || ''}</span></td>
+            <td>${p.quantity || 0}</td>
+            <td>${formatNumber(p.avg_cost || p.cost_price)}</td>
+            <td>${formatNumber(p.current_price || p.market_price)}</td>
+            <td class="${(p.unrealized_pnl || p.profit_loss || 0) >= 0 ? 'text-danger' : 'text-success'}">${formatMoney(p.unrealized_pnl || p.profit_loss)}</td>
+            <td class="${(p.unrealized_pnl_pct || p.profit_loss_pct || 0) >= 0 ? 'text-danger' : 'text-success'}">${formatPct(p.unrealized_pnl_pct || p.profit_loss_pct)}</td>
+            <td>${formatPct(p.weight_pct || p.position_pct)}</td>
+            <td><button class="btn btn-sm btn-ghost" onclick="analyzePosition('${p.symbol || p.stock_code}')">分析</button></td>
+        </tr>`).join('');
+
+        // 风险卡片
+        const risk = await api.get('/portfolio/risk', params).catch(() => null);
+        if (risk) {
+            document.getElementById('riskCards').innerHTML = `
+                <div class="card"><h3>总市值</h3><p class="card-value">${formatMoney(risk.total_market_value || snapshot.total_value)}</p></div>
+                <div class="card"><h3>总盈亏</h3><p class="card-value ${(risk.total_pnl||0)>=0?'positive':'negative'}">${formatMoney(risk.total_pnl)}</p></div>
+                <div class="card"><h3>集中度</h3><p class="card-value">${formatPct(risk.concentration)}</p></div>
+                <div class="card"><h3>持仓数</h3><p class="card-value">${positions.length}</p></div>`;
+        }
+    } catch(e) { document.getElementById('positionsBody').innerHTML = '<tr><td colspan="8" class="empty">加载失败</td></tr>'; }
+}
+
+async function loadTrades() {
+    const params = { page: tradePage, page_size: 20 };
+    if (currentAccountId) params.account_id = currentAccountId;
+    const sym = document.getElementById('tradeFilterSymbol').value;
+    const side = document.getElementById('tradeFilterSide').value;
+    if (sym) params.symbol = sym;
+    if (side) params.side = side;
+    try {
+        const data = await api.get('/portfolio/trades', params);
+        const items = data.items || [];
+        document.getElementById('tradesBody').innerHTML = items.length === 0 ? '<tr><td colspan="7" class="empty">暂无记录</td></tr>' :
+            items.map(t => `<tr>
+                <td>${t.trade_date}</td><td>${t.symbol}</td>
+                <td><span class="badge ${t.side==='buy'?'badge-danger':'badge-success'}">${t.side==='buy'?'买入':'卖出'}</span></td>
+                <td>${t.quantity}</td><td>${formatNumber(t.price)}</td><td>${formatNumber(t.fee)}</td>
+                <td><button class="btn btn-sm btn-ghost" onclick="deleteTrade(${t.id})">删除</button></td>
+            </tr>`).join('');
+        renderPagination(document.getElementById('tradesPagination'), { page: data.page||1, total: data.total||0, pageSize: 20, onChange: p => { tradePage=p; loadTrades(); } });
+    } catch(e) {}
+}
+
+async function analyzePosition(symbol) {
+    try { await api.post(`/portfolio/positions/${encodeURIComponent(symbol)}/analysis`, {}); showToast('持仓分析已触发', 'success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+async function deleteTrade(id) {
+    if (!await confirmDialog('确认删除此交易记录？')) return;
+    try { await api.delete(`/portfolio/trades/${id}`); loadTrades(); loadPortfolio(); showToast('已删除','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+function openTradeForm() {
+    openDrawer('新增交易', (body) => {
+        body.innerHTML = `<form onsubmit="submitTrade(event)">
+            <div class="form-group"><label class="form-label">股票代码</label><input class="form-input" id="tradeSymbol" required></div>
+            <div class="form-row"><div class="form-group"><label class="form-label">方向</label><select class="form-select" id="tradeSide"><option value="buy">买入</option><option value="sell">卖出</option></select></div>
+            <div class="form-group"><label class="form-label">日期</label><input type="date" class="form-input" id="tradeDate" required></div></div>
+            <div class="form-row"><div class="form-group"><label class="form-label">数量</label><input type="number" class="form-input" id="tradeQty" required></div>
+            <div class="form-group"><label class="form-label">价格</label><input type="number" step="0.01" class="form-input" id="tradePrice" required></div></div>
+            <div class="form-row"><div class="form-group"><label class="form-label">手续费</label><input type="number" step="0.01" class="form-input" id="tradeFee" value="0"></div>
+            <div class="form-group"><label class="form-label">税费</label><input type="number" step="0.01" class="form-input" id="tradeTax" value="0"></div></div>
+            <button type="submit" class="btn btn-primary w-full mt-4">提交</button></form>`;
+    });
+}
+
+async function submitTrade(e) {
+    e.preventDefault();
+    const body = {
+        account_id: parseInt(currentAccountId) || 1,
+        symbol: document.getElementById('tradeSymbol').value,
+        side: document.getElementById('tradeSide').value,
+        trade_date: document.getElementById('tradeDate').value,
+        quantity: parseFloat(document.getElementById('tradeQty').value),
+        price: parseFloat(document.getElementById('tradePrice').value),
+        fee: parseFloat(document.getElementById('tradeFee').value) || 0,
+        tax: parseFloat(document.getElementById('tradeTax').value) || 0,
+    };
+    try { await api.post('/portfolio/trades', body); closeDrawer(); loadTrades(); loadPortfolio(); showToast('交易已添加','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+function openImportModal() {
+    openDrawer('CSV导入', (body) => {
+        body.innerHTML = `<p class="mb-3 text-muted">选择券商格式并上传CSV文件</p>
+            <div class="form-group"><label class="form-label">券商</label><select class="form-select" id="importBroker"><option value="huatai">华泰</option><option value="citic">中信</option><option value="cmb">招商</option></select></div>
+            <div class="form-group"><label class="form-label">文件</label><input type="file" accept=".csv" id="importFile" class="form-input"></div>
+            <button class="btn btn-primary w-full mt-4" onclick="submitImport()">解析并导入</button>`;
+    });
+}
+
+async function submitImport() {
+    const file = document.getElementById('importFile').files[0];
+    if (!file) { showToast('请选择文件','warning'); return; }
+    const formData = new FormData();
+    formData.append('broker', document.getElementById('importBroker').value);
+    formData.append('file', file);
+    formData.append('account_id', currentAccountId || '1');
+    try { await api.upload('/portfolio/imports/csv/commit', formData); closeDrawer(); loadPortfolio(); loadTrades(); showToast('导入成功','success'); } catch(e) { showToast(e.message,'error'); }
+}
+
+loadAccounts();
+loadPortfolio();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>投资组合 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
 </head><body>

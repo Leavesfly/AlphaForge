@@ -1,5 +1,130 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>告警管理 - 股票智能分析系统</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<div class="layout">
+    <nav class="sidebar" th:replace="~{fragments/nav :: sidebar}"></nav>
+    <main class="content">
+        <header class="page-header"><h1>告警管理</h1>
+            <div class="actions"><button class="btn btn-sm btn-primary" onclick="openCreateRuleForm()">+ 创建规则</button></div>
+        </header>
+
+        <div data-tabs>
+            <div class="tabs">
+                <div class="tab-item active" data-target="#tabRules">告警规则</div>
+                <div class="tab-item" data-target="#tabTriggers">触发历史</div>
+                <div class="tab-item" data-target="#tabNotifications">通知日志</div>
+            </div>
+
+            <div class="tab-content active" id="tabRules">
+                <div class="filter-bar">
+                    <select class="form-select" id="ruleFilterEnabled" onchange="loadRules()"><option value="">全部</option><option value="true">已启用</option><option value="false">已禁用</option></select>
+                    <select class="form-select" id="ruleFilterType" onchange="loadRules()"><option value="">全部类型</option><option value="price">价格</option><option value="change_pct">涨跌幅</option><option value="volume">成交量</option><option value="macd">MACD</option><option value="rsi">RSI</option></select>
+                </div>
+                <div id="rulesList"></div>
+                <div id="rulesPagination"></div>
+            </div>
+
+            <div class="tab-content" id="tabTriggers">
+                <div class="table-wrapper"><table class="data-table">
+                    <thead><tr><th>时间</th><th>规则</th><th>目标</th><th>状态</th><th>观察值</th><th>消息</th></tr></thead>
+                    <tbody id="triggersBody"></tbody>
+                </table></div>
+                <div id="triggersPagination"></div>
+            </div>
+
+            <div class="tab-content" id="tabNotifications">
+                <div class="table-wrapper"><table class="data-table">
+                    <thead><tr><th>时间</th><th>渠道</th><th>状态</th><th>错误信息</th></tr></thead>
+                    <tbody id="notificationsBody"></tbody>
+                </table></div>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:src="@{/js/app.js}"></script>
+<script>
+let rulePage = 1;
+async function loadRules() {
+    const params = { page: rulePage, page_size: 20 };
+    const enabled = document.getElementById('ruleFilterEnabled').value;
+    const type = document.getElementById('ruleFilterType').value;
+    if (enabled) params.enabled = enabled;
+    if (type) params.alert_type = type;
+    try {
+        const data = await api.get('/alerts/rules', params);
+        const items = data.items || [];
+        document.getElementById('rulesList').innerHTML = items.length === 0 ? '<div class="empty-state"><p>暂无告警规则</p></div>' :
+            items.map(r => `<div class="report-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <strong>${r.name || r.alert_type}</strong>
+                        <span class="badge ${r.enabled?'badge-success':'badge-default'}" style="margin-left:8px;">${r.enabled?'启用':'禁用'}</span>
+                        <span class="badge badge-info" style="margin-left:4px;">${r.alert_type}</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-secondary" onclick="testRule(${r.id})">测试</button>
+                        <button class="btn btn-sm btn-secondary" onclick="toggleRule(${r.id},${!r.enabled})">${r.enabled?'禁用':'启用'}</button>
+                        <button class="btn btn-sm btn-ghost" onclick="deleteRule(${r.id})">删除</button>
+                    </div>
+                </div>
+                <p class="text-sm text-muted mt-2">目标: ${r.target || r.stock_code || '全局'} | 范围: ${r.target_scope || 'specific'}</p>
+            </div>`).join('');
+        renderPagination(document.getElementById('rulesPagination'), { page: data.page||1, total: data.total||0, pageSize: 20, onChange: p => { rulePage=p; loadRules(); } });
+    } catch(e) {}
+}
+
+async function testRule(id) { try { const r = await api.post(`/alerts/rules/${id}/test`); showToast(`测试结果: ${r.triggered?'触发':'未触发'} - ${r.message||''}`, r.triggered?'success':'info'); } catch(e) { showToast(e.message,'error'); } }
+async function toggleRule(id, enable) { try { await api.post(`/alerts/rules/${id}/${enable?'enable':'disable'}`); loadRules(); } catch(e) { showToast(e.message,'error'); } }
+async function deleteRule(id) { if (!await confirmDialog('确认删除此规则？')) return; try { await api.delete(`/alerts/rules/${id}`); loadRules(); showToast('已删除','success'); } catch(e) {} }
+
+async function loadTriggers() {
+    try {
+        const data = await api.get('/alerts/triggers', { page: 1, page_size: 50 });
+        const items = data.items || [];
+        document.getElementById('triggersBody').innerHTML = items.length === 0 ? '<tr><td colspan="6" class="empty">暂无触发记录</td></tr>' :
+            items.map(t => `<tr><td>${formatDateShort(t.triggered_at)}</td><td>${t.rule_id}</td><td>${t.target||'--'}</td><td><span class="badge badge-warning">${t.status}</span></td><td>${t.observed_value!=null?formatNumber(t.observed_value):'--'}</td><td class="text-sm">${t.message||''}</td></tr>`).join('');
+    } catch(e) {}
+}
+
+async function loadNotifications() {
+    try {
+        const data = await api.get('/alerts/notifications', { page: 1, page_size: 50 });
+        const items = data.items || [];
+        document.getElementById('notificationsBody').innerHTML = items.length === 0 ? '<tr><td colspan="4" class="empty">暂无通知记录</td></tr>' :
+            items.map(n => `<tr><td>${formatDateShort(n.sent_at)}</td><td>${n.channel}</td><td><span class="badge ${n.success?'badge-success':'badge-danger'}">${n.success?'成功':'失败'}</span></td><td class="text-sm">${n.error_message||''}</td></tr>`).join('');
+    } catch(e) {}
+}
+
+function openCreateRuleForm() {
+    openDrawer('创建告警规则', (body) => {
+        body.innerHTML = `<form onsubmit="submitRule(event)">
+            <div class="form-group"><label class="form-label">规则名称</label><input class="form-input" id="ruleName" required></div>
+            <div class="form-group"><label class="form-label">告警类型</label><select class="form-select" id="ruleType"><option value="price">价格告警</option><option value="change_pct">涨跌幅告警</option><option value="volume">成交量告警</option><option value="rsi">RSI告警</option><option value="macd">MACD告警</option></select></div>
+            <div class="form-group"><label class="form-label">目标范围</label><select class="form-select" id="ruleScope"><option value="specific">特定股票</option><option value="watchlist">自选股</option><option value="global">全局</option></select></div>
+            <div class="form-group"><label class="form-label">目标(股票代码)</label><input class="form-input" id="ruleTarget" placeholder="如 600519"></div>
+            <button type="submit" class="btn btn-primary w-full mt-4">创建</button></form>`;
+    });
+}
+
+async function submitRule(e) {
+    e.preventDefault();
+    try {
+        await api.post('/alerts/rules', { name: document.getElementById('ruleName').value, alert_type: document.getElementById('ruleType').value, target_scope: document.getElementById('ruleScope').value, target: document.getElementById('ruleTarget').value });
+        closeDrawer(); loadRules(); showToast('规则已创建','success');
+    } catch(e) { showToast(e.message,'error'); }
+}
+
+loadRules(); loadTriggers(); loadNotifications();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>告警管理 - 股票智能分析系统</title><link rel="stylesheet" th:href="@{/css/app.css}">
 </head><body>

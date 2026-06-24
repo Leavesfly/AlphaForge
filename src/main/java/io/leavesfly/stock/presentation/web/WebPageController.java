@@ -1,12 +1,13 @@
 package io.leavesfly.stock.presentation.web;
 
 import io.leavesfly.stock.config.AppConfig;
-
 import io.leavesfly.stock.domain.service.TradingCalendar;
 import io.leavesfly.stock.application.service.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+
+import jakarta.servlet.http.HttpSession;
 
 /**
  * WebUI页面控制器
@@ -62,43 +63,59 @@ public class WebPageController {
         return "analysis";
     }
 
-    /** 投资组合页 */
-    @GetMapping("/portfolio")
-    public String portfolio(Model model) {
-        model.addAttribute("pageTitle", "投资组合");
-        model.addAttribute("positions", portfolioService.getAllPositions());
-        model.addAttribute("summary", portfolioService.getPortfolioSummary());
-        model.addAttribute("risk", portfolioService.assessRisk());
-        return "portfolio";
-    }
-
-    /** 告警管理页 */
-    @GetMapping("/alerts")
-    public String alerts(Model model) {
-        model.addAttribute("pageTitle", "告警管理");
-        model.addAttribute("alerts", alertService.getActiveAlerts());
-        return "alerts";
-    }
-
-    /** 回测页 */
-    @GetMapping("/backtest")
-    public String backtest(Model model) {
-        model.addAttribute("pageTitle", "策略回测");
-        return "backtest";
-    }
-
-    /** Agent问股对话页 */
+    /** AI问股对话页 */
     @GetMapping("/chat")
     public String chat(Model model) {
         model.addAttribute("pageTitle", "AI问股");
         return "chat";
     }
 
+    /** 智能选股页 */
+    @GetMapping("/screening")
+    public String screening(Model model) {
+        model.addAttribute("pageTitle", "智能选股");
+        return "screening";
+    }
+
+    /** 投资组合页 */
+    @GetMapping("/portfolio")
+    public String portfolio(Model model) {
+        model.addAttribute("pageTitle", "投资组合");
+        return "portfolio";
+    }
+
+    /** 决策信号页 */
+    @GetMapping("/decision-signals")
+    public String decisionSignals(Model model) {
+        model.addAttribute("pageTitle", "决策信号");
+        return "decision-signals";
+    }
+
+    /** 回测分析页 */
+    @GetMapping("/backtest")
+    public String backtest(Model model) {
+        model.addAttribute("pageTitle", "回测分析");
+        return "backtest";
+    }
+
+    /** 告警管理页 */
+    @GetMapping("/alerts")
+    public String alerts(Model model) {
+        model.addAttribute("pageTitle", "告警管理");
+        return "alerts";
+    }
+
+    /** Token使用统计页 */
+    @GetMapping("/usage")
+    public String usage(Model model) {
+        model.addAttribute("pageTitle", "Token统计");
+        return "usage";
+    }
+
     /** 分析历史页 */
     @GetMapping("/history")
     public String history(Model model) {
         model.addAttribute("pageTitle", "分析历史");
-        model.addAttribute("reports", historyService.getRecentReports(null, 50));
         return "history";
     }
 
@@ -110,5 +127,20 @@ public class WebPageController {
         model.addAttribute("dataProvider", config.getDataProvider());
         model.addAttribute("market", config.getMarket());
         return "settings";
+    }
+
+    /** 登录页 */
+    @GetMapping("/login")
+    public String login(Model model) {
+        model.addAttribute("pageTitle", "登录");
+        model.addAttribute("authEnabled", config.isAuthEnabled());
+        return "login";
+    }
+
+    /** 登出 */
+    @GetMapping("/logout")
+    public String logout(HttpSession session) {
+        session.invalidate();
+        return "redirect:/web/login";
     }
 }
