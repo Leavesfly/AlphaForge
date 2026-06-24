@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.CashLedgerRepository">
+
+    <resultMap id="cashMap" type="io.leavesfly.stock.domain.model.entity.CashLedgerEntry">
+        <id property="id" column="id"/>
+        <result property="accountId" column="account_id"/>
+        <result property="eventDate" column="event_date"/>
+        <result property="direction" column="direction"/>
+        <result property="amount" column="amount"/>
+        <result property="currency" column="currency"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO cash_ledger (account_id, event_date, direction, amount, currency, note, created_at)
+        VALUES (#{accountId}, #{eventDate}, #{direction}, #{amount}, #{currency}, #{note}, #{createdAt})
+    </insert>
+
+    <select id="findById" resultMap="cashMap">
+        SELECT * FROM cash_ledger WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="cashMap">
+        SELECT * FROM cash_ledger ORDER BY event_date DESC, id DESC
+    </select>
+
+    <select id="findByAccountId" resultMap="cashMap">
+        SELECT * FROM cash_ledger WHERE account_id = #{accountId} ORDER BY event_date DESC, id DESC
+    </select>
+
+    <select id="findByDirection" resultMap="cashMap">
+        SELECT * FROM cash_ledger WHERE direction = #{direction} ORDER BY event_date DESC, id DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM cash_ledger WHERE id = #{id}
+    </delete>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM cash_ledger
+    </select>
+
+</mapper>

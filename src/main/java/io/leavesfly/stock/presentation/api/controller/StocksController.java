@@ -4,11 +4,12 @@ import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
 import io.leavesfly.stock.application.service.MarketAnalysisService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.util.*;
 
 /**
- * 股票数据API控制器
+ * 股票数据API控制器 (对齐 dsa-web stocksApi)
  * 对应Python版本的 api/v1/endpoints/stocks.py
  */
 @RestController
@@ -54,5 +55,48 @@ public class StocksController {
     @GetMapping("/market/review")
     public ResponseEntity<Map<String, Object>> getMarketReview() {
         return ResponseEntity.ok(marketService.marketReview());
+    }
+
+    /** 图片识别股票代码 (对齐 dsa-web stocksApi.extractFromImage) */
+    @PostMapping("/extract-from-image")
+    public ResponseEntity<Map<String, Object>> extractFromImage(@RequestParam("file") MultipartFile file) {
+        // 简化实现: 实际需接入Vision API进行OCR识别
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "image";
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("codes", List.of());
+        result.put("items", List.of());
+        result.put("raw_text", "图片识别功能待接入Vision API (" + filename + ")");
+        return ResponseEntity.ok(result);
+    }
+
+    /** 解析导入文件/文本 (对齐 dsa-web stocksApi.parseImport) */
+    @PostMapping("/parse-import")
+    public ResponseEntity<Map<String, Object>> parseImport(
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestBody(required = false) Map<String, Object> body) {
+        List<String> codes = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
+
+        // 从文本解析股票代码
+        String text = null;
+        if (body != null && body.containsKey("text")) {
+            text = (String) body.get("text");
+        }
+        if (text != null && !text.isEmpty()) {
+            // 简化解析: 按逗号/空格/换行分割
+            String[] parts = text.split("[,\\s\\n]+");
+            for (String part : parts) {
+                String trimmed = part.trim();
+                if (!trimmed.isEmpty() && trimmed.matches(".*\\d+.*")) {
+                    codes.add(trimmed);
+                    items.add(Map.of("code", trimmed, "name", "", "confidence", "medium"));
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("codes", codes);
+        result.put("items", items);
+        return ResponseEntity.ok(result);
     }
 }

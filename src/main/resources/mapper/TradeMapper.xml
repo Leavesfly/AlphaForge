@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.TradeRepository">
+
+    <resultMap id="tradeMap" type="io.leavesfly.stock.domain.model.entity.PortfolioTrade">
+        <id property="id" column="id"/>
+        <result property="accountId" column="account_id"/>
+        <result property="symbol" column="symbol"/>
+        <result property="tradeDate" column="trade_date"/>
+        <result property="side" column="side"/>
+        <result property="quantity" column="quantity"/>
+        <result property="price" column="price"/>
+        <result property="fee" column="fee"/>
+        <result property="tax" column="tax"/>
+        <result property="market" column="market"/>
+        <result property="currency" column="currency"/>
+        <result property="tradeUid" column="trade_uid"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO portfolio_trades (account_id, symbol, trade_date, side, quantity, price, fee, tax, market, currency, trade_uid, note, created_at)
+        VALUES (#{accountId}, #{symbol}, #{tradeDate}, #{side}, #{quantity}, #{price}, #{fee}, #{tax}, #{market}, #{currency}, #{tradeUid}, #{note}, #{createdAt})
+    </insert>
+
+    <select id="findById" resultMap="tradeMap">
+        SELECT * FROM portfolio_trades WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="tradeMap">
+        SELECT * FROM portfolio_trades ORDER BY trade_date DESC, id DESC
+    </select>
+
+    <select id="findByAccountId" resultMap="tradeMap">
+        SELECT * FROM portfolio_trades WHERE account_id = #{accountId} ORDER BY trade_date DESC, id DESC
+    </select>
+
+    <select id="findBySymbol" resultMap="tradeMap">
+        SELECT * FROM portfolio_trades WHERE symbol = #{symbol} ORDER BY trade_date DESC, id DESC
+    </select>
+
+    <select id="findByAccountIdAndSymbol" resultMap="tradeMap">
+        SELECT * FROM portfolio_trades WHERE account_id = #{accountId} AND symbol = #{symbol} ORDER BY trade_date DESC, id DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM portfolio_trades WHERE id = #{id}
+    </delete>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM portfolio_trades
+    </select>
+
+</mapper>

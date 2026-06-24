@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.CorporateActionRepository">
+
+    <resultMap id="corpMap" type="io.leavesfly.stock.domain.model.entity.CorporateAction">
+        <id property="id" column="id"/>
+        <result property="accountId" column="account_id"/>
+        <result property="symbol" column="symbol"/>
+        <result property="effectiveDate" column="effective_date"/>
+        <result property="actionType" column="action_type"/>
+        <result property="market" column="market"/>
+        <result property="currency" column="currency"/>
+        <result property="cashDividendPerShare" column="cash_dividend_per_share"/>
+        <result property="splitRatio" column="split_ratio"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO corporate_actions (account_id, symbol, effective_date, action_type, market, currency, cash_dividend_per_share, split_ratio, note, created_at)
+        VALUES (#{accountId}, #{symbol}, #{effectiveDate}, #{actionType}, #{market}, #{currency}, #{cashDividendPerShare}, #{splitRatio}, #{note}, #{createdAt})
+    </insert>
+
+    <select id="findById" resultMap="corpMap">
+        SELECT * FROM corporate_actions WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="corpMap">
+        SELECT * FROM corporate_actions ORDER BY effective_date DESC, id DESC
+    </select>
+
+    <select id="findByAccountId" resultMap="corpMap">
+        SELECT * FROM corporate_actions WHERE account_id = #{accountId} ORDER BY effective_date DESC, id DESC
+    </select>
+
+    <select id="findBySymbol" resultMap="corpMap">
+        SELECT * FROM corporate_actions WHERE symbol = #{symbol} ORDER BY effective_date DESC, id DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM corporate_actions WHERE id = #{id}
+    </delete>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM corporate_actions
+    </select>
+
+</mapper>
