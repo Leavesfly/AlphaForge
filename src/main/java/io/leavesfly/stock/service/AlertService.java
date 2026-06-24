@@ -53,7 +53,7 @@ public class AlertService {
 
     /** 更新告警规则 */
     public AlertRule updateAlert(Long id, AlertRule updated) {
-        return alertRepo.findById(id).map(rule -> {
+        return alertRepo.findByIdOpt(id).map(rule -> {
             if (updated.getAlertType() != null) rule.setAlertType(updated.getAlertType());
             if (updated.getThresholdValue() != null) rule.setThresholdValue(updated.getThresholdValue());
             if (updated.getEnabled() != null) rule.setEnabled(updated.getEnabled());

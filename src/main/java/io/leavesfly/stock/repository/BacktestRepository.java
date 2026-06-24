@@ -1,16 +1,47 @@
 package io.leavesfly.stock.repository;
 
 import io.leavesfly.stock.model.entity.BacktestRecord;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 回测记录数据访问层
  */
-@Repository
-public interface BacktestRepository extends JpaRepository<BacktestRecord, Long> {
-    List<BacktestRecord> findByStockCodeOrderByCreatedAtDesc(String stockCode);
-    List<BacktestRecord> findByStrategyNameOrderByCreatedAtDesc(String strategyName);
+@Mapper
+public interface BacktestRepository {
+
+    void insert(BacktestRecord record);
+
+    void update(BacktestRecord record);
+
+    BacktestRecord findById(@Param("id") Long id);
+
+    List<BacktestRecord> findAll();
+
+    void deleteById(@Param("id") Long id);
+
+    List<BacktestRecord> findByStockCodeOrderByCreatedAtDesc(@Param("stockCode") String stockCode);
+
+    List<BacktestRecord> findByStrategyNameOrderByCreatedAtDesc(@Param("strategyName") String strategyName);
+
     List<BacktestRecord> findTop20ByOrderByCreatedAtDesc();
+
+    default BacktestRecord save(BacktestRecord record) {
+        if (record.getId() == null) {
+            if (record.getCreatedAt() == null) {
+                record.setCreatedAt(java.time.LocalDateTime.now());
+            }
+            insert(record);
+        } else {
+            update(record);
+        }
+        return record;
+    }
+
+    default Optional<BacktestRecord> findByIdOpt(Long id) {
+        return Optional.ofNullable(findById(id));
+    }
 }

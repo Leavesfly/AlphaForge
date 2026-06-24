@@ -1,6 +1,5 @@
 package io.leavesfly.stock.model.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -8,78 +7,54 @@ import java.time.LocalDateTime;
  * 股票日K线数据实体
  * 对应数据源获取的OHLCV数据
  */
-@Entity
-@Table(name = "stock_daily_data")
 public class StockDailyData {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /** 股票代码 */
-    @Column(name = "stock_code", nullable = false, length = 20)
     private String stockCode;
 
     /** 股票名称 */
-    @Column(name = "stock_name", length = 50)
     private String stockName;
 
     /** 交易日期 */
-    @Column(name = "trade_date", nullable = false)
     private LocalDate tradeDate;
 
     /** 开盘价 */
-    @Column(name = "open_price")
     private Double openPrice;
 
     /** 最高价 */
-    @Column(name = "high_price")
     private Double highPrice;
 
     /** 最低价 */
-    @Column(name = "low_price")
     private Double lowPrice;
 
     /** 收盘价 */
-    @Column(name = "close_price")
     private Double closePrice;
 
     /** 成交量 */
-    @Column(name = "volume")
     private Long volume;
 
     /** 成交额 */
-    @Column(name = "amount")
     private Double amount;
 
     /** 涨跌幅(%) */
-    @Column(name = "change_pct")
     private Double changePct;
 
     /** 涨跌额 */
-    @Column(name = "change_amount")
     private Double changeAmount;
 
     /** 换手率(%) */
-    @Column(name = "turnover_rate")
     private Double turnoverRate;
 
     /** 振幅(%) */
-    @Column(name = "amplitude")
     private Double amplitude;
 
     /** 数据来源 */
-    @Column(name = "data_source", length = 30)
     private String dataSource;
 
     /** 创建时间 */
-    @Column(name = "created_at")
     private LocalDateTime createdAt;
-
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-    }
 
     // Getters and Setters
     public Long getId() { return id; }

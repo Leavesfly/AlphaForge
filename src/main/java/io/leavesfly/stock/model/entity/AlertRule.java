@@ -1,70 +1,50 @@
 package io.leavesfly.stock.model.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
  * 告警规则实体
  * 对应Python版本的 alert_repo.py
  */
-@Entity
-@Table(name = "alert_rules")
 public class AlertRule {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /** 股票代码 */
-    @Column(name = "stock_code", nullable = false, length = 20)
     private String stockCode;
 
     /** 股票名称 */
-    @Column(name = "stock_name", length = 50)
     private String stockName;
 
     /** 告警类型: price_above/price_below/change_pct_above/change_pct_below/volume_above/custom */
-    @Column(name = "alert_type", nullable = false, length = 30)
     private String alertType;
 
     /** 触发条件值 */
-    @Column(name = "threshold_value")
     private Double thresholdValue;
 
     /** 自定义条件表达式(JSON) */
-    @Column(name = "condition_expr", columnDefinition = "TEXT")
     private String conditionExpr;
 
     /** 是否启用 */
-    @Column(name = "enabled")
     private Boolean enabled = true;
 
     /** 是否已触发 */
-    @Column(name = "triggered")
     private Boolean triggered = false;
 
     /** 上次触发时间 */
-    @Column(name = "last_triggered_at")
     private LocalDateTime lastTriggeredAt;
 
     /** 触发后是否自动禁用(一次性告警) */
-    @Column(name = "one_shot")
     private Boolean oneShot = false;
 
     /** 通知渠道(逗号分隔) */
-    @Column(name = "notify_channels", length = 200)
     private String notifyChannels;
 
     /** 备注 */
-    @Column(name = "note", length = 500)
     private String note;
 
     /** 创建时间 */
-    @Column(name = "created_at")
     private LocalDateTime createdAt;
-
-    @PrePersist
-    public void prePersist() { this.createdAt = LocalDateTime.now(); }
 
     // Getters & Setters
     public Long getId() { return id; }

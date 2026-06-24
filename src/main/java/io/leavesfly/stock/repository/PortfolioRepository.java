@@ -1,24 +1,75 @@
 package io.leavesfly.stock.repository;
 
 import io.leavesfly.stock.model.entity.PortfolioPosition;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 /**
  * 投资组合数据访问层
  */
-@Repository
-public interface PortfolioRepository extends JpaRepository<PortfolioPosition, Long> {
+@Mapper
+public interface PortfolioRepository {
+
+    void insert(PortfolioPosition pos);
+
+    void update(PortfolioPosition pos);
+
+    PortfolioPosition findById(@Param("id") Long id);
+
+    List<PortfolioPosition> findAll();
+
+    void deleteById(@Param("id") Long id);
+
     List<PortfolioPosition> findAllByOrderByUpdatedAtDesc();
-    Optional<PortfolioPosition> findByStockCode(String stockCode);
-    List<PortfolioPosition> findByMarketOrderByMarketValueDesc(String market);
-    @Query("SELECT SUM(p.marketValue) FROM PortfolioPosition p")
+
+    PortfolioPosition findByStockCodeOne(@Param("stockCode") String stockCode);
+
+    List<PortfolioPosition> findByMarketOrderByMarketValueDesc(@Param("market") String market);
+
     Double getTotalMarketValue();
-    @Query("SELECT SUM(p.profitLoss) FROM PortfolioPosition p")
+
     Double getTotalProfitLoss();
-    long countByProfitLossPctGreaterThan(Double pct);
-    long countByProfitLossPctLessThan(Double pct);
+
+    long countByProfitLossPctGreaterThan(@Param("pct") Double pct);
+
+    long countByProfitLossPctLessThan(@Param("pct") Double pct);
+
+    default PortfolioPosition save(PortfolioPosition pos) {
+        LocalDateTime now = LocalDateTime.now();
+        if (pos.getId() == null) {
+            if (pos.getCreatedAt() == null) {
+                pos.setCreatedAt(now);
+            }
+            pos.setUpdatedAt(now);
+            insert(pos);
+        } else {
+            pos.setUpdatedAt(now);
+            update(pos);
+        }
+        return pos;
+    }
+
+    default void saveAll(List<PortfolioPosition> positions) {
+        for (PortfolioPosition pos : positions) {
+            save(pos);
+        }
+    }
+
+    default void delete(PortfolioPosition pos) {
+        if (pos != null && pos.getId() != null) {
+            deleteById(pos.getId());
+        }
+    }
+
+    default Optional<PortfolioPosition> findByStockCode(String stockCode) {
+        return Optional.ofNullable(findByStockCodeOne(stockCode));
+    }
+
+    default Optional<PortfolioPosition> findByIdOpt(Long id) {
+        return Optional.ofNullable(findById(id));
+    }
 }

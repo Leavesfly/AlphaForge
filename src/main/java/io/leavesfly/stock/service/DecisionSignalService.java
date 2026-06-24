@@ -50,7 +50,7 @@ public class DecisionSignalService {
 
     /** 标记信号为已执行 */
     public DecisionSignal executeSignal(Long id) {
-        return signalRepo.findById(id).map(s -> {
+        return signalRepo.findByIdOpt(id).map(s -> {
             s.setStatus("executed");
             return signalRepo.save(s);
         }).orElse(null);
@@ -58,7 +58,7 @@ public class DecisionSignalService {
 
     /** 取消信号 */
     public DecisionSignal cancelSignal(Long id) {
-        return signalRepo.findById(id).map(s -> {
+        return signalRepo.findByIdOpt(id).map(s -> {
             s.setStatus("cancelled");
             return signalRepo.save(s);
         }).orElse(null);

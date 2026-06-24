@@ -58,7 +58,7 @@ public class AnalysisHistoryService {
      * 根据ID获取报告详情
      */
     public Optional<AnalysisReport> getReportById(Long id) {
-        return repository.findById(id);
+        return repository.findByIdOpt(id);
     }
 
     /**

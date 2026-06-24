@@ -1,91 +1,63 @@
 package io.leavesfly.stock.model.entity;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
  * 投资组合持仓实体
  * 对应Python版本的 portfolio_repo.py
  */
-@Entity
-@Table(name = "portfolio_positions")
 public class PortfolioPosition {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     /** 股票代码 */
-    @Column(name = "stock_code", nullable = false, length = 20)
     private String stockCode;
 
     /** 股票名称 */
-    @Column(name = "stock_name", length = 50)
     private String stockName;
 
     /** 市场 */
-    @Column(name = "market", length = 10)
     private String market;
 
     /** 持仓数量(股) */
-    @Column(name = "quantity")
     private Integer quantity;
 
     /** 成本价 */
-    @Column(name = "cost_price")
     private Double costPrice;
 
     /** 当前价 */
-    @Column(name = "current_price")
     private Double currentPrice;
 
     /** 盈亏金额 */
-    @Column(name = "profit_loss")
     private Double profitLoss;
 
     /** 盈亏比例(%) */
-    @Column(name = "profit_loss_pct")
     private Double profitLossPct;
 
     /** 持仓市值 */
-    @Column(name = "market_value")
     private Double marketValue;
 
     /** 仓位占比(%) */
-    @Column(name = "position_pct")
     private Double positionPct;
 
     /** 买入日期 */
-    @Column(name = "buy_date")
     private LocalDateTime buyDate;
 
     /** 止损价 */
-    @Column(name = "stop_loss_price")
     private Double stopLossPrice;
 
     /** 目标价 */
-    @Column(name = "target_price")
     private Double targetPrice;
 
     /** 标签(逗号分隔) */
-    @Column(name = "tags", length = 200)
     private String tags;
 
     /** 备注 */
-    @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    @PrePersist
-    public void prePersist() { this.createdAt = LocalDateTime.now(); this.updatedAt = LocalDateTime.now(); }
-
-    @PreUpdate
-    public void preUpdate() { this.updatedAt = LocalDateTime.now(); }
 
     // Getters & Setters
     public Long getId() { return id; }

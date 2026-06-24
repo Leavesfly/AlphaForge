@@ -14,14 +14,18 @@ spring:
     url: jdbc:sqlite:./data/stock_analysis.db
     driver-class-name: org.sqlite.JDBC
   
-  jpa:
-    hibernate:
-      ddl-auto: update
-    database-platform: org.hibernate.community.dialect.SQLiteDialect
-    show-sql: false
-    properties:
-      hibernate:
-        format_sql: true
+  # SQL初始化配置
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+# MyBatis配置
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
   # Jackson JSON配置
   jackson:
@@ -36,6 +40,6 @@ logging:
   level:
     root: INFO
     com.stock: INFO
-    org.hibernate.SQL: WARN
+    org.springframework.jdbc: WARN
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

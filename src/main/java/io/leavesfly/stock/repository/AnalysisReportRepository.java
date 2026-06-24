@@ -1,33 +1,59 @@
 package io.leavesfly.stock.repository;
 
 import io.leavesfly.stock.model.entity.AnalysisReport;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 分析报告数据访问层
  */
-@Repository
-public interface AnalysisReportRepository extends JpaRepository<AnalysisReport, Long> {
+@Mapper
+public interface AnalysisReportRepository {
 
-    /** 按股票代码查询，按日期倒序 */
-    List<AnalysisReport> findByStockCodeOrderByAnalysisDateDesc(String stockCode);
+    void insert(AnalysisReport report);
 
-    /** 查询所有报告，按日期倒序 */
+    void update(AnalysisReport report);
+
+    AnalysisReport findById(@Param("id") Long id);
+
+    List<AnalysisReport> findAll();
+
+    void deleteById(@Param("id") Long id);
+
+    List<AnalysisReport> findByStockCodeOrderByAnalysisDateDesc(@Param("stockCode") String stockCode);
+
     List<AnalysisReport> findAllByOrderByAnalysisDateDesc();
 
-    /** 按日期范围查询 */
-    List<AnalysisReport> findByAnalysisDateBetweenOrderByAnalysisDateDesc(LocalDateTime start, LocalDateTime end);
+    List<AnalysisReport> findByAnalysisDateBetweenOrderByAnalysisDateDesc(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    /** 按市场类型查询 */
-    List<AnalysisReport> findByMarketOrderByAnalysisDateDesc(String market);
+    List<AnalysisReport> findByMarketOrderByAnalysisDateDesc(@Param("market") String market);
 
-    /** 按信号查询 */
-    List<AnalysisReport> findBySignalOrderByAnalysisDateDesc(String signal);
+    List<AnalysisReport> findBySignalOrderByAnalysisDateDesc(@Param("signal") String signal);
 
-    /** 统计指定股票的分析次数 */
-    long countByStockCode(String stockCode);
+    long countByStockCode(@Param("stockCode") String stockCode);
+
+    long count();
+
+    default AnalysisReport save(AnalysisReport report) {
+        if (report.getId() == null) {
+            if (report.getCreatedAt() == null) {
+                report.setCreatedAt(LocalDateTime.now());
+            }
+            if (report.getAnalysisDate() == null) {
+                report.setAnalysisDate(LocalDateTime.now());
+            }
+            insert(report);
+        } else {
+            update(report);
+        }
+        return report;
+    }
+
+    default Optional<AnalysisReport> findByIdOpt(Long id) {
+        return Optional.ofNullable(findById(id));
+    }
 }
