@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.ChatRepository">
+
+    <!-- 插入会话 -->
+    <insert id="insertSession">
+        INSERT OR IGNORE INTO chat_sessions (session_id, title, message_count, created_at, last_active)
+        VALUES (#{sessionId}, #{title}, 0, #{now}, #{now})
+    </insert>
+
+    <!-- 更新会话活跃时间 -->
+    <update id="updateSessionActive">
+        UPDATE chat_sessions
+        SET message_count = #{messageCount}, title = #{title}, last_active = #{now}
+        WHERE session_id = #{sessionId}
+    </update>
+
+    <!-- 删除会话 -->
+    <delete id="deleteSession">
+        DELETE FROM chat_sessions WHERE session_id = #{sessionId}
+    </delete>
+
+    <!-- 查询会话列表(按最近活跃排序) -->
+    <select id="findSessions" resultType="map">
+        SELECT session_id, title, message_count, created_at, last_active
+        FROM chat_sessions
+        ORDER BY last_active DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 按ID查询会话 -->
+    <select id="findSessionById" resultType="map">
+        SELECT session_id, title, message_count, created_at, last_active
+        FROM chat_sessions
+        WHERE session_id = #{sessionId}
+    </select>
+
+    <!-- 插入消息 -->
+    <insert id="insertMessage">
+        INSERT INTO chat_messages (session_id, message_id, role, content, skill_name, created_at)
+        VALUES (#{sessionId}, #{messageId}, #{role}, #{content}, #{skillName}, #{now})
+    </insert>
+
+    <!-- 查询会话消息(按时间排序) -->
+    <select id="findMessagesBySessionId" resultType="map">
+        SELECT id, session_id, message_id, role, content, skill_name, created_at
+        FROM chat_messages
+        WHERE session_id = #{sessionId}
+        ORDER BY id ASC
+    </select>
+
+    <!-- 删除会话消息 -->
+    <delete id="deleteMessagesBySessionId">
+        DELETE FROM chat_messages WHERE session_id = #{sessionId}
+    </delete>
+
+    <!-- 统计会话消息数 -->
+    <select id="countMessagesBySessionId" resultType="int">
+        SELECT COUNT(*) FROM chat_messages WHERE session_id = #{sessionId}
+    </select>
+
+</mapper>
