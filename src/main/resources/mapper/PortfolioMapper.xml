@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.repository.PortfolioRepository">
+
+    <resultMap id="portfolioPositionMap" type="io.leavesfly.stock.model.entity.PortfolioPosition">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="market" column="market"/>
+        <result property="quantity" column="quantity"/>
+        <result property="costPrice" column="cost_price"/>
+        <result property="currentPrice" column="current_price"/>
+        <result property="profitLoss" column="profit_loss"/>
+        <result property="profitLossPct" column="profit_loss_pct"/>
+        <result property="marketValue" column="market_value"/>
+        <result property="positionPct" column="position_pct"/>
+        <result property="buyDate" column="buy_date"/>
+        <result property="stopLossPrice" column="stop_loss_price"/>
+        <result property="targetPrice" column="target_price"/>
+        <result property="tags" column="tags"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO portfolio_positions (stock_code, stock_name, market, quantity, cost_price, current_price, profit_loss, profit_loss_pct, market_value, position_pct, buy_date, stop_loss_price, target_price, tags, note, created_at, updated_at)
+        VALUES (#{stockCode}, #{stockName}, #{market}, #{quantity}, #{costPrice}, #{currentPrice}, #{profitLoss}, #{profitLossPct}, #{marketValue}, #{positionPct}, #{buyDate}, #{stopLossPrice}, #{targetPrice}, #{tags}, #{note}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE portfolio_positions SET stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, quantity=#{quantity}, cost_price=#{costPrice}, current_price=#{currentPrice}, profit_loss=#{profitLoss}, profit_loss_pct=#{profitLossPct}, market_value=#{marketValue}, position_pct=#{positionPct}, buy_date=#{buyDate}, stop_loss_price=#{stopLossPrice}, target_price=#{targetPrice}, tags=#{tags}, note=#{note}, updated_at=#{updatedAt}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM portfolio_positions WHERE id = #{id}
+    </delete>
+
+    <select id="findAllByOrderByUpdatedAtDesc" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions ORDER BY updated_at DESC
+    </select>
+
+    <select id="findByStockCodeOne" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions WHERE stock_code = #{stockCode} LIMIT 1
+    </select>
+
+    <select id="findByMarketOrderByMarketValueDesc" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions WHERE market = #{market} ORDER BY market_value DESC
+    </select>
+
+    <select id="getTotalMarketValue" resultType="java.lang.Double">
+        SELECT SUM(market_value) FROM portfolio_positions
+    </select>
+
+    <select id="getTotalProfitLoss" resultType="java.lang.Double">
+        SELECT SUM(profit_loss) FROM portfolio_positions
+    </select>
+
+    <select id="countByProfitLossPctGreaterThan" resultType="long">
+        SELECT COUNT(*) FROM portfolio_positions WHERE profit_loss_pct > #{pct}
+    </select>
+
+    <select id="countByProfitLossPctLessThan" resultType="long">
+        SELECT COUNT(*) FROM portfolio_positions WHERE profit_loss_pct &lt; #{pct}
+    </select>
+
+</mapper>

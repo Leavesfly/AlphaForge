@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.repository.BacktestRepository">
+
+    <resultMap id="backtestRecordMap" type="io.leavesfly.stock.model.entity.BacktestRecord">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="strategyName" column="strategy_name"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="initialCapital" column="initial_capital"/>
+        <result property="finalCapital" column="final_capital"/>
+        <result property="totalReturnPct" column="total_return_pct"/>
+        <result property="annualReturnPct" column="annual_return_pct"/>
+        <result property="maxDrawdownPct" column="max_drawdown_pct"/>
+        <result property="sharpeRatio" column="sharpe_ratio"/>
+        <result property="winRatePct" column="win_rate_pct"/>
+        <result property="totalTrades" column="total_trades"/>
+        <result property="winningTrades" column="winning_trades"/>
+        <result property="losingTrades" column="losing_trades"/>
+        <result property="avgHoldingDays" column="avg_holding_days"/>
+        <result property="profitLossRatio" column="profit_loss_ratio"/>
+        <result property="benchmarkReturnPct" column="benchmark_return_pct"/>
+        <result property="alphaPct" column="alpha_pct"/>
+        <result property="tradeDetails" column="trade_details"/>
+        <result property="parameters" column="parameters"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO backtest_records (stock_code, stock_name, strategy_name, start_date, end_date, initial_capital, final_capital, total_return_pct, annual_return_pct, max_drawdown_pct, sharpe_ratio, win_rate_pct, total_trades, winning_trades, losing_trades, avg_holding_days, profit_loss_ratio, benchmark_return_pct, alpha_pct, trade_details, parameters, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{strategyName}, #{startDate}, #{endDate}, #{initialCapital}, #{finalCapital}, #{totalReturnPct}, #{annualReturnPct}, #{maxDrawdownPct}, #{sharpeRatio}, #{winRatePct}, #{totalTrades}, #{winningTrades}, #{losingTrades}, #{avgHoldingDays}, #{profitLossRatio}, #{benchmarkReturnPct}, #{alphaPct}, #{tradeDetails}, #{parameters}, #{createdAt})
+    </insert>
+
+    <update id="update">
+        UPDATE backtest_records SET stock_code=#{stockCode}, stock_name=#{stockName}, strategy_name=#{strategyName}, start_date=#{startDate}, end_date=#{endDate}, initial_capital=#{initialCapital}, final_capital=#{finalCapital}, total_return_pct=#{totalReturnPct}, annual_return_pct=#{annualReturnPct}, max_drawdown_pct=#{maxDrawdownPct}, sharpe_ratio=#{sharpeRatio}, win_rate_pct=#{winRatePct}, total_trades=#{totalTrades}, winning_trades=#{winningTrades}, losing_trades=#{losingTrades}, avg_holding_days=#{avgHoldingDays}, profit_loss_ratio=#{profitLossRatio}, benchmark_return_pct=#{benchmarkReturnPct}, alpha_pct=#{alphaPct}, trade_details=#{tradeDetails}, parameters=#{parameters}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="backtestRecordMap">
+        SELECT * FROM backtest_records WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="backtestRecordMap">
+        SELECT * FROM backtest_records
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM backtest_records WHERE id = #{id}
+    </delete>
+
+    <select id="findByStockCodeOrderByCreatedAtDesc" resultMap="backtestRecordMap">
+        SELECT * FROM backtest_records WHERE stock_code = #{stockCode} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByStrategyNameOrderByCreatedAtDesc" resultMap="backtestRecordMap">
+        SELECT * FROM backtest_records WHERE strategy_name = #{strategyName} ORDER BY created_at DESC
+    </select>
+
+    <select id="findTop20ByOrderByCreatedAtDesc" resultMap="backtestRecordMap">
+        SELECT * FROM backtest_records ORDER BY created_at DESC LIMIT 20
+    </select>
+
+</mapper>

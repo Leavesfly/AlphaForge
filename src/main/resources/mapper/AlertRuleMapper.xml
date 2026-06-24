@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.repository.AlertRuleRepository">
+
+    <resultMap id="alertRuleMap" type="io.leavesfly.stock.model.entity.AlertRule">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="alertType" column="alert_type"/>
+        <result property="thresholdValue" column="threshold_value"/>
+        <result property="conditionExpr" column="condition_expr"/>
+        <result property="enabled" column="enabled"/>
+        <result property="triggered" column="triggered"/>
+        <result property="lastTriggeredAt" column="last_triggered_at"/>
+        <result property="oneShot" column="one_shot"/>
+        <result property="notifyChannels" column="notify_channels"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO alert_rules (stock_code, stock_name, alert_type, threshold_value, condition_expr, enabled, triggered, last_triggered_at, one_shot, notify_channels, note, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{alertType}, #{thresholdValue}, #{conditionExpr}, #{enabled}, #{triggered}, #{lastTriggeredAt}, #{oneShot}, #{notifyChannels}, #{note}, #{createdAt})
+    </insert>
+
+    <update id="update">
+        UPDATE alert_rules SET stock_code=#{stockCode}, stock_name=#{stockName}, alert_type=#{alertType}, threshold_value=#{thresholdValue}, condition_expr=#{conditionExpr}, enabled=#{enabled}, triggered=#{triggered}, last_triggered_at=#{lastTriggeredAt}, one_shot=#{oneShot}, notify_channels=#{notifyChannels}, note=#{note}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM alert_rules WHERE id = #{id}
+    </delete>
+
+    <select id="findByStockCodeAndEnabledTrue" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE stock_code = #{stockCode} AND enabled = 1
+    </select>
+
+    <select id="findByEnabledTrueOrderByCreatedAtDesc" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE enabled = 1 ORDER BY created_at DESC
+    </select>
+
+    <select id="findByAlertTypeOrderByCreatedAtDesc" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE alert_type = #{alertType} ORDER BY created_at DESC
+    </select>
+
+    <select id="findByTriggeredFalseAndEnabledTrue" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE triggered = 0 AND enabled = 1
+    </select>
+
+    <select id="findByEnabled" resultMap="alertRuleMap">
+        SELECT * FROM alert_rules WHERE enabled = #{enabled}
+    </select>
+
+    <select id="countByEnabledTrue" resultType="long">
+        SELECT COUNT(*) FROM alert_rules WHERE enabled = 1
+    </select>
+
+</mapper>

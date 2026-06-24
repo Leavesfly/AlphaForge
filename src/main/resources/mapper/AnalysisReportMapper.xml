@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.leavesfly.stock.repository.AnalysisReportRepository">
+
+    <resultMap id="analysisReportMap" type="io.leavesfly.stock.model.entity.AnalysisReport">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="stockName" column="stock_name"/>
+        <result property="analysisDate" column="analysis_date"/>
+        <result property="market" column="market"/>
+        <result property="currentPrice" column="current_price"/>
+        <result property="changePct" column="change_pct"/>
+        <result property="totalScore" column="total_score"/>
+        <result property="signal" column="signal"/>
+        <result property="confidence" column="confidence"/>
+        <result property="summary" column="summary"/>
+        <result property="technicalAnalysis" column="technical_analysis"/>
+        <result property="fundamentalAnalysis" column="fundamental_analysis"/>
+        <result property="newsAnalysis" column="news_analysis"/>
+        <result property="fullReport" column="full_report"/>
+        <result property="llmResponse" column="llm_response"/>
+        <result property="agentMode" column="agent_mode"/>
+        <result property="llmModel" column="llm_model"/>
+        <result property="durationSeconds" column="duration_seconds"/>
+        <result property="tokenUsage" column="token_usage"/>
+        <result property="isDryRun" column="is_dry_run"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_report (stock_code, stock_name, analysis_date, market, current_price, change_pct, total_score, signal, confidence, summary, technical_analysis, fundamental_analysis, news_analysis, full_report, llm_response, agent_mode, llm_model, duration_seconds, token_usage, is_dry_run, created_at)
+        VALUES (#{stockCode}, #{stockName}, #{analysisDate}, #{market}, #{currentPrice}, #{changePct}, #{totalScore}, #{signal}, #{confidence}, #{summary}, #{technicalAnalysis}, #{fundamentalAnalysis}, #{newsAnalysis}, #{fullReport}, #{llmResponse}, #{agentMode}, #{llmModel}, #{durationSeconds}, #{tokenUsage}, #{isDryRun}, #{createdAt})
+    </insert>
+
+    <update id="update">
+        UPDATE analysis_report SET stock_code=#{stockCode}, stock_name=#{stockName}, analysis_date=#{analysisDate}, market=#{market}, current_price=#{currentPrice}, change_pct=#{changePct}, total_score=#{totalScore}, signal=#{signal}, confidence=#{confidence}, summary=#{summary}, technical_analysis=#{technicalAnalysis}, fundamental_analysis=#{fundamentalAnalysis}, news_analysis=#{newsAnalysis}, full_report=#{fullReport}, llm_response=#{llmResponse}, agent_mode=#{agentMode}, llm_model=#{llmModel}, duration_seconds=#{durationSeconds}, token_usage=#{tokenUsage}, is_dry_run=#{isDryRun}
+        WHERE id=#{id}
+    </update>
+
+    <select id="findById" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report WHERE id = #{id}
+    </select>
+
+    <select id="findAll" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_report WHERE id = #{id}
+    </delete>
+
+    <select id="findByStockCodeOrderByAnalysisDateDesc" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report WHERE stock_code = #{stockCode} ORDER BY analysis_date DESC
+    </select>
+
+    <select id="findAllByOrderByAnalysisDateDesc" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report ORDER BY analysis_date DESC
+    </select>
+
+    <select id="findByAnalysisDateBetweenOrderByAnalysisDateDesc" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report WHERE analysis_date BETWEEN #{start} AND #{end} ORDER BY analysis_date DESC
+    </select>
+
+    <select id="findByMarketOrderByAnalysisDateDesc" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report WHERE market = #{market} ORDER BY analysis_date DESC
+    </select>
+
+    <select id="findBySignalOrderByAnalysisDateDesc" resultMap="analysisReportMap">
+        SELECT * FROM analysis_report WHERE signal = #{signal} ORDER BY analysis_date DESC
+    </select>
+
+    <select id="countByStockCode" resultType="long">
+        SELECT COUNT(*) FROM analysis_report WHERE stock_code = #{stockCode}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM analysis_report
+    </select>
+
+</mapper>
