@@ -37,6 +37,8 @@ public class Application implements CommandLineRunner {
     }
 
     public static void main(String[] args) {
+        // 在Spring启动前执行初始化: 创建目录、环境预检查、设置系统属性
+        AppInitializer.init();
         SpringApplication.run(Application.class, args);
     }
 
@@ -52,9 +54,11 @@ public class Application implements CommandLineRunner {
             case SERVE:
                 // Web服务模式由Spring Boot自动处理
                 log.info("Web API服务已启动, 端口: {}", appConfig.getServerPort());
+                log.info("访问地址: http://localhost:{}", appConfig.getServerPort());
                 break;
             case SERVE_ONLY:
                 log.info("纯API服务模式已启动, 端口: {}", appConfig.getServerPort());
+                log.info("访问地址: http://localhost:{}", appConfig.getServerPort());
                 break;
             case SCHEDULE:
                 log.info("定时调度模式启动");
@@ -135,7 +139,7 @@ public class Application implements CommandLineRunner {
      * 命令行参数封装
      */
     public static class CommandLineArgs {
-        private RunMode mode = RunMode.SINGLE;
+        private RunMode mode = RunMode.SERVE;
         private String stocks;
         private boolean dryRun = false;
         private boolean debug = false;

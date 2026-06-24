@@ -10,8 +10,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * LLM服务 - 统一调用多提供商大语言模型
@@ -166,6 +171,108 @@ public class LlmService {
             }
 
             throw new RuntimeException("无法解析LLM响应: " + responseBody.substring(0, Math.min(200, responseBody.length())));
+        }
+    }
+
+    /**
+     * 流式对话接口 - 支持SSE逐字输出
+     *
+     * @param messages 消息列表
+     * @param onChunk  每收到一个文本片段时的回调
+     * @return 完整回复文本
+     */
+    public String streamChatWithMessages(List<Map<String, String>> messages, Consumer<String> onChunk) {
+        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        if (channels.isEmpty()) {
+            String err = "[错误] 未配置LLM服务";
+            onChunk.accept(err);
+            return err;
+        }
+
+        for (int attempt = 0; attempt < channels.size(); attempt++) {
+            int idx = (currentChannelIndex + attempt) % channels.size();
+            AppConfig.LlmChannelConfig channel = channels.get(idx);
+            try {
+                String result = callLlmStreamApi(channel, messages, onChunk);
+                if (result != null && !result.isEmpty()) {
+                    currentChannelIndex = idx;
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("LLM流式渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
+            }
+        }
+
+        String err = "[错误] LLM服务不可用";
+        onChunk.accept(err);
+        return err;
+    }
+
+    /**
+     * 调用单个LLM API (流式)
+     */
+    private String callLlmStreamApi(AppConfig.LlmChannelConfig channel,
+                                    List<Map<String, String>> messages,
+                                    Consumer<String> onChunk) throws Exception {
+        String apiUrl = resolveApiUrl(channel);
+
+        // 构建请求体 - 开启stream
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", channel.getModel());
+        requestBody.put("temperature", channel.getTemperature());
+        requestBody.put("max_tokens", channel.getMaxTokens());
+        requestBody.put("stream", true);
+
+        ArrayNode messagesArray = requestBody.putArray("messages");
+        for (Map<String, String> msg : messages) {
+            ObjectNode msgNode = messagesArray.addObject();
+            msgNode.put("role", msg.get("role"));
+            msgNode.put("content", msg.get("content"));
+        }
+
+        RequestBody body = RequestBody.create(
+                objectMapper.writeValueAsString(requestBody),
+                MediaType.get("application/json"));
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + channel.getApiKey())
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        log.debug("流式调用LLM: model={}, url={}", channel.getModel(), apiUrl);
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String errorBody = response.body() != null ? response.body().string() : "unknown";
+                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+            }
+
+            StringBuilder fullContent = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(response.body().byteStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("data: ")) {
+                        String data = line.substring(6).trim();
+                        if ("[DONE]".equals(data)) break;
+
+                        try {
+                            JsonNode node = objectMapper.readTree(data);
+                            JsonNode delta = node.path("choices").path(0).path("delta").path("content");
+                            if (!delta.isMissingNode() && !delta.isNull()) {
+                                String chunk = delta.asText();
+                                fullContent.append(chunk);
+                                onChunk.accept(chunk);
+                            }
+                        } catch (Exception e) {
+                            // 忽略解析失败的行（如空行、注释等）
+                        }
+                    }
+                }
+            }
+            return fullContent.toString();
         }
     }
 

@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,6 +39,7 @@ public class DataFetcherManager {
     /** 数据源优先级排序(根据市场类型) */
     private final Map<MarketType, List<DataProviderType>> marketProviderOrder;
 
+    @Autowired
     public DataFetcherManager(AppConfig config, List<BaseDataFetcher> fetchers) {
         this.config = config;
         this.fetchers = fetchers;

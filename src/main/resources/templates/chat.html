@@ -3,6 +3,10 @@
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI问股 - 股票智能分析系统</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
+    <!-- Markdown渲染: marked + 代码高亮: highlight.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
 </head>
 <body>
 <div class="layout">
@@ -15,36 +19,94 @@
             </div>
             <form id="chatForm" class="chat-input-form" onsubmit="sendMessage(event)">
                 <input type="text" id="chatInput" placeholder="输入问题，例如: 分析一下贵州茅台" class="input-lg" autocomplete="off">
-                <button type="submit" class="btn btn-primary">发送</button>
+                <button type="submit" id="sendBtn" class="btn btn-primary">发送</button>
             </form>
         </section>
     </main>
 </div>
 <script th:src="@{/js/app.js}"></script>
 <script>
+// 配置 marked
+marked.setOptions({
+    highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true
+});
+
+// 会话ID保持一致
+const SESSION_ID = 'web_' + Date.now();
+let isStreaming = false;
+
 async function sendMessage(e) {
     e.preventDefault();
+    if (isStreaming) return;
+
     const input = document.getElementById('chatInput');
     const msg = input.value.trim();
     if (!msg) return;
-    
+
     // 显示用户消息
     appendMessage('user', msg);
     input.value = '';
-    
-    // 显示加载
-    const loadingId = appendMessage('assistant', '⏳ 分析中...');
-    
+    setStreaming(true);
+
+    // 创建助手消息占位
+    const assistantDiv = createAssistantPlaceholder();
+    let fullText = '';
+
     try {
-        const res = await fetch('/api/v1/agent/chat', {
+        const response = await fetch('/api/v1/agent/chat/stream', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: msg, session_id: 'web_' + Date.now()})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, session_id: SESSION_ID })
         });
-        const data = await res.json();
-        updateMessage(loadingId, data.response || data.reply || '分析完成');
+
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // 保留未完成的行
+
+            for (const line of lines) {
+                if (line.startsWith('event:')) {
+                    const eventName = line.substring(6).trim();
+                    if (eventName === 'done') {
+                        break;
+                    } else if (eventName === 'error') {
+                        // error事件在下一行data中处理
+                    }
+                } else if (line.startsWith('data:')) {
+                    const data = line.substring(5);
+                    fullText += data;
+                    renderMarkdown(assistantDiv, fullText);
+                }
+            }
+        }
+
+        // 最终渲染
+        if (fullText) {
+            renderMarkdown(assistantDiv, fullText);
+        } else {
+            assistantDiv.querySelector('.md-content').textContent = '✅ 分析完成';
+        }
     } catch (err) {
-        updateMessage(loadingId, '❌ 请求失败: ' + err.message);
+        assistantDiv.querySelector('.md-content').innerHTML = '<span class="error-text">❌ 请求失败: ' + err.message + '</span>';
+    } finally {
+        setStreaming(false);
+        scrollToBottom();
     }
 }
 
@@ -52,16 +114,48 @@ function appendMessage(role, text) {
     const container = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'message ' + role;
-    div.id = 'msg_' + Date.now();
-    div.innerHTML = text.replace(/\n/g, '<br>');
+    if (role === 'user') {
+        div.textContent = text;
+    } else {
+        div.innerHTML = '<div class="md-content">' + marked.parse(text) + '</div>';
+    }
     container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    return div.id;
+    scrollToBottom();
+    return div;
 }
 
-function updateMessage(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = text.replace(/\n/g, '<br>');
+function createAssistantPlaceholder() {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    div.innerHTML = '<div class="md-content"><span class="typing-indicator">●●●</span></div>';
+    container.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+function renderMarkdown(el, text) {
+    const content = el.querySelector('.md-content');
+    content.innerHTML = marked.parse(text);
+    // 对代码块重新高亮
+    content.querySelectorAll('pre code').forEach(block => {
+        hljs.highlightElement(block);
+    });
+    scrollToBottom();
+}
+
+function setStreaming(val) {
+    isStreaming = val;
+    const btn = document.getElementById('sendBtn');
+    const input = document.getElementById('chatInput');
+    btn.disabled = val;
+    input.disabled = val;
+    btn.textContent = val ? '生成中...' : '发送';
+}
+
+function scrollToBottom() {
+    const container = document.getElementById('chatMessages');
+    container.scrollTop = container.scrollHeight;
 }
 </script>
 </body>

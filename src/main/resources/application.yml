@@ -9,9 +9,9 @@ spring:
   application:
     name: daily-stock-analysis
   
-  # SQLite数据库配置
+  # SQLite数据库配置 (存储在 ~/.j_daily-stock-analysis/data/ 下)
   datasource:
-    url: jdbc:sqlite:./data/stock_analysis.db
+    url: jdbc:sqlite:${app.home}/data/stock_analysis.db
     driver-class-name: org.sqlite.JDBC
   
   # SQL初始化配置

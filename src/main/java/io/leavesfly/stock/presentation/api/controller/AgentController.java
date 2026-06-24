@@ -4,9 +4,12 @@ import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.infrastructure.llm.LlmService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -72,6 +75,67 @@ public class AgentController {
         response.put("session_id", sessionId);
         response.put("model", config.getLlmModel());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Agent流式对话 (SSE)
+     * POST /api/v1/agent/chat/stream
+     */
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter chatStream(@RequestBody Map<String, Object> request) {
+        String message = (String) request.getOrDefault("message", "");
+        String sessionId = (String) request.getOrDefault("session_id", UUID.randomUUID().toString());
+
+        SseEmitter emitter = new SseEmitter(180_000L); // 3分钟超时
+
+        if (message.isEmpty()) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data("message不能为空"));
+                emitter.complete();
+            } catch (IOException e) {
+                emitter.completeWithError(e);
+            }
+            return emitter;
+        }
+
+        // 获取或创建会话
+        List<Map<String, String>> history = sessions.computeIfAbsent(sessionId, k -> new ArrayList<>());
+        if (history.isEmpty()) {
+            history.add(Map.of("role", "system", "content",
+                    "你是一个专业的股票分析助手。你可以回答关于股票分析、技术指标、投资策略等相关问题。"));
+        }
+        history.add(Map.of("role", "user", "content", message));
+
+        // 异步执行流式LLM调用
+        new Thread(() -> {
+            try {
+                String fullReply = llmService.streamChatWithMessages(history, chunk -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("chunk").data(chunk));
+                    } catch (IOException e) {
+                        log.warn("发送SSE chunk失败: {}", e.getMessage());
+                    }
+                });
+
+                // 流结束，发送done事件
+                emitter.send(SseEmitter.event().name("done").data(sessionId));
+                emitter.complete();
+
+                // 更新会话历史
+                history.add(Map.of("role", "assistant", "content", fullReply));
+                while (history.size() > 21) {
+                    history.remove(1);
+                }
+            } catch (Exception e) {
+                log.error("流式对话失败: {}", e.getMessage());
+                try {
+                    emitter.send(SseEmitter.event().name("error").data("分析失败: " + e.getMessage()));
+                } catch (IOException ignored) {}
+                emitter.completeWithError(e);
+            }
+        }, "sse-chat-" + sessionId).start();
+
+        return emitter;
     }
 
     /**

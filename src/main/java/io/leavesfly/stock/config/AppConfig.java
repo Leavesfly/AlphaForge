@@ -127,7 +127,69 @@ public class AppConfig {
             dotenv = null;
         }
         loadConfig();
+        validateConfig();
         log.info("配置加载完成: market={}, stocks={}, provider={}", market, stockList.size(), dataProvider);
+    }
+
+    /**
+     * 校验必填配置项，缺失时打印警告信息
+     */
+    private void validateConfig() {
+        List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        // 必填项校验 - 缺失将导致核心功能不可用
+        if (llmApiKey == null || llmApiKey.isEmpty()) {
+            errors.add("LLM_API_KEY 未配置 - AI分析功能将不可用，请配置阿里云百炼API Key");
+        }
+        if (stockList.isEmpty()) {
+            warnings.add("STOCK_LIST 未配置 - Web模式下可通过API传入，其他模式需要配置股票列表");
+        }
+
+        // 警告项 - 不影响启动但可能影响部分功能
+        if (notificationChannels != null && !notificationChannels.isEmpty()) {
+            // 检查配置的通知渠道是否有对应的凭据
+            for (String channel : notificationChannels.split(",")) {
+                String ch = channel.trim().toLowerCase();
+                switch (ch) {
+                    case "wecom":
+                        if (wecomWebhook == null || wecomWebhook.isEmpty())
+                            warnings.add("通知渠道 wecom 已启用但 WECOM_WEBHOOK 未配置");
+                        break;
+                    case "feishu":
+                        if (feishuWebhook == null || feishuWebhook.isEmpty())
+                            warnings.add("通知渠道 feishu 已启用但 FEISHU_WEBHOOK 未配置");
+                        break;
+                    case "telegram":
+                        if (telegramBotToken == null || telegramBotToken.isEmpty())
+                            warnings.add("通知渠道 telegram 已启用但 TELEGRAM_BOT_TOKEN 未配置");
+                        break;
+                    case "email":
+                        if (emailSmtpHost == null || emailSmtpHost.isEmpty())
+                            warnings.add("通知渠道 email 已启用但 EMAIL_SMTP_HOST 未配置");
+                        break;
+                }
+            }
+        }
+
+        // 打印校验结果
+        if (!errors.isEmpty()) {
+            log.error("========================================");
+            log.error("配置校验失败 - 以下必填配置缺失:");
+            for (String error : errors) {
+                log.error("  ✗ {}", error);
+            }
+            log.error("请参考 .env.example 文件配置必填项");
+            log.error("========================================");
+        }
+        if (!warnings.isEmpty()) {
+            log.warn("----------------------------------------");
+            log.warn("配置提醒 - 以下配置可能影响部分功能:");
+            for (String warning : warnings) {
+                log.warn("  ⚠ {}", warning);
+            }
+            log.warn("----------------------------------------");
+        }
     }
 
     /**
@@ -139,8 +201,8 @@ public class AppConfig {
         serverHost = getEnv("SERVER_HOST", "0.0.0.0");
 
         // LLM配置
-        llmApi = getEnv("LLM_API", "");
-        llmModel = getEnv("LLM_MODEL", "gemini-2.0-flash");
+        llmApi = getEnv("LLM_API", "https://dashscope.aliyuncs.com/compatible-mode/v1");
+        llmModel = getEnv("LLM_MODEL", "qwen-plus");
         llmApiKey = getEnv("LLM_API_KEY", "");
         llmTemperature = getDoubleEnv("LLM_TEMPERATURE", 0.7);
         llmMaxTokens = getIntEnv("LLM_MAX_TOKENS", 8000);

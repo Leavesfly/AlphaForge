@@ -5,13 +5,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
+import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Web配置 - CORS跨域支持
  * 对应Python版本的 api/app.py 中的CORS配置
  */
 @Configuration
-public class WebConfig {
+public class WebConfig implements WebMvcConfigurer {
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        // 根路径重定向到 WebUI 仪表盘
+        registry.addRedirectViewController("/", "/web/dashboard");
+    }
 
     @Bean
     public CorsFilter corsFilter() {
