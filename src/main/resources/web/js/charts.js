@@ -35,12 +35,11 @@ function initCharts() {
   });
 
   initChart('chart-cost', theme, (chart) => {
-    const days = Array.from({length:14},(_, i)=>`03-${String(i+2).padStart(2,'0')}`);
-    chart.setOption({ backgroundColor:'transparent', grid:{top:20,right:20,bottom:30,left:50}, xAxis:{type:'category',data:days,axisLabel:{fontSize:10}}, yAxis:{type:'value',axisLabel:{formatter:'¥{value}'}}, series:[{data:days.map(()=>20+Math.random()*40),type:'bar',itemStyle:{color:'#f59e0b',borderRadius:[4,4,0,0]}}], tooltip:{trigger:'axis',formatter:'{b}<br/>费用: ¥{c}'} });
+    chart.setOption({ backgroundColor:'transparent', grid:{top:20,right:20,bottom:30,left:50}, xAxis:{type:'category',data:[],axisLabel:{fontSize:10}}, yAxis:{type:'value',axisLabel:{formatter:'¥{value}'}}, series:[{data:[],type:'bar',itemStyle:{color:'#f59e0b',borderRadius:[4,4,0,0]}}], tooltip:{trigger:'axis',formatter:'{b}<br/>费用: ¥{c}'} });
   });
 
   initChart('chart-model-dist', theme, (chart) => {
-    chart.setOption({ backgroundColor:'transparent', series:[{type:'pie',radius:['40%','68%'],center:['50%','55%'],label:{fontSize:11},data:[{value:65,name:'qwen-max',itemStyle:{color:'#6366f1'}},{value:20,name:'gpt-4',itemStyle:{color:'#10b981'}},{value:10,name:'qwen-turbo',itemStyle:{color:'#f59e0b'}},{value:5,name:'ollama',itemStyle:{color:'#94a3b8'}}]}], tooltip:{formatter:'{b}: {c}%'} });
+    chart.setOption({ backgroundColor:'transparent', series:[{type:'pie',radius:['40%','68%'],center:['50%','55%'],label:{fontSize:11},data:[{value:1,name:'暂无数据',itemStyle:{color:'#e5e7eb'}}]}], tooltip:{formatter:'{b}: {c} tokens ({d}%)'} });
   });
 }
 

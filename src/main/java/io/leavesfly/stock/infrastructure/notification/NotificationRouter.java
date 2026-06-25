@@ -124,29 +124,24 @@ public class NotificationRouter {
 
     private boolean supportsMarkdown(NotificationChannel ch) {
         return ch == NotificationChannel.FEISHU || ch == NotificationChannel.WECOM ||
-               ch == NotificationChannel.TELEGRAM || ch == NotificationChannel.DISCORD ||
-               ch == NotificationChannel.SLACK || ch == NotificationChannel.NTFY ||
-               ch == NotificationChannel.GOTIFY;
+               ch == NotificationChannel.DINGTALK;
     }
 
     private boolean supportsImage(NotificationChannel ch) {
-        return ch == NotificationChannel.TELEGRAM || ch == NotificationChannel.DISCORD ||
-               ch == NotificationChannel.EMAIL || ch == NotificationChannel.FEISHU;
+        return ch == NotificationChannel.EMAIL || ch == NotificationChannel.FEISHU;
     }
 
     private boolean supportsCard(NotificationChannel ch) {
-        return ch == NotificationChannel.FEISHU || ch == NotificationChannel.WECOM;
+        return ch == NotificationChannel.FEISHU || ch == NotificationChannel.WECOM ||
+               ch == NotificationChannel.DINGTALK;
     }
 
     private int getMaxLength(NotificationChannel ch) {
         switch (ch) {
-            case TELEGRAM: return 4096;
-            case DISCORD: return 2000;
             case WECOM: return 4096;
             case FEISHU: return 30000;
-            case SLACK: return 40000;
+            case DINGTALK: return 20000;
             case EMAIL: return 100000;
-            case PUSHPLUS: return 100000;
             default: return 4096;
         }
     }

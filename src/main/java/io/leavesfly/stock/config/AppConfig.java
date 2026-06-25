@@ -64,27 +64,12 @@ public class AppConfig {
     private String notificationChannels = "";
     private String wecomWebhook;
     private String feishuWebhook;
-    private String telegramBotToken;
-    private String telegramChatId;
+    private String dingtalkWebhook;
     private String emailSmtpHost;
     private int emailSmtpPort = 465;
     private String emailUser;
     private String emailPassword;
     private String emailTo;
-    private String discordWebhook;
-    private String slackWebhook;
-    private String pushoverUserKey;
-    private String pushoverAppToken;
-    private String ntfyTopic;
-    private String ntfyServer;
-    private String gotifyUrl;
-    private String gotifyToken;
-    private String pushplusToken;
-    private String serverchan3Key;
-    private String customWebhookUrl;
-    private String customWebhookMethod = "POST";
-    private Map<String, String> customWebhookHeaders = new HashMap<>();
-    private String astrbotWebhook;
 
     // ========== Bot配置 ==========
     private boolean botEnabled = false;
@@ -160,9 +145,9 @@ public class AppConfig {
                         if (feishuWebhook == null || feishuWebhook.isEmpty())
                             warnings.add("通知渠道 feishu 已启用但 FEISHU_WEBHOOK 未配置");
                         break;
-                    case "telegram":
-                        if (telegramBotToken == null || telegramBotToken.isEmpty())
-                            warnings.add("通知渠道 telegram 已启用但 TELEGRAM_BOT_TOKEN 未配置");
+                    case "dingtalk":
+                        if (dingtalkWebhook == null || dingtalkWebhook.isEmpty())
+                            warnings.add("通知渠道 dingtalk 已启用但 DINGTALK_WEBHOOK 未配置");
                         break;
                     case "email":
                         if (emailSmtpHost == null || emailSmtpHost.isEmpty())
@@ -237,26 +222,12 @@ public class AppConfig {
         notificationChannels = getEnv("NOTIFICATION_CHANNELS", "");
         wecomWebhook = getEnv("WECOM_WEBHOOK", "");
         feishuWebhook = getEnv("FEISHU_WEBHOOK", "");
-        telegramBotToken = getEnv("TELEGRAM_BOT_TOKEN", "");
-        telegramChatId = getEnv("TELEGRAM_CHAT_ID", "");
+        dingtalkWebhook = getEnv("DINGTALK_WEBHOOK", "");
         emailSmtpHost = getEnv("EMAIL_SMTP_HOST", "");
         emailSmtpPort = getIntEnv("EMAIL_SMTP_PORT", 465);
         emailUser = getEnv("EMAIL_USER", "");
         emailPassword = getEnv("EMAIL_PASSWORD", "");
         emailTo = getEnv("EMAIL_TO", "");
-        discordWebhook = getEnv("DISCORD_WEBHOOK", "");
-        slackWebhook = getEnv("SLACK_WEBHOOK", "");
-        pushoverUserKey = getEnv("PUSHOVER_USER_KEY", "");
-        pushoverAppToken = getEnv("PUSHOVER_APP_TOKEN", "");
-        ntfyTopic = getEnv("NTFY_TOPIC", "");
-        ntfyServer = getEnv("NTFY_SERVER", "https://ntfy.sh");
-        gotifyUrl = getEnv("GOTIFY_URL", "");
-        gotifyToken = getEnv("GOTIFY_TOKEN", "");
-        pushplusToken = getEnv("PUSHPLUS_TOKEN", "");
-        serverchan3Key = getEnv("SERVERCHAN3_KEY", "");
-        customWebhookUrl = getEnv("CUSTOM_WEBHOOK_URL", "");
-        customWebhookMethod = getEnv("CUSTOM_WEBHOOK_METHOD", "POST");
-        astrbotWebhook = getEnv("ASTRBOT_WEBHOOK", "");
 
         // Bot配置
         botEnabled = getBoolEnv("BOT_ENABLED", false);
@@ -433,21 +404,7 @@ public class AppConfig {
     public String getNotificationChannels() { return notificationChannels; }
     public String getWecomWebhook() { return wecomWebhook; }
     public String getFeishuWebhook() { return feishuWebhook; }
-    public String getTelegramBotToken() { return telegramBotToken; }
-    public String getTelegramChatId() { return telegramChatId; }
-    public String getDiscordWebhook() { return discordWebhook; }
-    public String getSlackWebhook() { return slackWebhook; }
-    public String getPushoverUserKey() { return pushoverUserKey; }
-    public String getPushoverAppToken() { return pushoverAppToken; }
-    public String getNtfyTopic() { return ntfyTopic; }
-    public String getNtfyServer() { return ntfyServer; }
-    public String getGotifyUrl() { return gotifyUrl; }
-    public String getGotifyToken() { return gotifyToken; }
-    public String getPushplusToken() { return pushplusToken; }
-    public String getServerchan3Key() { return serverchan3Key; }
-    public String getCustomWebhookUrl() { return customWebhookUrl; }
-    public String getCustomWebhookMethod() { return customWebhookMethod; }
-    public String getAstrbotWebhook() { return astrbotWebhook; }
+    public String getDingtalkWebhook() { return dingtalkWebhook; }
     public boolean isBotEnabled() { return botEnabled; }
     public String getFeishuAppId() { return feishuAppId; }
     public String getFeishuAppSecret() { return feishuAppSecret; }

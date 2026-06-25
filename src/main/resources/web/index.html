@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StockAI Pro - AI 量化分析平台</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -383,10 +384,10 @@
 <div class="page" id="page-usage">
   <div class="page-header"><div class="page-header-left"><h2>LLM 用量监控</h2><p>按模型 / 日期统计 API 调用量、Token 消耗与费用</p></div></div>
   <div class="grid grid-4" style="margin-bottom:20px">
-    <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:20px">328</div><div class="stat-label">今日调用次数</div></div>
-    <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:20px">1.2M</div><div class="stat-label">今日 Token</div></div>
-    <div class="card stat-card accent-danger"><div class="stat-value" style="font-size:20px">¥45.80</div><div class="stat-label">今日费用</div></div>
-    <div class="card stat-card"><div class="stat-value" style="font-size:20px">¥892</div><div class="stat-label">本月累计</div></div>
+    <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:20px">0</div><div class="stat-label">今日调用次数</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:20px">0</div><div class="stat-label">今日 Token</div></div>
+    <div class="card stat-card accent-danger"><div class="stat-value" style="font-size:20px">¥0.00</div><div class="stat-label">今日费用</div></div>
+    <div class="card stat-card"><div class="stat-value" style="font-size:20px">¥0.00</div><div class="stat-label">本月累计</div></div>
   </div>
   <div class="grid grid-2" style="margin-bottom:16px">
     <div class="card"><div class="card-title">每日费用趋势</div><div class="chart-box-sm" id="chart-cost"></div></div>
@@ -395,11 +396,7 @@
   <div class="card"><div class="card-title">每日明细</div><div class="table-container"><table>
     <thead><tr><th>日期</th><th>模型</th><th>供应商</th><th>调用次数</th><th>输入Token</th><th>输出Token</th><th>总Token</th><th>费用(¥)</th></tr></thead>
     <tbody>
-      <tr><td>2024-03-15</td><td>qwen-max</td><td>DashScope</td><td>215</td><td>645,000</td><td>320,000</td><td>965,000</td><td>28.95</td></tr>
-      <tr><td>2024-03-15</td><td>gpt-4</td><td>OpenAI</td><td>48</td><td>96,000</td><td>48,000</td><td>144,000</td><td>14.40</td></tr>
-      <tr><td>2024-03-15</td><td>qwen-turbo</td><td>DashScope</td><td>65</td><td>32,500</td><td>16,250</td><td>48,750</td><td>2.45</td></tr>
-      <tr><td>2024-03-14</td><td>qwen-max</td><td>DashScope</td><td>198</td><td>594,000</td><td>297,000</td><td>891,000</td><td>26.73</td></tr>
-      <tr><td>2024-03-14</td><td>gpt-4</td><td>OpenAI</td><td>35</td><td>70,000</td><td>35,000</td><td>105,000</td><td>10.50</td></tr>
+      <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr>
     </tbody>
   </table></div></div>
 </div>
@@ -411,18 +408,12 @@
     <div class="chat-sidebar">
       <div class="chat-sidebar-header"><h3>历史会话</h3><button class="btn btn-sm btn-primary" onclick="newChatSession()">+ 新建</button></div>
       <div class="chat-session-list" id="chat-session-list">
-        <div class="chat-session-item active" data-session="1"><div class="session-title">分析中际旭创技术面</div><div class="session-meta"><span>3条消息</span><span>今天 14:20</span></div></div>
-        <div class="chat-session-item" data-session="2"><div class="session-title">贵州茅台估值讨论</div><div class="session-meta"><span>8条消息</span><span>昨天 09:15</span></div></div>
-        <div class="chat-session-item" data-session="3"><div class="session-title">均线金叉策略回测</div><div class="session-meta"><span>5条消息</span><span>03-13</span></div></div>
-        <div class="chat-session-item" data-session="4"><div class="session-title">AI选股结果分析</div><div class="session-meta"><span>12条消息</span><span>03-12</span></div></div>
-        <div class="chat-session-item" data-session="5"><div class="session-title">港股腾讯Q4业绩</div><div class="session-meta"><span>6条消息</span><span>03-10</span></div></div>
+        <!-- 由 app.js 动态加载 -->
       </div>
     </div>
     <div class="chat-main">
       <div class="chat-messages" id="chat-messages">
-        <div class="chat-msg assistant"><div class="chat-avatar">AI</div><div><div class="chat-bubble">你好！我是你的 AI 股票分析助手。我可以帮你：<br>• 分析个股（技术面/基本面/舆情）<br>• 解读行情与市场动向<br>• 运行策略回测<br>• 设置价格告警<br><br>直接输入问题即可开始，比如"分析一下贵州茅台"。</div><div class="chat-time">14:18</div></div></div>
-        <div class="chat-msg user"><div class="chat-avatar">Y</div><div><div class="chat-bubble">帮我分析一下中际旭创 300308，重点看技术面</div><div class="chat-time">14:20</div></div></div>
-        <div class="chat-msg assistant"><div class="chat-avatar">AI</div><div><div class="chat-bubble"><strong>中际旭创 (300308) 技术面分析</strong><br><br>当前价格 118.60 元，近5日放量上涨 +8.2%。<br><br><strong>趋势指标</strong><br>价格站上5/10/20日均线，呈多头排列。MACD 在零轴上方金叉，红柱持续放大。<br><br><strong>动能指标</strong><br>RSI(14) = 65，偏强但未超买。KDJ 金叉向上发散。<br><br><strong>量价关系</strong><br>近3日量比 > 1.5，放量突破前期平台115元压力位。<br><br><strong>结论</strong><br>短期趋势偏多，关注 125 元压力位。止损参考20日均线（约108元）。<br><br>需要我生成完整报告或设置告警吗？</div><div class="chat-time">14:21</div></div></div>
+        <!-- 由 app.js 动态加载 -->
       </div>
       <div class="chat-input-area">
         <textarea class="chat-input" id="chat-input" rows="1" placeholder="输入问题...（如：分析XX / 回测XX策略 / 设置告警）"></textarea>

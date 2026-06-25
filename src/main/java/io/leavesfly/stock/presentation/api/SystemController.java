@@ -60,9 +60,13 @@ public class SystemController {
     @GetMapping("/usage")
     public ResponseEntity<Map<String, Object>> usage() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("overall", usageTracker.getOverallStats());
         result.put("today", usageTracker.getTodayUsage());
+        result.put("overall", usageTracker.getOverallStats());
+        result.put("monthly_total", usageTracker.getMonthlyStats());
         result.put("by_model", usageTracker.getModelBreakdown());
+        result.put("daily_detail", usageTracker.getDailyDetail(30));
+        result.put("cost_trend", usageTracker.getCostTrend(14));
+        result.put("model_distribution", usageTracker.getModelDistribution(30));
         return ResponseEntity.ok(result);
     }
 

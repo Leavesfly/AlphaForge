@@ -2,22 +2,13 @@ package io.leavesfly.stock.domain.model.enums;
 
 /**
  * 通知渠道枚举
- * 支持13+通知渠道
+ * 支持企业微信、飞书、钉钉、邮件通知渠道
  */
 public enum NotificationChannel {
     WECOM("wecom", "企业微信"),
     FEISHU("feishu", "飞书"),
-    TELEGRAM("telegram", "Telegram"),
-    EMAIL("email", "邮件"),
-    DISCORD("discord", "Discord"),
-    SLACK("slack", "Slack"),
-    PUSHOVER("pushover", "Pushover"),
-    NTFY("ntfy", "ntfy"),
-    GOTIFY("gotify", "Gotify"),
-    PUSHPLUS("pushplus", "PushPlus"),
-    SERVERCHAN3("serverchan3", "Server酱3"),
-    CUSTOM_WEBHOOK("custom_webhook", "自定义Webhook"),
-    ASTRBOT("astrbot", "AstrBot");
+    DINGTALK("dingtalk", "钉钉"),
+    EMAIL("email", "邮件");
 
     private final String code;
     private final String name;

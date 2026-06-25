@@ -121,11 +121,7 @@
             <version>2.3.32</version>
         </dependency>
 
-        <!-- 定时调度 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-quartz</artifactId>
-        </dependency>
+        <!-- 定时调度: 使用 Spring @Scheduled，无需 Quartz 重型调度器 -->
 
         <!-- dotenv配置加载 -->
         <dependency>
@@ -164,13 +160,6 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.12.5</version>
             <scope>runtime</scope>
-        </dependency>
-
-        <!-- Markdown处理 -->
-        <dependency>
-            <groupId>com.vladsch.flexmark</groupId>
-            <artifactId>flexmark-all</artifactId>
-            <version>0.64.8</version>
         </dependency>
 
         <!-- 技术分析(TA-Lib Java绑定) -->

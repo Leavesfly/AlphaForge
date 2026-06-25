@@ -12,30 +12,28 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Telegram通知发送器
+ * 钉钉Webhook通知发送器
  */
 @Component
-public class TelegramSender implements BaseNotificationSender {
+public class DingTalkSender implements BaseNotificationSender {
 
-    private static final Logger log = LoggerFactory.getLogger(TelegramSender.class);
-    private static final String TELEGRAM_API = "https://api.telegram.org/bot%s/sendMessage";
-    
+    private static final Logger log = LoggerFactory.getLogger(DingTalkSender.class);
     private final AppConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public TelegramSender(AppConfig config) {
+    public DingTalkSender(AppConfig config) {
         this.config = config;
         this.objectMapper = new ObjectMapper();
         this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
                 .build();
     }
 
     @Override
     public NotificationChannel getChannel() {
-        return NotificationChannel.TELEGRAM;
+        return NotificationChannel.DINGTALK;
     }
 
     @Override
@@ -45,41 +43,47 @@ public class TelegramSender implements BaseNotificationSender {
 
     @Override
     public int getMaxContentLength() {
-        return 4096;
+        return 20000;
     }
 
     @Override
     public boolean send(String title, String content) {
-        String botToken = config.getTelegramBotToken();
-        String chatId = config.getTelegramChatId();
-        if (botToken == null || botToken.isEmpty() || chatId == null || chatId.isEmpty()) {
-            log.warn("Telegram配置不完整");
+        String webhook = config.getDingtalkWebhook();
+        if (webhook == null || webhook.isEmpty()) {
+            log.warn("钉钉Webhook未配置");
             return false;
         }
 
         try {
-            String url = String.format(TELEGRAM_API, botToken);
-            String fullContent = "**" + title + "**\n\n" + content;
-            if (fullContent.length() > getMaxContentLength()) {
-                fullContent = fullContent.substring(0, getMaxContentLength() - 10) + "\n...(已截断)";
-            }
+            String truncated = truncateContent(content, getMaxContentLength());
 
             ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("chat_id", chatId);
-            payload.put("text", fullContent);
-            payload.put("parse_mode", "Markdown");
+            payload.put("msgtype", "markdown");
+            ObjectNode markdown = payload.putObject("markdown");
+            markdown.put("title", title);
+            markdown.put("text", truncated);
 
             RequestBody body = RequestBody.create(
                     objectMapper.writeValueAsString(payload),
                     MediaType.get("application/json"));
 
-            Request request = new Request.Builder().url(url).post(body).build();
+            Request request = new Request.Builder()
+                    .url(webhook)
+                    .post(body)
+                    .build();
+
             try (Response response = httpClient.newCall(request).execute()) {
                 return response.isSuccessful();
             }
         } catch (Exception e) {
-            log.error("Telegram通知发送失败: {}", e.getMessage());
+            log.error("钉钉通知发送失败: {}", e.getMessage());
             return false;
         }
+    }
+
+    private String truncateContent(String content, int maxLen) {
+        if (content == null) return "";
+        if (content.length() <= maxLen) return content;
+        return content.substring(0, maxLen - 10) + "\n...(已截断)";
     }
 }

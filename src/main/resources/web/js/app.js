@@ -34,11 +34,35 @@ function navigateTo(page) {
   const pageEl = document.getElementById('page-' + page);
   if (navItem) navItem.classList.add('active');
   if (pageEl) pageEl.classList.add('active');
+  // 同步 URL hash，刷新后保持当前页面
+  if (location.hash !== '#' + page) {
+    location.hash = page;
+  }
   setTimeout(initCharts, 150);
+  if (page === 'chat') initChat();
 }
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
+
+// 监听浏览器前进/后退，同步页面切换
+window.addEventListener('hashchange', () => {
+  const hashPage = location.hash.replace('#', '');
+  const activePage = document.querySelector('.page.active');
+  const activePageName = activePage ? activePage.id.replace('page-', '') : '';
+  if (hashPage && hashPage !== activePageName) {
+    navigateTo(hashPage);
+  }
+});
+
+// 页面加载时从 URL hash 恢复当前页面（刷新保持）
+// 用 setTimeout 延迟执行，确保所有 let/const 变量（如 chatInitialized）已完成初始化
+setTimeout(() => {
+  const initialHash = location.hash.replace('#', '');
+  if (initialHash && document.getElementById('page-' + initialHash)) {
+    navigateTo(initialHash);
+  }
+}, 0);
 
 // ===== Tab System =====
 document.querySelectorAll('.tabs[data-tab-group]').forEach(tabGroup => {
@@ -161,13 +185,118 @@ function openSignalDetail(name, code, action) {
 const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
 let chatHistory = [];
+let currentSessionId = null;
+let chatInitialized = false;
 
 chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
 chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
 
+/** 初始化聊天页面 - 加载会话列表 */
+function initChat() {
+  if (chatInitialized) return;
+  chatInitialized = true;
+  loadSessionList();
+}
+
+/** 从后端加载会话列表 */
+function loadSessionList() {
+  fetch('/api/v1/agent/sessions')
+    .then(r => r.json())
+    .then(sessions => {
+      const list = document.getElementById('chat-session-list');
+      list.innerHTML = '';
+      if (!sessions.length) {
+        createNewSession();
+        return;
+      }
+      sessions.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'chat-session-item';
+        item.dataset.sessionId = s.sessionId;
+        item.innerHTML = `<div class="session-title">${escapeHtml(s.title)}</div><div class="session-meta"><span>${s.messageCount}条消息</span><span>${formatSessionTime(s.lastActive)}</span></div><button class="session-delete-btn" title="删除会话">&times;</button>`;
+        item.addEventListener('click', () => selectSession(s.sessionId));
+        item.querySelector('.session-delete-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteSession(s.sessionId);
+        });
+        list.appendChild(item);
+      });
+      // 自动选中最近的会话
+      selectSession(sessions[0].sessionId);
+    })
+    .catch(err => {
+      showToast('加载会话列表失败: ' + err.message, 'error');
+    });
+}
+
+/** 选择会话并加载消息 */
+function selectSession(sessionId) {
+  currentSessionId = sessionId;
+  document.querySelectorAll('.chat-session-item').forEach(s => s.classList.remove('active'));
+  const item = document.querySelector(`.chat-session-item[data-session-id="${sessionId}"]`);
+  if (item) item.classList.add('active');
+  loadSessionMessages(sessionId);
+}
+
+/** 从后端加载会话消息 */
+function loadSessionMessages(sessionId) {
+  fetch(`/api/v1/agent/sessions/${sessionId}/messages`)
+    .then(r => r.json())
+    .then(messages => {
+      chatMessages.innerHTML = '';
+      chatHistory = [];
+      if (!messages.length) {
+        appendMessage('assistant', '你好！我是你的 AI 股票分析助手。我可以帮你：\n• 分析个股（技术面/基本面/舆情）\n• 解读行情与市场动向\n• 运行策略回测\n• 设置价格告警\n\n直接输入问题即可开始，比如"分析一下贵州茅台"。');
+        return;
+      }
+      messages.forEach(msg => {
+        appendMessage(msg.role, msg.content, msg.createdAt);
+        chatHistory.push({role: msg.role, content: msg.content});
+      });
+    })
+    .catch(err => {
+      showToast('加载消息失败: ' + err.message, 'error');
+    });
+}
+
+/** 新建会话 */
+function newChatSession() {
+  createNewSession();
+}
+
+function createNewSession() {
+  fetch('/api/v1/agent/sessions', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({title: '新对话'})
+  })
+    .then(r => r.json())
+    .then(session => {
+      currentSessionId = session.sessionId;
+      const list = document.getElementById('chat-session-list');
+      const item = document.createElement('div');
+      item.className = 'chat-session-item active';
+      item.dataset.sessionId = session.sessionId;
+      item.innerHTML = `<div class="session-title">${escapeHtml(session.title)}</div><div class="session-meta"><span>0条消息</span><span>刚刚</span></div>`;
+      item.addEventListener('click', () => selectSession(session.sessionId));
+      list.querySelectorAll('.chat-session-item').forEach(s => s.classList.remove('active'));
+      list.prepend(item);
+      chatMessages.innerHTML = '';
+      chatHistory = [];
+      appendMessage('assistant', '你好！新对话已创建。有什么我可以帮你分析的吗？');
+    })
+    .catch(err => {
+      showToast('创建会话失败: ' + err.message, 'error');
+    });
+}
+
 function sendChatMessage() {
   const text = chatInput.value.trim();
   if (!text) return;
+  if (!currentSessionId) {
+    showToast('请先选择或创建一个会话', 'warning');
+    return;
+  }
   appendMessage('user', text);
   chatHistory.push({role: 'user', content: text});
   chatInput.value = ''; chatInput.style.height = 'auto';
@@ -180,75 +309,187 @@ function sendChatMessage() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   const bubble = msgEl.querySelector('.chat-bubble');
+  const contentWrapper = bubble.parentElement;
 
   // 调用流式API
   fetch('/api/v1/agent/chat/stream', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({message: text, history: chatHistory.slice(-10)})
+    body: JSON.stringify({message: text, sessionId: currentSessionId, history: chatHistory.slice(-10)})
   }).then(response => {
     bubble.innerHTML = '';
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = '';
+    let buffer = '';
+
+    function processSSEEvents() {
+      const events = buffer.split('\n\n');
+      buffer = events.pop(); // 保留最后不完整的部分
+      for (const evt of events) {
+        let eventName = 'message';
+        let eventData = '';
+        for (const line of evt.split('\n')) {
+          if (line.startsWith('event:')) {
+            eventName = line.substring(6).trim();
+          } else if (line.startsWith('data:')) {
+            eventData = line.substring(5).trim();
+          }
+        }
+        if (eventName === 'tool') {
+          try {
+            const toolInfo = JSON.parse(eventData);
+            appendToolCall(contentWrapper, bubble, toolInfo);
+          } catch(e) { /* ignore */ }
+        } else if (eventName === 'chunk') {
+          fullText += eventData;
+          bubble.innerHTML = renderMarkdown(fullText);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (eventName === 'done') {
+          // 流式完成
+        } else if (eventName === 'error') {
+          bubble.innerHTML = '<span style="color:var(--danger)">错误: ' + escapeHtml(eventData) + '</span>';
+        }
+      }
+    }
+
     function read() {
       reader.read().then(({done, value}) => {
         if (done) {
+          // 最终渲染 Markdown
+          bubble.innerHTML = renderMarkdown(fullText);
+          bubble.classList.add('md-content');
           chatHistory.push({role: 'assistant', content: fullText});
           msgEl.querySelector('.chat-time').textContent = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+          refreshSessionItem(currentSessionId);
           return;
         }
-        const lines = decoder.decode(value, {stream: true}).split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data:')) {
-            const data = line.substring(5).trim();
-            if (data === '[DONE]') continue;
-            fullText += data;
-            bubble.innerHTML = fullText.replace(/\n/g, '<br>');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-          }
-        }
+        buffer += decoder.decode(value, {stream: true});
+        processSSEEvents();
+        chatMessages.scrollTop = chatMessages.scrollHeight;
         read();
       });
     }
     read();
   }).catch(err => {
-    bubble.innerHTML = '抱歉，AI服务暂时不可用: ' + err.message;
+    bubble.innerHTML = '抱歉，AI服务暂时不可用: ' + escapeHtml(err.message);
   });
 }
 
-function appendMessage(role, text) {
-  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-  const avatar = role === 'user' ? 'Y' : 'AI';
-  const msg = document.createElement('div');
-  msg.className = `chat-msg ${role}`;
-  msg.innerHTML = `<div class="chat-avatar">${avatar}</div><div><div class="chat-bubble">${text.replace(/\n/g, '<br>')}</div><div class="chat-time">${time}</div></div>`;
-  chatMessages.appendChild(msg);
+/** 发送完成后刷新会话列表项的消息数和标题 */
+function refreshSessionItem(sessionId) {
+  fetch('/api/v1/agent/sessions')
+    .then(r => r.json())
+    .then(sessions => {
+      const s = sessions.find(x => x.sessionId === sessionId);
+      if (!s) return;
+      const item = document.querySelector(`.chat-session-item[data-session-id="${sessionId}"]`);
+      if (!item) return;
+      item.querySelector('.session-title').textContent = escapeHtml(s.title);
+      item.querySelector('.session-meta').innerHTML = `<span>${s.messageCount}条消息</span><span>${formatSessionTime(s.lastActive)}</span>`;
+    })
+    .catch(() => {});
+}
+
+/** 格式化会话时间显示 */
+function formatSessionTime(timeStr) {
+  if (!timeStr) return '';
+  try {
+    const date = new Date(timeStr);
+    const now = new Date();
+    const diff = now - date;
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+    if (date.toDateString() === now.toDateString())
+      return date.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return '昨天';
+    return date.toLocaleDateString('zh-CN', {month:'2-digit', day:'2-digit'});
+  } catch(e) { return timeStr; }
+}
+
+/** HTML转义 */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Markdown渲染 */
+function renderMarkdown(text) {
+  if (!text) return '';
+  if (typeof marked !== 'undefined' && marked.parse) {
+    try { return marked.parse(text); }
+    catch(e) { return escapeHtml(text).replace(/\n/g, '<br>'); }
+  }
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
+/** 删除会话 */
+function deleteSession(sessionId) {
+  if (!confirm('确定删除这个会话吗？')) return;
+  fetch(`/api/v1/agent/sessions/${sessionId}`, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(() => {
+      const item = document.querySelector(`.chat-session-item[data-session-id="${sessionId}"]`);
+      if (item) item.remove();
+      if (currentSessionId === sessionId) {
+        const firstItem = document.querySelector('.chat-session-item');
+        if (firstItem) {
+          selectSession(firstItem.dataset.sessionId);
+        } else {
+          createNewSession();
+        }
+      }
+      showToast('会话已删除', 'success');
+    })
+    .catch(err => { showToast('删除失败: ' + err.message, 'error'); });
+}
+
+/** 在消息区域插入工具调用卡片（折叠式） */
+function appendToolCall(contentWrapper, bubble, toolInfo) {
+  const toolEl = document.createElement('div');
+  toolEl.className = 'chat-tool-call';
+  const argsStr = toolInfo.args ? Object.entries(toolInfo.args).map(([k,v]) => `${k}=${v}`).join(', ') : '';
+  const duration = toolInfo.durationMs != null
+    ? (toolInfo.durationMs < 1000 ? toolInfo.durationMs + 'ms' : (toolInfo.durationMs / 1000).toFixed(1) + 's')
+    : '';
+  toolEl.innerHTML = `
+    <div class="tool-call-header">
+      <span class="tool-call-icon">🔧</span>
+      <span class="tool-call-name">${escapeHtml(toolInfo.name)}</span>
+      ${duration ? `<span class="tool-call-duration">${duration}</span>` : ''}
+      <span class="tool-call-arrow">▸</span>
+    </div>
+    <div class="tool-call-body">
+      ${argsStr ? `<div class="tool-call-section"><div class="tool-call-label">入参</div><div class="tool-call-value">${escapeHtml(argsStr)}</div></div>` : ''}
+      <div class="tool-call-section"><div class="tool-call-label">返回结果</div><div class="tool-call-value">${escapeHtml(toolInfo.result)}</div></div>
+    </div>
+  `;
+  toolEl.querySelector('.tool-call-header').addEventListener('click', () => {
+    toolEl.classList.toggle('expanded');
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
+  contentWrapper.insertBefore(toolEl, bubble);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Chat session switching
-document.querySelectorAll('.chat-session-item').forEach(item => {
-  item.addEventListener('click', () => {
-    document.querySelectorAll('.chat-session-item').forEach(s => s.classList.remove('active'));
-    item.classList.add('active');
-    showToast(`已切换到：${item.querySelector('.session-title').textContent}`, 'info');
-  });
-});
-
-function newChatSession() {
-  const list = document.getElementById('chat-session-list');
-  const newItem = document.createElement('div');
-  newItem.className = 'chat-session-item active';
-  newItem.innerHTML = `<div class="session-title">新对话</div><div class="session-meta"><span>0条消息</span><span>刚刚</span></div>`;
-  list.querySelectorAll('.chat-session-item').forEach(s => s.classList.remove('active'));
-  list.prepend(newItem);
-  chatMessages.innerHTML = '';
-  appendMessage('assistant', '你好！新对话已创建。有什么我可以帮你分析的吗？');
-  newItem.addEventListener('click', () => {
-    list.querySelectorAll('.chat-session-item').forEach(s => s.classList.remove('active'));
-    newItem.classList.add('active');
-  });
+function appendMessage(role, text, timeStr) {
+  let time;
+  if (timeStr) {
+    try { time = new Date(timeStr).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}); }
+    catch(e) { time = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'}); }
+  } else {
+    time = new Date().toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+  }
+  const avatar = role === 'user' ? 'Y' : 'AI';
+  const msg = document.createElement('div');
+  msg.className = `chat-msg ${role}`;
+  const bubbleContent = role === 'assistant' ? renderMarkdown(text) : escapeHtml(text).replace(/\n/g, '<br>');
+  const bubbleClass = role === 'assistant' ? 'chat-bubble md-content' : 'chat-bubble';
+  msg.innerHTML = `<div class="chat-avatar">${avatar}</div><div><div class="${bubbleClass}">${bubbleContent}</div><div class="chat-time">${time}</div></div>`;
+  chatMessages.appendChild(msg);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 // ===== Watchlist =====
@@ -382,14 +623,109 @@ function loadSignals() {
 /** 用量监控加载 */
 function loadUsage() {
   fetch('/api/v1/usage').then(r => r.json()).then(data => {
-    const cards = document.querySelectorAll('#page-usage .stat-card');
     const today = data.today || {};
+    const monthly = data.monthly_total || {};
+
+    // 更新统计卡片
+    const cards = document.querySelectorAll('#page-usage .stat-card');
     if (cards[0]) cards[0].querySelector('.stat-value').textContent = today.calls || 0;
-    if (cards[1]) cards[1].querySelector('.stat-value').textContent = today.total_tokens ? (today.total_tokens > 1000000 ? (today.total_tokens/1000000).toFixed(1)+'M' : (today.total_tokens/1000).toFixed(0)+'K') : '0';
-    if (cards[2]) cards[2].querySelector('.stat-value').textContent = today.estimated_cost || '¥0';
-    const overall = data.overall || {};
-    if (cards[3]) cards[3].querySelector('.stat-value').textContent = overall.total_tokens ? (overall.total_tokens > 1000000 ? '¥'+(overall.total_tokens*0.00003).toFixed(0) : '¥0') : '¥0';
+    if (cards[1]) cards[1].querySelector('.stat-value').textContent = formatTokenCount(today.total_tokens);
+    if (cards[2]) cards[2].querySelector('.stat-value').textContent = formatCostStr(today.estimated_cost);
+    if (cards[3]) cards[3].querySelector('.stat-value').textContent = '¥' + Number(monthly.total_cost || 0).toFixed(2);
+
+    // 渲染每日明细表格
+    const tbody = document.querySelector('#page-usage table tbody');
+    if (tbody) {
+      const detail = data.daily_detail || [];
+      if (!detail.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无用量数据，进行一次 AI 分析后将自动记录</td></tr>';
+      } else {
+        tbody.innerHTML = detail.map(d =>
+          '<tr><td>' + (d.date||'-') + '</td><td>' + (d.model||'-') + '</td><td>' + (d.provider||'-') +
+          '</td><td>' + (d.calls||0) + '</td><td>' + formatNumber(d.prompt_tokens) +
+          '</td><td>' + formatNumber(d.completion_tokens) + '</td><td>' + formatNumber(d.total_tokens) +
+          '</td><td>¥' + Number(d.cost||0).toFixed(2) + '</td></tr>'
+        ).join('');
+      }
+    }
+
+    // 渲染费用趋势图
+    renderCostTrendChart(data.cost_trend || []);
+    // 渲染模型占比图
+    renderModelDistChart(data.model_distribution || []);
   }).catch(() => {});
+}
+
+function formatTokenCount(n) {
+  n = Number(n) || 0;
+  if (n >= 1000000) return (n/1000000).toFixed(1)+'M';
+  if (n >= 1000) return (n/1000).toFixed(0)+'K';
+  return String(n);
+}
+
+function formatCostStr(c) {
+  if (!c) return '¥0.00';
+  c = String(c);
+  if (c.startsWith('¥') || c.startsWith('$')) return c;
+  return '¥' + Number(c).toFixed(2);
+}
+
+function formatNumber(n) {
+  return Number(n || 0).toLocaleString();
+}
+
+function renderCostTrendChart(trend) {
+  const el = document.getElementById('chart-cost');
+  if (!el) return;
+  let chart = echarts.getInstanceByDom(el);
+  if (!chart) chart = echarts.init(el, getChartTheme());
+
+  const sorted = [...trend].reverse(); // 日期从旧到新
+  const dates = sorted.map(t => t.date ? String(t.date).substring(5) : '-');
+  const costs = sorted.map(t => Number(t.cost || 0).toFixed(2));
+  const tokens = sorted.map(t => Number(t.total_tokens || 0));
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: {top: 35, right: 50, bottom: 30, left: 55},
+    legend: {top: 0, textStyle: {fontSize: 11}},
+    xAxis: {type: 'category', data: dates, axisLabel: {fontSize: 10}},
+    yAxis: [
+      {type: 'value', name: '费用(¥)', position: 'left', axisLabel: {formatter: '¥{value}'}},
+      {type: 'value', name: 'Token', position: 'right', axisLabel: {formatter: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v}}
+    ],
+    series: [
+      {name: '费用(¥)', data: costs, type: 'bar', itemStyle: {color: '#f59e0b', borderRadius: [4,4,0,0]}},
+      {name: 'Token', data: tokens, type: 'line', yAxisIndex: 1, smooth: true, lineStyle: {color: '#6366f1', width: 2}, itemStyle: {color: '#6366f1'}, symbol: 'circle', symbolSize: 5}
+    ],
+    tooltip: {trigger: 'axis'}
+  }, true);
+}
+
+function renderModelDistChart(dist) {
+  const el = document.getElementById('chart-model-dist');
+  if (!el) return;
+  let chart = echarts.getInstanceByDom(el);
+  if (!chart) chart = echarts.init(el, getChartTheme());
+
+  const colors = ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#94a3b8'];
+  const pieData = dist.map((d, i) => ({
+    value: Number(d.total_tokens || 0),
+    name: d.model || 'unknown',
+    itemStyle: {color: colors[i % colors.length]}
+  }));
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    series: [{
+      type: 'pie',
+      radius: ['40%', '68%'],
+      center: ['50%', '55%'],
+      label: {fontSize: 11, formatter: '{b}\n{d}%'},
+      data: pieData.length > 0 ? pieData : [{value: 1, name: '暂无数据', itemStyle: {color: '#e5e7eb'}}]
+    }],
+    tooltip: {formatter: '{b}: {c} tokens ({d}%)'}
+  }, true);
 }
 
 /** 告警列表加载 */

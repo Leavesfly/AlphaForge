@@ -32,12 +32,14 @@ public class LlmService {
     private final AppConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final LlmUsageTracker usageTracker;
 
     /** 当前使用的渠道索引 */
     private int currentChannelIndex = 0;
 
-    public LlmService(AppConfig config) {
+    public LlmService(AppConfig config, LlmUsageTracker usageTracker) {
         this.config = config;
+        this.usageTracker = usageTracker;
         this.objectMapper = new ObjectMapper();
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
@@ -137,6 +139,7 @@ public class LlmService {
                 .build();
 
         log.debug("调用LLM: model={}, url={}", channel.getModel(), apiUrl);
+        long startTime = System.currentTimeMillis();
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
@@ -146,6 +149,7 @@ public class LlmService {
 
             String responseBody = response.body().string();
             JsonNode root = objectMapper.readTree(responseBody);
+            long durationMs = System.currentTimeMillis() - startTime;
             
             // 解析响应 (OpenAI格式)
             JsonNode choices = root.path("choices");
@@ -154,23 +158,59 @@ public class LlmService {
                 
                 // 记录token使用量
                 JsonNode usage = root.path("usage");
+                int promptTokens, completionTokens;
                 if (!usage.isMissingNode()) {
+                    promptTokens = usage.path("prompt_tokens").asInt();
+                    completionTokens = usage.path("completion_tokens").asInt();
                     log.info("Token使用: prompt={}, completion={}, total={}",
-                            usage.path("prompt_tokens").asInt(),
-                            usage.path("completion_tokens").asInt(),
+                            promptTokens, completionTokens,
                             usage.path("total_tokens").asInt());
+                } else {
+                    // 部分供应商不返回usage，粗略估算
+                    promptTokens = estimateTokens(messages);
+                    completionTokens = estimateTokens(content);
+                    log.debug("Token估算(供应商未返回usage): prompt~={}, completion~={}", promptTokens, completionTokens);
                 }
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        promptTokens, completionTokens, durationMs);
                 return content;
             }
             
             // Gemini格式兼容
             JsonNode candidates = root.path("candidates");
             if (candidates.isArray() && !candidates.isEmpty()) {
-                return candidates.get(0).path("content").path("parts").get(0).path("text").asText("");
+                String content = candidates.get(0).path("content").path("parts").get(0).path("text").asText("");
+                JsonNode usage = root.path("usage_metadata");
+                int promptTokens, completionTokens;
+                if (!usage.isMissingNode()) {
+                    promptTokens = usage.path("prompt_token_count").asInt();
+                    completionTokens = usage.path("candidates_token_count").asInt();
+                } else {
+                    promptTokens = estimateTokens(messages);
+                    completionTokens = estimateTokens(content);
+                }
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        promptTokens, completionTokens, durationMs);
+                return content;
             }
 
             throw new RuntimeException("无法解析LLM响应: " + responseBody.substring(0, Math.min(200, responseBody.length())));
         }
+    }
+
+    /** 粗略估算文本的 token 数（约4字符≈1 token） */
+    private int estimateTokens(List<Map<String, String>> messages) {
+        int total = 0;
+        for (Map<String, String> msg : messages) {
+            String content = msg.get("content");
+            if (content != null) total += content.length();
+        }
+        return Math.max(1, total / 4);
+    }
+
+    private int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        return Math.max(1, text.length() / 4);
     }
 
     /**
@@ -288,6 +328,9 @@ public class LlmService {
         requestBody.put("temperature", channel.getTemperature());
         requestBody.put("max_tokens", channel.getMaxTokens());
         requestBody.put("stream", true);
+        // 请求在最后一个chunk中返回usage信息
+        ObjectNode streamOptions = requestBody.putObject("stream_options");
+        streamOptions.put("include_usage", true);
 
         ArrayNode messagesArray = requestBody.putArray("messages");
         for (Map<String, String> msg : messages) {
@@ -308,6 +351,7 @@ public class LlmService {
                 .build();
 
         log.debug("流式调用LLM: model={}, url={}", channel.getModel(), apiUrl);
+        long startTime = System.currentTimeMillis();
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
@@ -316,6 +360,8 @@ public class LlmService {
             }
 
             StringBuilder fullContent = new StringBuilder();
+            int streamPromptTokens = 0;
+            int streamCompletionTokens = 0;
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(response.body().byteStream()))) {
                 String line;
@@ -332,11 +378,31 @@ public class LlmService {
                                 fullContent.append(chunk);
                                 onChunk.accept(chunk);
                             }
+                            // 解析最后一个chunk中的usage信息
+                            JsonNode usageNode = node.path("usage");
+                            if (!usageNode.isMissingNode()) {
+                                streamPromptTokens = usageNode.path("prompt_tokens").asInt();
+                                streamCompletionTokens = usageNode.path("completion_tokens").asInt();
+                            }
                         } catch (Exception e) {
                             // 忽略解析失败的行（如空行、注释等）
                         }
                     }
                 }
+            }
+            long durationMs = System.currentTimeMillis() - startTime;
+            // 记录token使用量
+            if (streamPromptTokens > 0 || streamCompletionTokens > 0) {
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        streamPromptTokens, streamCompletionTokens, durationMs);
+                log.info("流式Token使用: prompt={}, completion={}", streamPromptTokens, streamCompletionTokens);
+            } else {
+                // 供应商未返回usage，粗略估算
+                int estPrompt = estimateTokens(messages);
+                int estCompletion = estimateTokens(fullContent.toString());
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        estPrompt, estCompletion, durationMs);
+                log.debug("流式Token估算: prompt~={}, completion~={}", estPrompt, estCompletion);
             }
             return fullContent.toString();
         }

@@ -14,7 +14,7 @@ import java.util.*;
 /**
  * 通知服务 - 多渠道通知推送
  *
- * 支持13+通知渠道，自动路由和故障容错
+ * 支持企业微信、飞书、钉钉、邮件通知渠道，自动路由和故障容错
  */
 @Service
 public class NotificationService {

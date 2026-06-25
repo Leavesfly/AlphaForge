@@ -1,5 +1,6 @@
 package io.leavesfly.stock.application.service;
 
+import io.leavesfly.stock.AppInitializer;
 import io.leavesfly.stock.config.AppConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,10 @@ public class StorageService {
     private final Map<String, CacheEntry> memoryCache = new ConcurrentHashMap<>();
 
     public StorageService(AppConfig config) {
-        this.baseDir = config.getEnv("STORAGE_DIR", "./data");
+        // 优先使用 STORAGE_DIR 环境变量覆盖；未设置时回退到 app.home/data (即 ~/.j_daily-stock-analysis/data)
+        String appHome = System.getProperty(AppInitializer.PROP_APP_HOME, "");
+        String defaultStorageDir = appHome.isEmpty() ? "./data" : appHome + "/data";
+        this.baseDir = config.getEnv("STORAGE_DIR", defaultStorageDir);
         this.reportDir = baseDir + "/reports";
         this.cacheDir = baseDir + "/cache";
         this.dataDir = baseDir + "/stocks";
