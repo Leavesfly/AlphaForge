@@ -12,7 +12,6 @@ import jakarta.servlet.http.HttpSession;
 /**
  * WebUI页面控制器
  * 
- * 对应Python版本的 apps/dsa-web/ React前端
  * 使用Thymeleaf服务端渲染实现相同功能
  */
 @Controller

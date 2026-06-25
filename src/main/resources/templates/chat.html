@@ -16,14 +16,14 @@
             <!-- 会话列表 -->
             <div class="chat-sidebar">
                 <div class="chat-sidebar-header">
-                    <button class="btn btn-primary btn-sm w-full" onclick="newSession()">+ 新对话</button>
+                    <button class="btn btn-primary w-full chat-new-btn" onclick="newSession()">+ New Chat</button>
                 </div>
                 <div id="sessionList" class="chat-session-list"></div>
             </div>
             <!-- 主聊天区 -->
             <div class="chat-main">
                 <!-- 技能选择 -->
-                <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div class="chat-toolbar">
                     <span class="text-sm text-muted">技能:</span>
                     <div id="skillTags" class="skill-tags" style="margin:0;"></div>
                     <div style="margin-left:auto;">
@@ -32,18 +32,22 @@
                 </div>
                 <!-- 消息区 -->
                 <div id="chatMessages" class="chat-messages">
-                    <div class="empty-state" id="chatEmpty">
-                        <div class="icon">🤖</div>
-                        <h4>AI问股助手</h4>
-                        <p>你可以问任何关于股票分析、市场走势、投资策略的问题</p>
-                        <div class="skill-tags mt-4" id="quickQuestions"></div>
+                    <div class="chat-welcome" id="chatEmpty">
+                        <div class="chat-welcome-avatar">🤖</div>
+                        <h2 class="chat-welcome-title">你好，有什么可以帮你？</h2>
+                        <p class="chat-welcome-subtitle">我是AI问股助手，可以帮你分析股票、解读行情、制定策略</p>
+                        <div class="chat-suggestions" id="quickQuestions"></div>
                     </div>
                 </div>
                 <!-- 输入 -->
-                <form class="chat-input-form" onsubmit="sendMessage(event)">
-                    <input type="text" id="chatInput" class="form-input" placeholder="输入问题，如: 用缠论分析茅台" autocomplete="off">
-                    <button type="submit" id="sendBtn" class="btn btn-primary">发送</button>
-                </form>
+                <div class="chat-input-area">
+                    <div class="chat-input-wrapper">
+                        <textarea id="chatInput" class="chat-textarea" placeholder="输入问题... (Ctrl+Enter 发送)" rows="1"></textarea>
+                        <button type="button" id="sendBtn" class="chat-send-btn" onclick="sendMessage(event)">
+                            <span class="send-icon">↑</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
@@ -58,16 +62,17 @@ const SKILLS = [
     {id:'box_oscillation',name:'箱体震荡'},{id:'shrink_pullback',name:'缩量回调'},
 ];
 const QUICK_QUESTIONS = [
-    {label:'用缠论分析茅台',skill:'chan_theory'},
-    {label:'波浪理论看宁德时代',skill:'wave_theory'},
-    {label:'分析比亚迪趋势',skill:'bull_trend'},
-    {label:'分析腾讯 hk00700',skill:'bull_trend'},
+    {label:'用缠论分析茅台',skill:'chan_theory',icon:'📈'},
+    {label:'波浪理论看宁德时代',skill:'wave_theory',icon:'🌊'},
+    {label:'分析比亚迪趋势',skill:'bull_trend',icon:'🚀'},
+    {label:'分析腾讯 hk00700',skill:'bull_trend',icon:'🌏'},
 ];
 
 let currentSessionId = null;
 let selectedSkills = [];
 let isStreaming = false;
 let sessions = [];
+let abortController = null;
 
 // 初始化技能标签
 function renderSkillTags() {
@@ -82,10 +87,16 @@ function toggleSkill(id) {
     renderSkillTags();
 }
 
-// 快速问题
+// 快速问题 - 卡片式建议
 function renderQuickQuestions() {
-    document.getElementById('quickQuestions').innerHTML = QUICK_QUESTIONS.map(q =>
-        `<span class="skill-tag" onclick="askQuick('${q.label}','${q.skill}')">${q.label}</span>`
+    const container = document.getElementById('quickQuestions');
+    if (!container) return;
+    container.innerHTML = QUICK_QUESTIONS.map(q =>
+        `<div class="suggestion-card" onclick="askQuick('${q.label}','${q.skill}')">
+            <span class="suggestion-icon">${q.icon}</span>
+            <span class="suggestion-text">${q.label}</span>
+            <span class="suggestion-arrow">→</span>
+        </div>`
     ).join('');
 }
 
@@ -93,6 +104,12 @@ function askQuick(label, skill) {
     document.getElementById('chatInput').value = label;
     if (!selectedSkills.includes(skill)) { selectedSkills = [skill]; renderSkillTags(); }
     sendMessage(new Event('submit'));
+}
+
+// Textarea 自动展开
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 150) + 'px';
 }
 
 // 发送消息
@@ -103,22 +120,24 @@ async function sendMessage(e) {
     const msg = input.value.trim();
     if (!msg) return;
 
-    // 确保sessionId存在
     if (!currentSessionId) currentSessionId = 'web_' + Date.now();
 
     document.getElementById('chatEmpty')?.remove();
     appendMessage('user', msg);
     input.value = '';
+    input.style.height = 'auto';
     setStreaming(true);
 
     const assistantDiv = createAssistantPlaceholder();
     let fullText = '';
+    abortController = new AbortController();
 
     try {
         const response = await fetch('/api/v1/agent/chat/stream', {
             method: 'POST', credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: msg, session_id: currentSessionId, skills: selectedSkills.length > 0 ? selectedSkills : undefined })
+            body: JSON.stringify({ message: msg, session_id: currentSessionId, skills: selectedSkills.length > 0 ? selectedSkills : undefined }),
+            signal: abortController.signal
         });
         if (!response.ok) throw new Error('HTTP ' + response.status);
 
@@ -136,18 +155,31 @@ async function sendMessage(e) {
                 if (line.startsWith('data:')) { fullText += line.substring(5); renderMarkdown(assistantDiv, fullText); }
             }
         }
-        if (fullText) renderMarkdown(assistantDiv, fullText);
+        if (fullText) { renderMarkdown(assistantDiv, fullText); markComplete(assistantDiv); }
         else assistantDiv.querySelector('.md-content').textContent = '✅ 完成';
     } catch (err) {
-        assistantDiv.querySelector('.md-content').innerHTML = '<span style="color:var(--danger)">❌ 请求失败: ' + err.message + '</span>';
-    } finally { setStreaming(false); loadSessions(); }
+        if (err.name === 'AbortError') {
+            if (fullText) { renderMarkdown(assistantDiv, fullText); markStopped(assistantDiv); }
+            else assistantDiv.querySelector('.md-content').innerHTML = '<span class="chat-status stopped">■ 已停止</span>';
+        } else {
+            assistantDiv.querySelector('.md-content').innerHTML = '<span class="chat-status error">❌ 请求失败: ' + err.message + '</span>';
+        }
+    } finally { abortController = null; setStreaming(false); loadSessions(); }
+}
+
+function stopGeneration() {
+    if (abortController) abortController.abort();
 }
 
 function appendMessage(role, text) {
     const container = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'message ' + role;
-    div.textContent = text;
+    if (role === 'user') {
+        div.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+    } else {
+        div.textContent = text;
+    }
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
@@ -156,10 +188,19 @@ function createAssistantPlaceholder() {
     const container = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'message assistant';
-    div.innerHTML = '<div class="md-content"><span class="typing-indicator">●●●</span></div>';
+    div.innerHTML = `<div class="message-header"><span class="skill-label">🔧 分析中</span></div><div class="md-content"><span class="typing-indicator"><span></span><span></span><span></span></span></div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
     return div;
+}
+
+function markComplete(el) {
+    const header = el.querySelector('.message-header');
+    if (header) header.innerHTML = '<span class="skill-label">🔧 skills</span><span class="chat-status complete">✅ 完成</span>';
+}
+function markStopped(el) {
+    const header = el.querySelector('.message-header');
+    if (header) header.innerHTML = '<span class="skill-label">🔧 skills</span><span class="chat-status stopped">■ 已停止</span>';
 }
 
 function renderMarkdown(el, text) {
@@ -171,9 +212,25 @@ function renderMarkdown(el, text) {
 
 function setStreaming(val) {
     isStreaming = val;
-    document.getElementById('sendBtn').disabled = val;
-    document.getElementById('chatInput').disabled = val;
-    document.getElementById('sendBtn').textContent = val ? '生成中...' : '发送';
+    const btn = document.getElementById('sendBtn');
+    const input = document.getElementById('chatInput');
+    input.disabled = val;
+    if (val) {
+        btn.innerHTML = '<span class="stop-icon">■</span>';
+        btn.classList.add('streaming');
+        btn.onclick = stopGeneration;
+    } else {
+        btn.innerHTML = '<span class="send-icon">↑</span>';
+        btn.classList.remove('streaming');
+        btn.onclick = sendMessage;
+        btn.disabled = false;
+    }
+}
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
 }
 
 // 会话管理
@@ -197,11 +254,14 @@ function renderSessions() {
 
 function newSession() {
     currentSessionId = 'web_' + Date.now();
-    document.getElementById('chatMessages').innerHTML = '';
+    const container = document.getElementById('chatMessages');
+    container.innerHTML = '';
+    const welcome = document.createElement('div');
+    welcome.className = 'chat-welcome';
+    welcome.id = 'chatEmpty';
+    welcome.innerHTML = `<div class="chat-welcome-avatar">🤖</div><h2 class="chat-welcome-title">开始新的对话</h2><p class="chat-welcome-subtitle">问我任何关于股票分析的问题</p><div class="chat-suggestions" id="quickQuestions"></div>`;
+    container.appendChild(welcome);
     renderQuickQuestions();
-    document.getElementById('chatMessages').prepend(
-        el('div', { className: 'empty-state', id: 'chatEmpty', innerHTML: '<div class="icon">🤖</div><h4>AI问股助手</h4><p>开始新的对话</p>' })
-    );
     renderSessions();
 }
 
@@ -216,10 +276,14 @@ async function switchSession(sessionId) {
         messages.forEach(m => {
             const div = document.createElement('div');
             div.className = 'message ' + m.role;
-            if (m.role === 'assistant') { div.innerHTML = '<div class="md-content">' + marked.parse(m.content) + '</div>'; }
-            else { div.textContent = m.content; }
+            if (m.role === 'assistant') {
+                div.innerHTML = `<div class="message-header"><span class="skill-label">🔧 skills</span><span class="chat-status complete">✅ 完成</span></div><div class="md-content">${marked.parse(m.content)}</div>`;
+            } else {
+                div.innerHTML = `<div class="message-content">${escapeHtml(m.content)}</div>`;
+            }
             container.appendChild(div);
         });
+        container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
         container.scrollTop = container.scrollHeight;
     } catch(e) { showToast('加载会话失败', 'error'); }
 }
@@ -244,6 +308,16 @@ function exportChat() {
 }
 
 // 初始化
+const chatInput = document.getElementById('chatInput');
+chatInput.addEventListener('input', function() { autoResize(this); });
+chatInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        sendMessage(e);
+    }
+    // Enter without modifier adds newline (default textarea behavior)
+});
+
 renderSkillTags();
 renderQuickQuestions();
 initChat();
@@ -253,7 +327,6 @@ async function initChat() {
         const data = await api.get('/agent/chat/sessions', { limit: 30 });
         sessions = data.sessions || [];
         renderSessions();
-        // 恢复最近的会话
         if (sessions.length > 0) {
             await switchSession(sessions[0].session_id);
         } else {
