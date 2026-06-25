@@ -13,8 +13,6 @@ import java.util.*;
 
 /**
  * 回测引擎 + 配置管理 + 配置注册 + 市场概况 + 大盘复盘 + 市场策略
- * 对应Python: core/backtest_engine.py / config_manager.py / config_registry.py
- *             core/market_profile.py / market_review.py / market_strategy.py
  */
 @Component
 public class MarketEngine {
