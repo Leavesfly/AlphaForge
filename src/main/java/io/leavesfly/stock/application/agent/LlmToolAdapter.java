@@ -3,7 +3,8 @@ package io.leavesfly.stock.application.agent;
 import io.leavesfly.stock.infrastructure.llm.LlmService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.leavesfly.stock.application.agent.tools.AgentToolRegistry;
+import io.leavesfly.stock.application.agent.tools.ToolException;
+import io.leavesfly.stock.application.agent.tools.ToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,10 @@ public class LlmToolAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(LlmToolAdapter.class);
     private final LlmService llmService;
-    private final AgentToolRegistry toolRegistry;
+    private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public LlmToolAdapter(LlmService llmService, AgentToolRegistry toolRegistry) {
+    public LlmToolAdapter(LlmService llmService, ToolRegistry toolRegistry) {
         this.llmService = llmService;
         this.toolRegistry = toolRegistry;
     }
@@ -67,7 +68,12 @@ public class LlmToolAdapter {
                 toolCalls++;
                 log.debug("执行工具调用 #{}: {}({})", toolCalls, call.name, call.arguments);
                 long startTime = System.currentTimeMillis();
-                String result = toolRegistry.executeTool(call.name, call.arguments);
+                String result;
+                try {
+                    result = toolRegistry.execute(call.name, call.arguments);
+                } catch (ToolException e) {
+                    result = "工具调用失败: " + e.getMessage();
+                }
                 long durationMs = System.currentTimeMillis() - startTime;
                 toolCallLog.add(call.name + " → " + truncate(result, 200));
 
@@ -122,7 +128,12 @@ public class LlmToolAdapter {
                 toolCalls++;
                 log.debug("执行工具调用 #{}: {}({})", toolCalls, call.name, call.arguments);
                 long startTime = System.currentTimeMillis();
-                String result = toolRegistry.executeTool(call.name, call.arguments);
+                String result;
+                try {
+                    result = toolRegistry.execute(call.name, call.arguments);
+                } catch (ToolException e) {
+                    result = "工具调用失败: " + e.getMessage();
+                }
                 long durationMs = System.currentTimeMillis() - startTime;
                 toolCallLog.add(call.name + " → " + truncate(result, 200));
 

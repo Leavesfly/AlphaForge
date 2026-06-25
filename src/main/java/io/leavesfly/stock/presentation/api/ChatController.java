@@ -1,6 +1,8 @@
 package io.leavesfly.stock.presentation.api;
 
 import io.leavesfly.stock.application.agent.LlmToolAdapter;
+import io.leavesfly.stock.application.agent.skills.SkillsLoader;
+import io.leavesfly.stock.application.agent.tools.ToolRegistry;
 import io.leavesfly.stock.infrastructure.llm.LlmService;
 import io.leavesfly.stock.infrastructure.persistence.ChatRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,10 +34,12 @@ public class ChatController {
     private final LlmService llmService;
     private final ChatRepository chatRepository;
     private final LlmToolAdapter llmToolAdapter;
+    private final ToolRegistry toolRegistry;
+    private final SkillsLoader skillsLoader;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    private static final String SYSTEM_PROMPT = """
+    private static final String SYSTEM_PROMPT_TEMPLATE = """
             你是一位专业的AI股票分析助手。你可以帮用户：
             • 分析个股（技术面/基本面/舆情）
             • 解读行情与市场动向
@@ -48,20 +52,39 @@ public class ChatController {
             [TOOL_CALL]{"name":"工具名","args":{参数}}[/TOOL_CALL]
 
             可用工具：
-            - get_stock_price: 获取实时行情 (参数: stock_code)
-            - get_stock_history: 获取历史行情 (参数: stock_code, days)
-            - technical_analysis: 技术面分析 (参数: stock_code)
-            - search_news: 搜索新闻 (参数: keyword)
-            - run_backtest: 策略回测 (参数: stock_code, strategy)
-            - get_market_overview: 市场概览 (参数: 无)
+            %s
 
             每次只调用一个工具，收到工具结果后再给出最终分析。
+
+            ## 技能（Skills）
+            以下技能扩展了你的分析能力。当用户任务与某个技能描述匹配时，
+            先调用 skills(action='invoke', name='技能名') 获取执行指令，再按指令调用其他工具完成分析。
+
+            %s
+
+            ## 技能使用规则
+            1. 当用户任务与某个技能的 description 高度匹配时，主动调用 skills(action='invoke', name='技能名')
+            2. 加载技能后，严格按照技能指令中的步骤执行
+            3. 如果没有匹配的技能，直接使用工具回答用户问题
+            4. 遇到无法处理的任务时，可使用 skills(action='install', repo='owner/repo') 从GitHub安装新技能
+            5. 可使用 skills(action='remove', name='技能名') 删除不需要的已安装技能
             """;
 
-    public ChatController(LlmService llmService, ChatRepository chatRepository, LlmToolAdapter llmToolAdapter) {
+    public ChatController(LlmService llmService, ChatRepository chatRepository,
+                          LlmToolAdapter llmToolAdapter, ToolRegistry toolRegistry,
+                          SkillsLoader skillsLoader) {
         this.llmService = llmService;
         this.chatRepository = chatRepository;
         this.llmToolAdapter = llmToolAdapter;
+        this.toolRegistry = toolRegistry;
+        this.skillsLoader = skillsLoader;
+    }
+
+    /** 动态生成System Prompt（工具列表+技能摘要动态注入） */
+    private String buildSystemPrompt() {
+        return String.format(SYSTEM_PROMPT_TEMPLATE,
+                toolRegistry.getToolSummaryText(),
+                skillsLoader.buildSkillsSummary());
     }
 
     // ===== 会话管理 API =====
@@ -261,7 +284,7 @@ public class ChatController {
 
     private List<Map<String, String>> buildMessages(String userMessage, List<Map<String, String>> history) {
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
+        messages.add(Map.of("role", "system", "content", buildSystemPrompt()));
 
         // 加入历史消息
         if (history != null && !history.isEmpty()) {
