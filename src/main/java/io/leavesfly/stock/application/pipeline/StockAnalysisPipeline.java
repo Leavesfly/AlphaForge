@@ -12,7 +12,7 @@ import io.leavesfly.stock.domain.model.enums.MarketType;
 import io.leavesfly.stock.infrastructure.notification.NotificationService;
 import io.leavesfly.stock.infrastructure.notification.NotificationRouter;
 
-import io.leavesfly.stock.application.agent.AgentOrchestrator;
+import io.leavesfly.stock.application.agent.ReactAgent;
 import io.leavesfly.stock.application.service.*;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import io.leavesfly.stock.domain.service.TradingCalendar;
@@ -54,7 +54,7 @@ public class StockAnalysisPipeline {
     private final AnalysisHistoryService historyService;
     private final AnalysisContextBuilder contextBuilder;
     private final AnalysisResultAggregator resultAggregator;
-    private final AgentOrchestrator agentOrchestrator;
+    private final ReactAgent reactAgent;
     private final DecisionSignalService decisionSignalService;
     private final DailyMarketContextService dailyMarketContextService;
     private final TradingCalendar tradingCalendar;
@@ -75,7 +75,7 @@ public class StockAnalysisPipeline {
             LlmService llmService, LlmUsageTracker usageTracker,
             NotificationService notificationService, NotificationRouter notificationRouter,
             AnalysisHistoryService historyService, AnalysisContextBuilder contextBuilder,
-            AnalysisResultAggregator resultAggregator, AgentOrchestrator agentOrchestrator,
+            AnalysisResultAggregator resultAggregator, ReactAgent reactAgent,
             DecisionSignalService decisionSignalService, DailyMarketContextService dailyMarketContextService,
             TradingCalendar tradingCalendar, NameToCodeResolver nameResolver,
             AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer) {
@@ -90,7 +90,7 @@ public class StockAnalysisPipeline {
         this.historyService = historyService;
         this.contextBuilder = contextBuilder;
         this.resultAggregator = resultAggregator;
-        this.agentOrchestrator = agentOrchestrator;
+        this.reactAgent = reactAgent;
         this.decisionSignalService = decisionSignalService;
         this.dailyMarketContextService = dailyMarketContextService;
         this.tradingCalendar = tradingCalendar;
@@ -219,23 +219,15 @@ public class StockAnalysisPipeline {
                 enhancedContext.put("intelligence", intelligenceContext);
             }
 
-            // ===== Step 8: LLM分析(区分Agent模式和传统模式) =====
+            // ===== Step 8: LLM分析(统一使用ReactAgent) =====
             diag.stage("llm_analysis");
             AnalysisResult analysisResult;
             long llmStart = System.currentTimeMillis();
 
-            if ("true".equalsIgnoreCase(config.getAgentMode()) || "full".equals(config.getAgentMode())) {
-                // Agent模式分析(当AGENT_MODE=true/full时启用)
-                if (!dryRun) {
-                analysisResult = analyzeWithAgent(stockCode, stockName, enhancedContext, diag);
-                } else {
-                    analysisResult = AnalysisResult.dryRun(stockCode, stockName);
-                }
-            } else if (dryRun) {
+            if (dryRun) {
                 analysisResult = AnalysisResult.dryRun(stockCode, stockName);
             } else {
-                // 传统LLM直接分析
-                analysisResult = analyzeWithLlm(stockCode, stockName, enhancedContext);
+                analysisResult = analyzeWithAgent(stockCode, stockName, enhancedContext, diag);
             }
 
             long llmDuration = System.currentTimeMillis() - llmStart;
@@ -278,37 +270,34 @@ public class StockAnalysisPipeline {
     // ==================== Agent模式分析 ====================
 
     /**
-     * 使用Agent编排器进行分析
+     * 使用ReactAgent进行分析（LLM自主调用工具获取数据）
      */
     private AnalysisResult analyzeWithAgent(String stockCode, String stockName,
                                             Map<String, Object> context, DiagnosticContext diag) {
         try {
-            AgentOrchestrator.AnalysisOutput output = agentOrchestrator.runAnalysis(context);
-            diag.record("agent_mode", output.getMode());
-            diag.record("agent_opinions", output.getOpinionCount());
-            return agentResultToAnalysisResult(output, stockCode, stockName);
+            ReactAgent.ReactResult reactResult = reactAgent.analyze(stockCode, stockName, context);
+            diag.record("agent_mode", "react");
+            diag.record("agent_tool_calls", reactResult.totalToolCalls());
+            diag.record("agent_duration_ms", reactResult.durationMs());
+            return reactResultToAnalysisResult(reactResult, stockCode, stockName);
         } catch (Exception e) {
-            log.warn("[{}] Agent分析失败，降级到传统LLM: {}", stockCode, e.getMessage());
+            log.warn("[{}] ReactAgent分析失败，降级到传统LLM: {}", stockCode, e.getMessage());
             return analyzeWithLlm(stockCode, stockName, context);
         }
     }
 
     /**
-     * Agent结果转换为标准AnalysisResult
+     * ReactAgent结果转换为标准AnalysisResult
      */
-    private AnalysisResult agentResultToAnalysisResult(AgentOrchestrator.AnalysisOutput output,
+    private AnalysisResult reactResultToAnalysisResult(ReactAgent.ReactResult reactResult,
                                                        String stockCode, String stockName) {
         AnalysisResult result = new AnalysisResult();
         result.stockCode = stockCode;
         result.stockName = stockName;
-        result.signal = output.getConsensusSignal();
-        result.score = output.getConsensusScore();
-        result.fullReport = output.getFullReport();
-        result.summary = output.getSummary();
-        result.operationAdvice = output.getAdvice();
-        result.confidence = output.getConfidence();
-        result.riskNote = output.getRiskAssessment();
-        result.source = "agent_" + output.getMode();
+        result.fullReport = reactResult.response();
+        result.source = "react_agent";
+        // 从LLM回复中提取结构化字段（信号/评分）
+        extractFieldsFromLlmResponse(result, reactResult.response());
         return result;
     }
 

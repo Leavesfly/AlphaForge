@@ -893,6 +893,78 @@ function loadMarketOverview() {
   }).catch(() => {});
 }
 
+// ===== Portfolio =====
+function loadPortfolio() {
+  fetch('/api/v1/portfolio/summary').then(r => r.json()).then(data => {
+    const cards = document.querySelectorAll('#page-portfolio .stat-card');
+    if (cards[0]) cards[0].querySelector('.stat-value').textContent = '¥' + Number(data.total_market_value || 0).toLocaleString();
+    if (cards[1]) { const pnl = Number(data.total_profit_loss || 0); cards[1].querySelector('.stat-value').textContent = (pnl>=0?'+':'') + '¥' + Math.abs(pnl).toLocaleString(); cards[1].querySelector('.stat-value').className = 'stat-value ' + (pnl>=0?'text-up':'text-down'); }
+    if (cards[2]) cards[2].querySelector('.stat-value').textContent = Number(data.total_return_pct || 0).toFixed(2) + '%';
+    if (cards[3]) cards[3].querySelector('.stat-value').textContent = data.total_positions || 0;
+  }).catch(() => {});
+  fetch('/api/v1/portfolio/positions').then(r => r.json()).then(positions => {
+    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="positions"] table tbody');
+    if (!tbody) return;
+    if (!positions.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无持仓数据</td></tr>'; return; }
+    tbody.innerHTML = positions.map(p => {
+      const cost = Number(p.costPrice||p.cost_price||0), cur = Number(p.currentPrice||p.current_price||0), qty = Number(p.quantity||0);
+      const pnl = (cur - cost) * qty, pnlPct = cost ? ((cur-cost)/cost*100).toFixed(2) : '0.00';
+      const cls = pnl >= 0 ? 'text-up' : 'text-down';
+      return `<tr><td><strong>${p.stockName||p.stock_name||''}</strong> ${p.stockCode||p.stock_code||''}</td><td>${qty}</td><td>${cost.toFixed(2)}</td><td>${cur.toFixed(2)}</td><td class="${cls}">${pnl>=0?'+':''}${pnl.toFixed(0)}</td><td class="${cls}">${pnlPct>=0?'+':''}${pnlPct}%</td><td>${p.weight?(p.weight*100).toFixed(1):'-'}%</td><td>${p.stopLoss||p.stop_loss||'-'}</td><td>${p.targetPrice||p.target_price||'-'}</td></tr>`;
+    }).join('');
+  }).catch(() => {});
+  fetch('/api/v1/portfolio/trades').then(r => r.json()).then(trades => {
+    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="trades"] table tbody');
+    if (!tbody) return;
+    if (!trades.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无交易记录</td></tr>'; return; }
+    tbody.innerHTML = trades.map(t => `<tr><td>${t.tradeDate||t.trade_date||'-'}</td><td>${t.stockName||t.stock_name||''} ${t.stockCode||t.stock_code||''}</td><td>${t.side==='buy'?'<span class="badge badge-success">买入</span>':'<span class="badge badge-danger">卖出</span>'}</td><td>${t.quantity||0}</td><td>${t.price||'-'}</td><td>${t.totalAmount||t.total_amount||'-'}</td><td>${t.fee||'-'}</td><td>${t.note||'-'}</td></tr>`).join('');
+  }).catch(() => {});
+  fetch('/api/v1/portfolio/cash-ledger').then(r => r.json()).then(entries => {
+    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="cashflow"] table tbody');
+    if (!tbody) return;
+    if (!entries.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无资金流水</td></tr>'; return; }
+    tbody.innerHTML = entries.map(e => `<tr><td>${e.entryDate||e.entry_date||'-'}</td><td>${e.direction==='in'?'<span class="badge badge-success">入金</span>':'<span class="badge badge-danger">出金</span>'}</td><td class="${e.direction==='in'?'text-up':'text-down'}">${e.direction==='in'?'+':'-'}${e.amount||0}</td><td>${e.currency||'CNY'}</td><td>${e.note||'-'}</td></tr>`).join('');
+  }).catch(() => {});
+  fetch('/api/v1/portfolio/corporate-actions').then(r => r.json()).then(actions => {
+    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="actions"] table tbody');
+    if (!tbody) return;
+    if (!actions.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无公司行动</td></tr>'; return; }
+    tbody.innerHTML = actions.map(a => `<tr><td>${a.effectiveDate||a.effective_date||'-'}</td><td>${a.stockName||a.stock_name||''} ${a.stockCode||a.stock_code||''}</td><td><span class="badge badge-info">${a.actionType||a.action_type||'-'}</span></td><td>${a.details||'-'}</td><td>${a.note||'-'}</td></tr>`).join('');
+  }).catch(() => {});
+}
+
+// ===== Backtest =====
+function loadBacktestHistory() {
+  fetch('/api/v1/backtest/history').then(r => r.json()).then(records => {
+    const tbody = document.querySelector('#page-backtest table tbody');
+    if (!tbody) return;
+    if (!records || !records.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录，请在上方运行回测</td></tr>'; return; }
+    tbody.innerHTML = records.map(r => `<tr><td>${r.createdAt||r.created_at||'-'}</td><td>${r.stockName||r.stock_name||''} ${r.stockCode||r.stock_code||''}</td><td><span class="badge badge-info">${r.strategy||'-'}</span></td><td>${r.totalReturnPct||r.total_return_pct||'-'}%</td><td>${r.maxDrawdownPct||r.max_drawdown_pct||'-'}%</td><td>${r.winRatePct||r.win_rate_pct||'-'}%</td><td>${r.sharpeRatio||r.sharpe_ratio||'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('查看详情','info')">详情</button></td></tr>`).join('');
+  }).catch(() => {});
+}
+function runBacktest() {
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  if (!code) { showToast('请输入股票代码', 'warning'); return; }
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const startDate = document.getElementById('backtest-start')?.value;
+  const endDate = document.getElementById('backtest-end')?.value;
+  const capital = parseFloat((document.getElementById('backtest-capital')?.value||'100000').replace(/,/g,''));
+  showToast('回测运行中...', 'info');
+  fetch('/api/v1/backtest/run', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stock_code: code, strategy, start_date: startDate, end_date: endDate, initial_capital: capital })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    const cards = document.querySelectorAll('#page-backtest .stat-card');
+    if (cards[0]) cards[0].querySelector('.stat-value').textContent = Number(data.totalReturnPct||data.total_return_pct||0).toFixed(1) + '%';
+    if (cards[1]) cards[1].querySelector('.stat-value').textContent = Number(data.maxDrawdownPct||data.max_drawdown_pct||0).toFixed(1) + '%';
+    if (cards[2]) cards[2].querySelector('.stat-value').textContent = data.sharpeRatio||data.sharpe_ratio||'-';
+    if (cards[3]) cards[3].querySelector('.stat-value').textContent = Number(data.winRatePct||data.win_rate_pct||0).toFixed(1) + '%';
+    showToast('回测完成', 'success');
+    loadBacktestHistory();
+  }).catch(() => showToast('回测请求失败', 'error'));
+}
+
 // ===== 页面导航时加载数据 =====
 const originalNavigateTo = navigateTo;
 navigateTo = function(page) {
@@ -905,6 +977,7 @@ navigateTo = function(page) {
     case 'watchlist': loadWatchlist(); break;
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
+    case 'backtest': loadBacktestHistory(); break;
   }
 };
 

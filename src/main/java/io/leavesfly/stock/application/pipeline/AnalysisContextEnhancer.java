@@ -1,6 +1,5 @@
 package io.leavesfly.stock.application.pipeline;
 
-import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
