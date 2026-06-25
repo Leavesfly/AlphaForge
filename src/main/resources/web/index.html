@@ -131,7 +131,7 @@
 
 <!-- ===== Dashboard ===== -->
 <div class="page active" id="page-dashboard">
-  <div class="page-header"><div class="page-header-left"><h2>系统仪表盘</h2><p>AI 量化分析系统运行概览 · 实时数据</p></div><div><button class="btn btn-outline btn-sm" onclick="showToast('数据已刷新', 'success')">刷新数据</button></div></div>
+  <div class="page-header"><div class="page-header-left"><h2>系统仪表盘</h2><p>AI 量化分析系统运行概览 · 实时数据</p></div><div><button class="btn btn-outline btn-sm" onclick="loadDashboard();showToast('数据已刷新', 'success')">刷新数据</button></div></div>
   <div class="grid grid-4" style="margin-bottom:24px">
     <div class="card stat-card accent-primary"><div class="stat-icon">📊</div><div class="stat-value">847</div><div class="stat-label">累计分析报告</div><div class="stat-change up">+23 今日</div></div>
     <div class="card stat-card accent-success"><div class="stat-icon">⚡</div><div class="stat-value">156</div><div class="stat-label">活跃决策信号</div><div class="stat-change up">72% 准确率</div></div>
@@ -272,7 +272,7 @@
     </table></div></div>
   </div>
   <div class="tab-panel" data-panel="cashflow" data-group="portfolio">
-    <div class="card"><div class="card-title">资金流水 <button class="btn btn-sm btn-outline" onclick="showToast('出入金已记录','success')">+ 记录出入金</button></div><div class="table-container"><table>
+    <div class="card"><div class="card-title">资金流水 <button class="btn btn-sm btn-outline" onclick="openCashEntryForm();">+ 记录出入金</button></div><div class="table-container"><table>
       <thead><tr><th>日期</th><th>类型</th><th>金额</th><th>货币</th><th>备注</th></tr></thead>
       <tbody>
         <tr><td>2024-03-01</td><td><span class="badge badge-success">入金</span></td><td class="text-up">+100,000</td><td>CNY</td><td>月度定投</td></tr>
@@ -304,7 +304,7 @@
       <div class="form-group" style="margin-bottom:0;width:140px"><label>起始日期</label><input class="form-input" type="date" value="2023-01-01" /></div>
       <div class="form-group" style="margin-bottom:0;width:140px"><label>结束日期</label><input class="form-input" type="date" value="2024-03-15" /></div>
       <div class="form-group" style="margin-bottom:0;width:130px"><label>初始资金</label><input class="form-input" value="100,000" /></div>
-      <button class="btn btn-primary" style="height:38px" onclick="showToast('回测任务已提交，预计30秒完成','info')">运行回测</button>
+      <button class="btn btn-primary" style="height:38px" onclick="runBacktest()">运行回测</button>
     </div>
   </div>
   <div class="grid grid-4" style="margin-bottom:20px">
@@ -328,7 +328,7 @@
 <!-- ===== Watchlist ===== -->
 <div class="page" id="page-watchlist">
   <div class="page-header"><div class="page-header-left"><h2>自选股</h2><p>关注列表 · 支持批量分析与告警监控</p></div></div>
-  <div class="card" style="margin-bottom:16px"><div style="display:flex;gap:10px;align-items:center"><input class="form-input" id="watchlist-input" style="max-width:280px" placeholder="输入代码或名称添加..." /><button class="btn btn-primary" onclick="addWatchlist()">添加</button><button class="btn btn-outline" onclick="showToast('批量分析已启动，预计2分钟完成','info')">批量分析全部</button></div></div>
+  <div class="card" style="margin-bottom:16px"><div style="display:flex;gap:10px;align-items:center"><input class="form-input" id="watchlist-input" style="max-width:280px" placeholder="输入代码或名称添加..." /><button class="btn btn-primary" onclick="addWatchlist()">添加</button><button class="btn btn-outline" onclick="batchAnalyzeWatchlist()">批量分析全部</button></div></div>
   <div class="card"><div class="table-container"><table>
     <thead><tr><th>代码</th><th>名称</th><th>市场</th><th>现价</th><th>涨跌幅</th><th>成交量</th><th>加入时间</th><th>操作</th></tr></thead>
     <tbody id="watchlist-body">
@@ -450,7 +450,7 @@
     </div>
     <div class="form-group"><label>监控范围</label><select class="form-select"><option>指定个股</option><option>自选股全部</option><option>全市场</option></select></div>
     <div class="form-group"><label>通知渠道</label><div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" checked> 微信</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox"> Email</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" checked> Bark</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox"> Webhook</label></div></div>
-    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-alert')">取消</button><button class="btn btn-primary" onclick="closeModal('modal-alert');showToast('告警规则已创建','success')">保存规则</button></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-alert')">取消</button><button class="btn btn-primary" onclick="saveAlertRule()">保存规则</button></div>
   </div>
 </div>
 
@@ -471,7 +471,7 @@
     </div>
     <div class="form-group"><label>所属账户</label><select class="form-select"><option>A 股主账户 - 华泰证券</option><option>港股账户 - 富途</option><option>美股账户 - IBKR</option></select></div>
     <div class="form-group"><label>备注</label><input class="form-input" placeholder="可选备注..." /></div>
-    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-trade')">取消</button><button class="btn btn-primary" onclick="closeModal('modal-trade');showToast('交易已录入','success')">确认录入</button></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-trade')">取消</button><button class="btn btn-primary" onclick="saveTrade()">确认录入</button></div>
   </div>
 </div>
 
