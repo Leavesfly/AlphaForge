@@ -1,6 +1,7 @@
 package io.leavesfly.stock.application.agent;
 
-import io.leavesfly.stock.application.agent.tools.AgentToolRegistry;
+import io.leavesfly.stock.application.agent.tools.ToolException;
+import io.leavesfly.stock.application.agent.tools.ToolRegistry;
 import io.leavesfly.stock.infrastructure.llm.LlmService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,13 +22,13 @@ public class AgentExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(AgentExecutor.class);
     private final LlmService llmService;
-    private final AgentToolRegistry toolRegistry;
+    private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 最大迭代次数(防止无限循环) */
     private static final int MAX_ITERATIONS = 10;
 
-    public AgentExecutor(LlmService llmService, AgentToolRegistry toolRegistry) {
+    public AgentExecutor(LlmService llmService, ToolRegistry toolRegistry) {
         this.llmService = llmService;
         this.toolRegistry = toolRegistry;
     }
@@ -66,7 +67,12 @@ public class AgentExecutor {
                         Map<String, Object> args = (Map<String, Object>) parsed.get("args");
                         
                         log.debug("Agent调用工具: {} args={}", toolName, args);
-                        String toolResult = toolRegistry.executeTool(toolName, args != null ? args : Map.of());
+                        String toolResult;
+                        try {
+                            toolResult = toolRegistry.execute(toolName, args != null ? args : Map.of());
+                        } catch (ToolException e) {
+                            toolResult = "工具调用失败: " + e.getMessage();
+                        }
                         toolCalls.add(toolName + " -> " + toolResult.substring(0, Math.min(100, toolResult.length())));
 
                         // 将工具结果添加到消息历史
