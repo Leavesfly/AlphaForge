@@ -7,7 +7,6 @@ import java.util.*;
 
 /**
  * 股票名称到代码解析器
- * 对应Python版本的 src/services/name_to_code_resolver.py
  * 支持中文名/拼音/简写解析到标准代码
  */
 @Service

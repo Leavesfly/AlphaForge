@@ -12,7 +12,6 @@ import java.util.*;
 
 /**
  * 组合风险服务 + 组合告警 + 组合导入
- * 对应Python: portfolio_risk_service.py + portfolio_alerts.py + portfolio_import_service.py
  */
 @Service
 public class PortfolioRiskService {

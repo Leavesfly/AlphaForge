@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 /**
  * 告警规则实体
- * 对应Python版本的 alert_repo.py
  */
 public class AlertRule {
 

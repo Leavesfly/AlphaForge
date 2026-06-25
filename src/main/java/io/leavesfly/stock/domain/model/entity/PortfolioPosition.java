@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 /**
  * 投资组合持仓实体
- * 对应Python版本的 portfolio_repo.py
  */
 public class PortfolioPosition {
 

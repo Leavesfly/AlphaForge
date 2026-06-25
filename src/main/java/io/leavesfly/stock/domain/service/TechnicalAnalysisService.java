@@ -9,8 +9,7 @@ import java.util.*;
 
 /**
  * 技术分析服务
- * 
- * 对应Python版本的 src/stock_analyzer.py 中的技术指标计算
+ *
  * 计算: MA、MACD、KDJ、RSI、BOLL、成交量分析等
  */
 @Service

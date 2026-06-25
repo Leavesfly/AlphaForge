@@ -15,7 +15,6 @@ import java.util.*;
 
 /**
  * 告警后台工作线程
- * 对应Python: alert_worker.py
  * 定时扫描所有告警规则，触发满足条件的告警
  */
 @Service

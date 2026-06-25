@@ -13,8 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Bot命令分发器
- * 
- * 对应Python版本的 bot/dispatcher.py
+ *
  * 支持命令注册、别名路由、频率限制
  */
 @Component

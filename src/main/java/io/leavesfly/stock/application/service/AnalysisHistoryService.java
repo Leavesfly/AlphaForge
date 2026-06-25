@@ -12,8 +12,7 @@ import java.util.Optional;
 
 /**
  * 分析历史服务
- * 
- * 对应Python版本的 src/services/history_service.py
+ *
  * 负责分析报告的持久化存储和查询
  */
 @Service

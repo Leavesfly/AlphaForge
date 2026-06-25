@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 分析报告Schema - 对应Python版的AnalysisReportSchema
+ * 分析报告Schema
  * 用于LLM返回的结构化分析报告
  */
 public class AnalysisReportSchema {

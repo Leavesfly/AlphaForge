@@ -7,7 +7,6 @@ import java.util.Map;
 
 /**
  * 投资组合Agent - 分析持仓和仓位
- * 对应Python版本的 src/agent/agents/portfolio_agent.py
  */
 @Component
 public class PortfolioAgent implements BaseAgent {

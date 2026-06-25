@@ -278,7 +278,8 @@ function removeWatchlistRow(btn) {
 function loadWatchlist() {
   fetch('/api/v1/watchlist').then(r => r.json()).then(items => {
     const tbody = document.getElementById('watchlist-body');
-    if (!tbody || !items.length) return;
+    if (!tbody) return;
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">自选股列表为空，请在上方添加股票代码</td></tr>'; return; }
     tbody.innerHTML = items.map(item => `<tr><td>${item.stockCode}</td><td><strong>${item.stockName||item.stockCode}</strong></td><td>${item.market||'A股'}</td><td>-</td><td>-</td><td>-</td><td>${item.addedAt?item.addedAt.substring(0,10):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('已加入分析队列','success')">分析</button> <button class="btn btn-sm btn-outline" onclick="openModal('modal-alert')">告警</button> <button class="btn btn-sm btn-ghost" onclick="removeWatchlistRow(this)" style="color:var(--danger)">删除</button></td></tr>`).join('');
   }).catch(() => {});
 }
@@ -335,13 +336,15 @@ function loadDashboard() {
     if (cards[0]) cards[0].querySelector('.stat-value').textContent = data.total_reports || 0;
     if (cards[1]) cards[1].querySelector('.stat-value').textContent = data.active_signals || 0;
     // 渲染最新信号表格
-    if (data.recent_signals && data.recent_signals.length > 0) {
-      const tbody = document.querySelector('#page-dashboard table tbody');
-      if (tbody) {
+    const tbody = document.querySelector('#page-dashboard table tbody');
+    if (tbody) {
+      if (data.recent_signals && data.recent_signals.length > 0) {
         tbody.innerHTML = data.recent_signals.slice(0, 5).map(s => {
           const signalBadge = s.action === 'buy' ? '<span class="badge badge-success">买入</span>' : s.action === 'sell' ? '<span class="badge badge-danger">卖出</span>' : '<span class="badge badge-warning">持有</span>';
           return `<tr><td><strong>${s.stockName||''}</strong> <span style="color:var(--text-dim)">${s.stockCode||''}</span></td><td>${signalBadge}</td><td>${s.confidence?Math.round(s.confidence*100)+'%':'-'}</td><td>${s.entryLow||'-'}-${s.entryHigh||'-'}</td><td>${s.stopLoss||'-'}</td><td>${s.targetPrice||'-'}</td><td>${s.createdAt?s.createdAt.substring(5,16):'-'}</td><td><span class="badge badge-info">${s.status||'active'}</span></td></tr>`;
         }).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无决策信号，请先运行股票分析</td></tr>';
       }
     }
   }).catch(() => {});
@@ -351,7 +354,8 @@ function loadDashboard() {
 function loadHistory() {
   fetch('/api/v1/history?limit=20').then(r => r.json()).then(reports => {
     const tbody = document.querySelector('#page-analysis table tbody');
-    if (!tbody || !reports.length) return;
+    if (!tbody) return;
+    if (!reports.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无分析记录，请在上方输入股票代码开始分析</td></tr>'; return; }
     tbody.innerHTML = reports.map(r => {
       const scoreCls = (r.totalScore||0) >= 70 ? 'success' : (r.totalScore||0) >= 50 ? 'info' : (r.totalScore||0) >= 30 ? 'warning' : 'danger';
       return `<tr><td><strong>${r.stockName||''}</strong> ${r.stockCode||''}</td><td><span class="badge badge-${scoreCls}">${r.totalScore||'-'}</span></td><td>${r.signal||'-'}</td><td>${r.confidence?Math.round(r.confidence*100)+'%':'-'}</td><td>${r.llmModel||'-'}</td><td>${r.tokenUsage||'-'}</td><td>${r.durationSeconds?r.durationSeconds.toFixed(1)+'s':'-'}</td><td>${r.analysisDate?r.analysisDate.substring(5,16):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>`;
@@ -364,7 +368,8 @@ function loadSignals() {
   fetch('/api/v1/decision-signals?pageSize=20').then(r => r.json()).then(data => {
     const items = data.items || [];
     const grid = document.getElementById('signals-grid');
-    if (!grid || !items.length) return;
+    if (!grid) return;
+    if (!items.length) { grid.innerHTML = '<div class="empty-state">暂无决策信号，分析股票后将自动生成</div>'; return; }
     grid.innerHTML = items.map(s => {
       const actionCls = (s.action||'').includes('buy') ? 'buy' : s.action === 'sell' ? 'sell' : 'hold';
       const actionLabel = s.action === 'buy' ? '买入' : s.action === 'strong_buy' ? '强买入' : s.action === 'sell' ? '卖出' : '持有';
@@ -391,7 +396,8 @@ function loadUsage() {
 function loadAlerts() {
   fetch('/api/v1/alerts').then(r => r.json()).then(rules => {
     const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="rules"] table tbody');
-    if (!tbody || !rules.length) return;
+    if (!tbody) return;
+    if (!rules.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无告警规则，点击“新建规则”添加</td></tr>'; return; }
     tbody.innerHTML = rules.map(r => {
       const statusDot = r.enabled ? (r.triggered ? 'triggered' : 'active') : 'disabled';
       const statusText = r.enabled ? (r.triggered ? '已触发' : '启用') : '已禁用';
@@ -402,14 +408,16 @@ function loadAlerts() {
 function loadAlertTriggers() {
   fetch('/api/v1/alerts/triggers').then(r => r.json()).then(triggers => {
     const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="triggers"] table tbody');
-    if (!tbody || !triggers.length) return;
+    if (!tbody) return;
+    if (!triggers.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">暂无触发记录</td></tr>'; return; }
     tbody.innerHTML = triggers.map(t => `<tr><td>${t.triggered_at?t.triggered_at.substring(5,16):'-'}</td><td>${t.rule_id||'-'}</td><td>${t.display_target||t.target||'-'}</td><td>${t.observed_value||'-'}</td><td>${t.threshold_value||'-'}</td><td>${t.message||'-'}</td><td><span class="badge badge-warning">${t.status||'triggered'}</span></td></tr>`).join('');
   }).catch(() => {});
 }
 function loadAlertNotifications() {
   fetch('/api/v1/alerts/notifications').then(r => r.json()).then(notifs => {
     const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="notifications"] table tbody');
-    if (!tbody || !notifs.length) return;
+    if (!tbody) return;
+    if (!notifs.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无通知记录</td></tr>'; return; }
     tbody.innerHTML = notifs.map(n => `<tr><td>${n.sent_at?n.sent_at.substring(5,16):'-'}</td><td><span class="badge badge-info">${n.channel||'-'}</span></td><td>${n.trigger_id||'-'}</td><td><span class="badge badge-${n.success?'success':'danger'}">${n.success?'成功':'失败'}</span></td><td>${n.error_message||'-'}</td></tr>`).join('');
   }).catch(() => {});
 }
@@ -474,7 +482,8 @@ function loadPortfolio() {
   // 加载持仓
   fetch('/api/v1/portfolio/positions').then(r => r.json()).then(positions => {
     const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="positions"] table tbody');
-    if (!tbody || !positions.length) return;
+    if (!tbody) return;
+    if (!positions.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无持仓数据，请录入交易或添加持仓</td></tr>'; return; }
     tbody.innerHTML = positions.map(p => {
       const pnlCls = (p.profitLoss||0) >= 0 ? 'text-up' : 'text-down';
       const pctCls = (p.profitLossPct||0) >= 0 ? 'text-up' : 'text-down';
@@ -484,7 +493,8 @@ function loadPortfolio() {
   // 加载交易记录
   fetch('/api/v1/portfolio/trades').then(r => r.json()).then(trades => {
     const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="trades"] table tbody');
-    if (!tbody || !trades.length) return;
+    if (!tbody) return;
+    if (!trades.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无交易记录</td></tr>'; return; }
     tbody.innerHTML = trades.map(t => {
       const sideBadge = t.side === 'buy' ? '<span class="badge badge-success">买入</span>' : '<span class="badge badge-danger">卖出</span>';
       return `<tr><td>${t.tradeDate||'-'}</td><td>${t.symbol||''}</td><td>${sideBadge}</td><td>${t.quantity||0}</td><td>${t.price||0}</td><td>${t.amount||0}</td><td>${t.fee||0}</td><td>${t.note||''}</td></tr>`;
@@ -493,7 +503,8 @@ function loadPortfolio() {
   // 加载资金流水
   fetch('/api/v1/portfolio/cash-ledger').then(r => r.json()).then(entries => {
     const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="cashflow"] table tbody');
-    if (!tbody || !entries.length) return;
+    if (!tbody) return;
+    if (!entries.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无资金流水</td></tr>'; return; }
     tbody.innerHTML = entries.map(e => {
       const dirBadge = e.direction === 'in' ? '<span class="badge badge-success">入金</span>' : '<span class="badge badge-danger">出金</span>';
       const amtCls = e.direction === 'in' ? 'text-up' : 'text-down';
@@ -503,7 +514,8 @@ function loadPortfolio() {
   // 加载公司行动
   fetch('/api/v1/portfolio/corporate-actions').then(r => r.json()).then(actions => {
     const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="actions"] table tbody');
-    if (!tbody || !actions.length) return;
+    if (!tbody) return;
+    if (!actions.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无公司行动记录</td></tr>'; return; }
     tbody.innerHTML = actions.map(a => `<tr><td>${a.effectiveDate||'-'}</td><td>${a.symbol||''}</td><td><span class="badge badge-info">${a.actionType||'-'}</span></td><td>${a.description||'-'}</td><td>${a.note||''}</td></tr>`).join('');
   }).catch(() => {});
 }

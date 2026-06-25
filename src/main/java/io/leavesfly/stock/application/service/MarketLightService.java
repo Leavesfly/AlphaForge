@@ -12,7 +12,6 @@ import java.util.*;
 
 /**
  * 市场信号灯服务 + 告警
- * 对应Python: market_light_service.py + market_light_alerts.py
  * 红灯=高风险, 黄灯=谨慎, 绿灯=可操作
  */
 @Service

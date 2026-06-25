@@ -16,8 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * AKShare数据源适配器(通过HTTP API调用)
- * 
- * 对应Python版本的akshare_fetcher.py
+ *
  * 由于Java没有akshare库，通过部署的akshare HTTP服务获取数据
  * 或者直接调用东方财富等公开HTTP接口
  */

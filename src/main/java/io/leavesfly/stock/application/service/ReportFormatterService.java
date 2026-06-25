@@ -8,8 +8,7 @@ import java.util.List;
 
 /**
  * 报告格式化服务
- * 
- * 对应Python版本的 src/formatters.py + src/report_language.py
+ *
  * 功能: 报告格式转换(Markdown/HTML/纯文本/企微格式)
  */
 @Service

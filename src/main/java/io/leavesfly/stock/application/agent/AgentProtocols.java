@@ -5,8 +5,7 @@ import java.util.*;
 
 /**
  * Agent协议定义
- * 
- * 对应Python版本的 src/agent/protocols.py
+ *
  * 定义Agent系统的共享数据结构和通信协议
  */
 @Component

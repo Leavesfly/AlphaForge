@@ -11,7 +11,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Web配置 - CORS跨域支持
- * 对应Python版本的 api/app.py 中的CORS配置
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {

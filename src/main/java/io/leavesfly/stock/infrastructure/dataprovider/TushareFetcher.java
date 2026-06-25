@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Tushare数据源适配器
- * 对应Python版本的 tushare_fetcher.py
  * 通过Tushare Pro API获取A股数据
  */
 @Component

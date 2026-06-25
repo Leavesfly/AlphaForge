@@ -16,7 +16,6 @@ import java.util.*;
 
 /**
  * Agent工具集合(6类)
- * 对应Python: agent/tools/ 目录
  * - data_tools: 数据获取
  * - analysis_tools: 技术分析
  * - search_tools: 搜索

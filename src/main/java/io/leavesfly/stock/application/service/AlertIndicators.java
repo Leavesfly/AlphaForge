@@ -11,7 +11,6 @@ import java.util.*;
 
 /**
  * 告警指标计算器
- * 对应Python: alert_indicators.py
  * 提供MACD金叉/死叉、RSI超买超卖、均线突破、量比等指标判断
  */
 @Service

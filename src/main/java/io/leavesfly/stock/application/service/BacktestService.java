@@ -14,8 +14,7 @@ import java.util.*;
 
 /**
  * 回测引擎服务
- * 
- * 对应Python版本的 src/core/backtest_engine.py + src/services/backtest_service.py
+ *
  * 功能: 策略回测、绩效计算、交易模拟
  */
 @Service

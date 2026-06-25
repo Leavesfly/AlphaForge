@@ -13,8 +13,7 @@ import java.util.*;
 
 /**
  * 通知服务 - 多渠道通知推送
- * 
- * 对应Python版本的 src/notification.py
+ *
  * 支持13+通知渠道，自动路由和故障容错
  */
 @Service

@@ -7,8 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent记忆系统
- * 
- * 对应Python版本的 src/agent/memory.py
+ *
  * 存储Agent的对话历史、分析经验和学到的模式
  */
 @Component

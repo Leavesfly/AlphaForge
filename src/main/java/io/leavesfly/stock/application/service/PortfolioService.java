@@ -11,8 +11,7 @@ import java.util.*;
 
 /**
  * 投资组合服务
- * 
- * 对应Python版本的 src/services/portfolio_service.py
+ *
  * 功能: 持仓管理、盈亏计算、风险评估、仓位分析
  */
 @Service

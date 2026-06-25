@@ -12,8 +12,7 @@ import java.util.*;
 
 /**
  * Agent执行器 - ReAct循环
- * 
- * 对应Python版本的 src/agent/executor.py
+ *
  * 实现: 思考 → 行动 → 观察 → 思考 循环
  * 支持LLM Tool Calling/Function Calling
  */

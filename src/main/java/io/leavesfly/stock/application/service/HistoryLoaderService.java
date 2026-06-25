@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 
 /**
  * 历史数据加载器 + 历史对比服务
- * 对应Python: history_loader.py + history_comparison_service.py
  */
 @Service
 public class HistoryLoaderService {

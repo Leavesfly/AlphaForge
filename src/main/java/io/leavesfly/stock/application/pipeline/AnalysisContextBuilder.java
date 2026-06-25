@@ -17,8 +17,7 @@ import java.util.*;
 
 /**
  * 分析上下文构建器
- * 
- * 对应Python版本的 src/services/analysis_context_builder.py
+ *
  * 负责收集股票的全维度数据并组装为LLM可理解的分析上下文
  */
 @Component

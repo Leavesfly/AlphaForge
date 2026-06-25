@@ -8,8 +8,6 @@ import java.util.*;
 
 /**
  * Agent模型服务 + 分析服务 + 股票服务 + 系统配置服务 + 导入解析 + 指数远程
- * 对应Python: agent_model_service.py / analyzer_service.py / stock_service.py
- *             system_config_service.py / import_parser.py / stock_index_remote_service.py
  */
 @Service
 public class StockIndexService {

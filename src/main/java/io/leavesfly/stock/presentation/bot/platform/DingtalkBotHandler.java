@@ -12,7 +12,6 @@ import java.util.*;
 
 /**
  * 钉钉Bot Webhook处理器
- * 对应Python版本的 bot/platforms/dingtalk.py
  */
 @RestController
 @RequestMapping("/bot/dingtalk")

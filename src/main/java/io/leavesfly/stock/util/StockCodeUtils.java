@@ -7,8 +7,6 @@ import java.util.regex.Pattern;
 
 /**
  * 股票代码工具类
- * 
- * 对应Python版本中各处的股票代码转换逻辑
  */
 public class StockCodeUtils {
 

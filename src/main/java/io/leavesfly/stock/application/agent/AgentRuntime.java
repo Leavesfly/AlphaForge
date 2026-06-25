@@ -9,8 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent对话上下文 + 会话管理 + 事件总线 + 工厂 + Runner + Research + StockScope + ProviderTrace
- * 对应Python: chat_context.py / conversation.py / events.py / factory.py / runner.py
- *             research.py / stock_scope.py / provider_trace.py
  */
 @Component
 public class AgentRuntime {

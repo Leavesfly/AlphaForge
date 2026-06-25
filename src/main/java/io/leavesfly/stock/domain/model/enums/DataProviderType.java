@@ -2,7 +2,6 @@ package io.leavesfly.stock.domain.model.enums;
 
 /**
  * 数据源提供者枚举
- * 对应Python版本的多数据源切换
  */
 public enum DataProviderType {
     EFINANCE("efinance", "efinance数据源", true),

@@ -1,5 +1,4 @@
 # 股票智能分析系统 - Java版配置
-# 对应Python版本的 .env 配置
 
 server:
   port: ${SERVER_PORT:8000}

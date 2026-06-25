@@ -5,7 +5,6 @@ import java.util.*;
 
 /**
  * Agent技能系统
- * 对应Python: agent/skills/ (aggregator.py / base.py / defaults.py / skill_agent.py)
  */
 @Component
 public class SkillManager {

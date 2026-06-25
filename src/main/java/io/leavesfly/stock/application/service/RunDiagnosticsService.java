@@ -8,7 +8,6 @@ import java.util.*;
 
 /**
  * 运行诊断服务
- * 对应Python: run_diagnostics.py + notification_diagnostics.py
  * 收集分析流程每步的执行状态、耗时、异常
  */
 @Service

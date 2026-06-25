@@ -9,7 +9,6 @@ import java.util.*;
 
 /**
  * 智能情报服务
- * 对应Python版本的 src/services/intelligence_service.py
  * 功能: 情报收集、分析整合、智能摘要
  */
 @Service

@@ -9,7 +9,6 @@ import java.util.regex.*;
 
 /**
  * 图片股票提取器 + Markdown转图片 + 飞书文档
- * 对应Python: image_stock_extractor.py + md2img.py + feishu_doc.py
  */
 @Service
 public class MediaService {

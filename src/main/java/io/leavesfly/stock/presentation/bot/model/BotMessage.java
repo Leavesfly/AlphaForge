@@ -2,7 +2,6 @@ package io.leavesfly.stock.presentation.bot.model;
 
 /**
  * Bot统一消息模型
- * 对应Python版本的 bot/models.py
  */
 public class BotMessage {
     

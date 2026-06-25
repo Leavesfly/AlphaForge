@@ -13,7 +13,6 @@ import java.util.*;
 
 /**
  * 飞书Bot Webhook处理器
- * 对应Python版本的 bot/platforms/feishu_stream.py
  */
 @RestController
 @RequestMapping("/bot/feishu")

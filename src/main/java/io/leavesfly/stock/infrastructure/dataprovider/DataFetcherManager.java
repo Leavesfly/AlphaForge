@@ -18,8 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 数据源管理器 - 策略模式 + 熔断器
- * 
- * 对应Python版本的DataFetcherManager
+ *
  * 功能:
  * 1. 多数据源自动切换
  * 2. 故障熔断与自动恢复

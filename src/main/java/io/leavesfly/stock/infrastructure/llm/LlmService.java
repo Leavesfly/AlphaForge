@@ -20,8 +20,7 @@ import java.util.function.Consumer;
 
 /**
  * LLM服务 - 统一调用多提供商大语言模型
- * 
- * 对应Python版本的 src/llm/ 模块
+ *
  * 支持: OpenAI、Gemini、Anthropic、DeepSeek等兼容OpenAI API格式的提供商
  * 通过统一的Chat Completion API调用
  */

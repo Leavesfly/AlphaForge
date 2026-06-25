@@ -11,12 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 通知路由和降噪管理器
- * 
- * 对应Python版本的:
- * - src/notification_routing.py (路由)
- * - src/notification_noise.py (降噪)
- * - src/notification_capabilities.py (能力协商)
- * - src/notification_contracts.py (契约)
  */
 @Component
 public class NotificationRouter {

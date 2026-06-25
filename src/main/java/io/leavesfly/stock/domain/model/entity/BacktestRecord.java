@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 
 /**
  * 回测记录实体
- * 对应Python版本的 backtest_repo.py
  */
 public class BacktestRecord {
 

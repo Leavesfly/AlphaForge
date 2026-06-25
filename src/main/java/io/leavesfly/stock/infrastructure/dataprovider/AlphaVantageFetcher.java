@@ -15,7 +15,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Alpha Vantage数据源适配器
- * 对应Python版本的 alphavantage_fetcher.py
  * 获取全球市场数据(美股为主)
  */
 @Component

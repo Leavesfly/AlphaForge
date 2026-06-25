@@ -15,8 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Yahoo Finance数据源适配器
- * 
- * 对应Python版本的yfinance_fetcher.py
+ *
  * 用于获取美股、港股、日股等国际市场数据
  */
 @Component

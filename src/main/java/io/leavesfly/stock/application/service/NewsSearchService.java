@@ -10,8 +10,7 @@ import java.util.*;
 
 /**
  * 新闻搜索服务
- * 
- * 对应Python版本的 src/search_service.py
+ *
  * 通过 NewsSearchPort 接口与搜索提供商解耦，不再直接依赖 HTTP 客户端。
  */
 @Service

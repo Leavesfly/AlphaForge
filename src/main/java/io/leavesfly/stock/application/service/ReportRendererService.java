@@ -7,7 +7,6 @@ import java.util.*;
 
 /**
  * 报告渲染服务
- * 对应Python: report_renderer.py
  * 支持: Markdown/HTML/简洁/企微卡片/Telegram 等多种输出格式
  */
 @Service

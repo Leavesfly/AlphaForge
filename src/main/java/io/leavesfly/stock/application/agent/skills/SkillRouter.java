@@ -6,8 +6,7 @@ import java.util.*;
 
 /**
  * Agent技能路由器
- * 
- * 对应Python版本的 src/agent/skills/router.py
+ *
  * 根据用户意图自动路由到合适的技能Agent
  */
 @Component

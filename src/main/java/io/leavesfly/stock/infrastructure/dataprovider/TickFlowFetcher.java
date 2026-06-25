@@ -16,8 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * TickFlow数据源适配器
- * 
- * 对应Python版本的 tickflow_fetcher.py
+ *
  * TickFlow是一个第三方A股数据API服务
  * 
  * 接口:

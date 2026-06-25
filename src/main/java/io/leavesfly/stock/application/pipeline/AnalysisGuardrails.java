@@ -5,11 +5,6 @@ import java.util.*;
 
 /**
  * 分析上下文包 + 市场阶段 + 通知契约 + 决策护栏 + 报告语言
- * 对应Python: analysis_context_pack_overview.py / analysis_context_pack_prompt.py
- *             market_phase_prompt.py / market_phase_summary.py
- *             notification_capabilities.py / notification_contracts.py
- *             phase_decision_guardrail.py / report_language.py
- *             daily_market_context_guardrail.py
  */
 @Component
 public class AnalysisGuardrails {

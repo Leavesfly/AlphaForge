@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Longbridge(长桥)数据源适配器
- * 
- * 对应Python版本的 longbridge_fetcher.py
+ *
  * 通过Longbridge OpenAPI获取港股/美股数据
  * 
  * API文档: https://open.longbridgeapp.com/docs

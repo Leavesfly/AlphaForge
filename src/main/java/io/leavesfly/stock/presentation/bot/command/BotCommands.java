@@ -15,7 +15,6 @@ import java.util.*;
 
 /**
  * Bot命令处理器集合
- * 对应Python bot/commands/ 目录下12个命令文件
  */
 @Component
 public class BotCommands {

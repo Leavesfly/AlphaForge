@@ -12,8 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * 分析结果汇总器
- * 
- * 对应Python版本 pipeline.py 中的结果汇总和报告生成逻辑
+ *
  * 功能:
  * 1. 汇总多只股票的分析结果
  * 2. 生成综合报告

@@ -8,7 +8,6 @@ import java.util.concurrent.*;
 
 /**
  * 异步任务队列服务
- * 对应Python版本的 src/services/task_queue.py + task_service.py
  * 管理后台异步分析任务
  */
 @Service

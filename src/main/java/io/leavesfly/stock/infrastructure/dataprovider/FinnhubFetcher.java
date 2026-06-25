@@ -15,7 +15,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Finnhub数据源适配器
- * 对应Python版本的 finnhub_fetcher.py
  * 获取美股/全球市场数据
  */
 @Component

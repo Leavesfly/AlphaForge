@@ -9,8 +9,7 @@ import java.util.*;
 
 /**
  * Agent编排器 - 多智能体协作系统
- * 
- * 对应Python版本的 src/agent/orchestrator.py
+ *
  * 支持模式: quick/standard/full/specialist
  * 协调多个专业Agent完成综合分析
  */

@@ -9,7 +9,6 @@ import java.util.*;
 
 /**
  * 运行流程服务
- * 对应Python版本的 src/services/run_flow.py
  * 管理分析任务的执行流程和诊断
  */
 @Service
@@ -60,7 +59,6 @@ public class RunFlowService {
 
     /**
      * 运行诊断检查
-     * 对应Python的 run_diagnostics.py
      */
     public Map<String, Object> runDiagnostics() {
         Map<String, Object> diag = new LinkedHashMap<>();

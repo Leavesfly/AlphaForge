@@ -18,8 +18,7 @@ import java.util.*;
 
 /**
  * 告警服务 - 条件触发和监控
- * 
- * 对应Python版本的 src/services/alert_service.py + alert_worker.py
+ *
  * 功能:
  * 1. 管理告警规则(CRUD)
  * 2. 定期轮询检查告警条件
@@ -148,7 +147,6 @@ public class AlertService {
 
     /**
      * 告警工作线程 - 每分钟检查一次
-     * 对应Python版本的alert_worker.py
      */
     @Scheduled(fixedDelay = 60000)
     public void checkAlerts() {

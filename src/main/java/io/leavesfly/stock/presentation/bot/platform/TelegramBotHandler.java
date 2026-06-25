@@ -12,7 +12,6 @@ import java.util.*;
 
 /**
  * Telegram Bot Webhook处理器
- * 对应Python版本的 bot/platforms/ Telegram处理
  */
 @RestController
 @RequestMapping("/bot/telegram")

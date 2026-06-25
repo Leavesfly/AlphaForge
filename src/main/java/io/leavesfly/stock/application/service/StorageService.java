@@ -14,8 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 存储管理服务
- * 
- * 对应Python版本的 src/storage.py
+ *
  * 功能:
  * 1. 报告文件存储(Markdown/JSON)
  * 2. 缓存管理(数据源缓存/LLM缓存)

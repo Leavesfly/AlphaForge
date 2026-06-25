@@ -12,8 +12,7 @@ import java.util.*;
 
 /**
  * Agent工具注册中心
- * 
- * 对应Python版本的 src/agent/tools/registry.py
+ *
  * 为Agent提供可调用的工具集合
  */
 @Component

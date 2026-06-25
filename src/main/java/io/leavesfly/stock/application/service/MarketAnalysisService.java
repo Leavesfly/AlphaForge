@@ -13,8 +13,7 @@ import java.util.*;
 
 /**
  * 市场分析服务
- * 
- * 对应Python版本的 src/market_analyzer.py
+ *
  * 功能: 大盘分析、板块分析、市场情绪判断
  */
 @Service

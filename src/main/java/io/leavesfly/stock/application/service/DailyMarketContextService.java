@@ -12,7 +12,6 @@ import java.util.*;
 
 /**
  * 每日市场上下文服务
- * 对应Python版本的 src/services/daily_market_context.py
  * 提供当日大盘环境数据用于分析决策
  */
 @Service

@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 腾讯财经数据源适配器
- * 对应Python版本的 tencent_fetcher.py
  * 通过腾讯股票接口获取A股/港股实时和历史数据
  */
 @Component

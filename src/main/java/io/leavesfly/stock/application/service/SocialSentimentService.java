@@ -8,7 +8,6 @@ import java.util.*;
 
 /**
  * 社交情绪服务
- * 对应Python: social_sentiment_service.py
  */
 @Service
 public class SocialSentimentService {

@@ -6,8 +6,7 @@ import java.util.*;
 
 /**
  * 交易日历
- * 
- * 对应Python版本的 src/core/trading_calendar.py
+ *
  * 判断交易日、节假日、连续交易时段等
  */
 @Component

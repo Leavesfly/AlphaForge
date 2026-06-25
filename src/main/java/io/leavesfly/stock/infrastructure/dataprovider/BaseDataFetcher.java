@@ -7,7 +7,6 @@ import java.util.Map;
 
 /**
  * 数据获取器基础接口
- * 对应Python版本的BaseFetcher抽象基类
  * 所有数据源适配器都需要实现此接口
  */
 public interface BaseDataFetcher {

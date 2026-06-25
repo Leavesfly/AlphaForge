@@ -15,8 +15,7 @@ import java.util.*;
 
 /**
  * 通达信(TDX)数据源适配器(Java版)
- * 
- * 对应Python版本的 pytdx_fetcher.py
+ *
  * 原理: pytdx通过TCP连接通达信行情服务器获取数据
  * Java实现: 直接用Socket实现TDX二进制协议
  * 

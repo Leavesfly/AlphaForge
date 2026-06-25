@@ -16,8 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * EFinance数据源适配器(Java版)
- * 
- * 对应Python版本的 efinance_fetcher.py
+ *
  * 原理: efinance库本质是调用东方财富pushapi接口，Java可直接调用相同HTTP端点
  * 接口:
  *   - 历史K线: push2his.eastmoney.com

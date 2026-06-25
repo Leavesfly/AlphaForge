@@ -29,8 +29,7 @@ import java.util.function.BiConsumer;
 
 /**
  * 股票分析流水线 - 核心编排器(完整版)
- * 
- * 对应Python版本的 src/core/pipeline.py (3578行) 完整还原
+ *
  * 包含:
  * - analyze_stock() 完整30+步骤
  * - 结果后处理链(fallback/dashboard回填)
@@ -105,7 +104,7 @@ public class StockAnalysisPipeline {
     // ==================== 主入口方法 ====================
 
     /**
-     * 执行完整分析流程 (对应Python run() 169行)
+     * 执行完整分析流程
      */
     public Map<String, Object> runFullAnalysis(String stocksStr, boolean dryRun, boolean debug) {
         long startTime = System.currentTimeMillis();
@@ -166,11 +165,10 @@ public class StockAnalysisPipeline {
         return summary;
     }
 
-    // ==================== 单股分析主流程(对应Python analyze_stock 479行) ====================
+    // ==================== 单股分析主流程 ====================
 
     /**
      * 分析单只股票 - 完整30+步骤
-     * 对应Python版 analyze_stock() 方法
      */
     public AnalysisReport analyzeStock(String stockCode, Map<String, Object> marketContext,
                                        boolean dryRun, boolean debug) {
@@ -277,7 +275,7 @@ public class StockAnalysisPipeline {
 
     // ==================== 结果后处理链(已委托给 AnalysisPostProcessor) ====================
 
-    // ==================== Agent模式分析(对应Python _analyze_with_agent 312行) ====================
+    // ==================== Agent模式分析 ====================
 
     /**
      * 使用Agent编排器进行分析
@@ -296,7 +294,7 @@ public class StockAnalysisPipeline {
     }
 
     /**
-     * Agent结果转换为标准AnalysisResult(对应Python _agent_result_to_analysis_result 183行)
+     * Agent结果转换为标准AnalysisResult
      */
     private AnalysisResult agentResultToAnalysisResult(AgentOrchestrator.AnalysisOutput output,
                                                        String stockCode, String stockName) {
@@ -332,7 +330,7 @@ public class StockAnalysisPipeline {
         return result;
     }
 
-    // ==================== 决策信号提取(对应Python _extract_decision_signal_after_history_save 48行) ====================
+    // ==================== 决策信号提取 ====================
 
     private void extractAndPersistDecisionSignal(AnalysisReport report, AnalysisResult result) {
         if (result == null || result.signal == null) return;
@@ -355,7 +353,7 @@ public class StockAnalysisPipeline {
     // ==================== 通知适配链 ====================
 
     /**
-     * 单股实时通知(对应Python _send_single_stock_notification 95行)
+     * 单股实时通知
      */
     public void sendSingleStockNotification(AnalysisReport report) {
         synchronized (singleStockNotifyLock) {

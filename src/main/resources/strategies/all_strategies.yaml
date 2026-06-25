@@ -1,5 +1,4 @@
 # 股票分析策略配置(完整版)
-# 对应Python strategies/ 目录的16个策略文件
 
 # 底部放量策略
 bottom_volume:

@@ -15,8 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * BaoStock数据源适配器(Java版)
- * 
- * 对应Python版本的 baostock_fetcher.py
+ *
  * 原理: BaoStock提供HTTP API接口(baostock.com)获取历史K线
  * 注意: BaoStock官方是TCP协议，但也提供了HTTP查询接口
  * Java替代方案: 直接通过证券之星/新浪财经HTTP接口获取相同数据

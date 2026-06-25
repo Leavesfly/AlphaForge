@@ -12,8 +12,7 @@ import java.util.*;
 
 /**
  * LLM工具调用适配器
- * 
- * 对应Python版本的 src/agent/llm_adapter.py
+ *
  * 实现OpenAI Function Calling格式的工具调用解析和执行
  */
 @Component
