@@ -61,6 +61,7 @@ public class StockAnalysisPipeline {
     private final NameToCodeResolver nameResolver;
     private final AnalysisPostProcessor postProcessor;
     private final AnalysisContextEnhancer contextEnhancer;
+    private final PipelineMetrics pipelineMetrics;
 
     /** 并发线程池 */
     private final ExecutorService executorService;
@@ -78,7 +79,8 @@ public class StockAnalysisPipeline {
             AnalysisResultAggregator resultAggregator, ReactAgent reactAgent,
             DecisionSignalService decisionSignalService, DailyMarketContextService dailyMarketContextService,
             TradingCalendar tradingCalendar, NameToCodeResolver nameResolver,
-            AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer) {
+            AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer,
+            PipelineMetrics pipelineMetrics) {
         this.config = config;
         this.dataFetcherManager = dataFetcherManager;
         this.technicalAnalysisService = technicalAnalysisService;
@@ -97,6 +99,7 @@ public class StockAnalysisPipeline {
         this.nameResolver = nameResolver;
         this.postProcessor = postProcessor;
         this.contextEnhancer = contextEnhancer;
+        this.pipelineMetrics = pipelineMetrics;
         this.executorService = Executors.newFixedThreadPool(
                 Math.min(Runtime.getRuntime().availableProcessors(), 4));
     }
@@ -251,7 +254,8 @@ public class StockAnalysisPipeline {
 
             // ===== Step 18: 刷新诊断快照 =====
             diag.complete(elapsed);
-            log.info("[{}] 分析完成 | 信号:{} 评分:{} 耗时:{:.1f}秒", 
+            pipelineMetrics.recordPhase(stockCode, "analyze_stock", System.currentTimeMillis() - startTime);
+            log.info("[{}] 分析完成 | 信号:{} 评分:{} 耗时:{:.1f}秒",
                     stockCode, report.getSignal(), report.getTotalScore(), elapsed);
 
             return report;

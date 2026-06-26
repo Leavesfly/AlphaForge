@@ -28,6 +28,12 @@ public interface PortfolioRepository {
 
     PortfolioPosition findByStockCodeOne(@Param("stockCode") String stockCode);
 
+    List<PortfolioPosition> findByAccountId(@Param("accountId") Long accountId);
+
+    PortfolioPosition findByAccountIdAndStockCode(@Param("accountId") Long accountId, @Param("stockCode") String stockCode);
+
+    void deleteByAccountId(@Param("accountId") Long accountId);
+
     List<PortfolioPosition> findByMarketOrderByMarketValueDesc(@Param("market") String market);
 
     Double getTotalMarketValue();
@@ -67,6 +73,10 @@ public interface PortfolioRepository {
 
     default Optional<PortfolioPosition> findByStockCode(String stockCode) {
         return Optional.ofNullable(findByStockCodeOne(stockCode));
+    }
+
+    default Optional<PortfolioPosition> findByAccountIdAndStockCodeOpt(Long accountId, String stockCode) {
+        return Optional.ofNullable(findByAccountIdAndStockCode(accountId, stockCode));
     }
 
     default Optional<PortfolioPosition> findByIdOpt(Long id) {

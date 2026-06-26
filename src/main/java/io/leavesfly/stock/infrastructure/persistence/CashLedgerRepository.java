@@ -25,6 +25,8 @@ public interface CashLedgerRepository {
 
     void deleteById(@Param("id") Long id);
 
+    void deleteByAccountId(@Param("accountId") Long accountId);
+
     long count();
 
     default CashLedgerEntry save(CashLedgerEntry entry) {

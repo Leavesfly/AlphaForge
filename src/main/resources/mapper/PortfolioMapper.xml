@@ -4,6 +4,7 @@
 
     <resultMap id="portfolioPositionMap" type="io.leavesfly.stock.domain.model.entity.PortfolioPosition">
         <id property="id" column="id"/>
+        <result property="accountId" column="account_id"/>
         <result property="stockCode" column="stock_code"/>
         <result property="stockName" column="stock_name"/>
         <result property="market" column="market"/>
@@ -24,12 +25,12 @@
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO portfolio_positions (stock_code, stock_name, market, quantity, cost_price, current_price, profit_loss, profit_loss_pct, market_value, position_pct, buy_date, stop_loss_price, target_price, tags, note, created_at, updated_at)
-        VALUES (#{stockCode}, #{stockName}, #{market}, #{quantity}, #{costPrice}, #{currentPrice}, #{profitLoss}, #{profitLossPct}, #{marketValue}, #{positionPct}, #{buyDate}, #{stopLossPrice}, #{targetPrice}, #{tags}, #{note}, #{createdAt}, #{updatedAt})
+        INSERT INTO portfolio_positions (account_id, stock_code, stock_name, market, quantity, cost_price, current_price, profit_loss, profit_loss_pct, market_value, position_pct, buy_date, stop_loss_price, target_price, tags, note, created_at, updated_at)
+        VALUES (#{accountId}, #{stockCode}, #{stockName}, #{market}, #{quantity}, #{costPrice}, #{currentPrice}, #{profitLoss}, #{profitLossPct}, #{marketValue}, #{positionPct}, #{buyDate}, #{stopLossPrice}, #{targetPrice}, #{tags}, #{note}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update">
-        UPDATE portfolio_positions SET stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, quantity=#{quantity}, cost_price=#{costPrice}, current_price=#{currentPrice}, profit_loss=#{profitLoss}, profit_loss_pct=#{profitLossPct}, market_value=#{marketValue}, position_pct=#{positionPct}, buy_date=#{buyDate}, stop_loss_price=#{stopLossPrice}, target_price=#{targetPrice}, tags=#{tags}, note=#{note}, updated_at=#{updatedAt}
+        UPDATE portfolio_positions SET account_id=#{accountId}, stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, quantity=#{quantity}, cost_price=#{costPrice}, current_price=#{currentPrice}, profit_loss=#{profitLoss}, profit_loss_pct=#{profitLossPct}, market_value=#{marketValue}, position_pct=#{positionPct}, buy_date=#{buyDate}, stop_loss_price=#{stopLossPrice}, target_price=#{targetPrice}, tags=#{tags}, note=#{note}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 
@@ -52,6 +53,18 @@
     <select id="findByStockCodeOne" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE stock_code = #{stockCode} LIMIT 1
     </select>
+
+    <select id="findByAccountId" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions WHERE account_id = #{accountId} ORDER BY updated_at DESC
+    </select>
+
+    <select id="findByAccountIdAndStockCode" resultMap="portfolioPositionMap">
+        SELECT * FROM portfolio_positions WHERE account_id = #{accountId} AND stock_code = #{stockCode} LIMIT 1
+    </select>
+
+    <delete id="deleteByAccountId">
+        DELETE FROM portfolio_positions WHERE account_id = #{accountId}
+    </delete>
 
     <select id="findByMarketOrderByMarketValueDesc" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE market = #{market} ORDER BY market_value DESC

@@ -1,0 +1,17 @@
+# ──────────────────────────────────────────────────────────────
+# 缠论策略（综合分析评分）
+# 引擎：scoring → CompositeScoringEngine
+# 逻辑：基于缠中说禅理论的背驰与中枢突破判断买卖点
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: chan_theory
+label: 缠论
+description: 基于缠中说禅理论的买卖点判断
+category: pattern
+risk_level: medium
+
+scoring:
+  score_weight: 12
+  conditions:
+    divergence: true                # 出现背驰信号
+    center_break: true              # 突破中枢

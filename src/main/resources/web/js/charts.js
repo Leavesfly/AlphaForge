@@ -29,9 +29,15 @@ function initCharts() {
   });
 
   initChart('chart-backtest', theme, (chart) => {
-    const days = Array.from({length:90},(_, i)=>{const d=new Date(2023,6,1+i*3);return d.toISOString().slice(0,10);});
-    let s=100000,b=100000; const sd=days.map(()=>{s+=(Math.random()-0.38)*2500;return Math.round(s);}); const bd=days.map(()=>{b+=(Math.random()-0.45)*1500;return Math.round(b);});
-    chart.setOption({ backgroundColor:'transparent', grid:{top:40,right:20,bottom:30,left:65}, legend:{top:5,textStyle:{fontSize:11}}, xAxis:{type:'category',data:days,axisLabel:{fontSize:10}}, yAxis:{type:'value',axisLabel:{formatter:v=>'¥'+(v/10000).toFixed(1)+'万'}}, series:[{name:'策略净值',data:sd,type:'line',smooth:true,lineStyle:{color:'#6366f1',width:2},itemStyle:{color:'#6366f1'},symbol:'none'},{name:'基准(沪深300)',data:bd,type:'line',smooth:true,lineStyle:{color:'#94a3b8',width:1.5,type:'dashed'},itemStyle:{color:'#94a3b8'},symbol:'none'}], tooltip:{trigger:'axis'} });
+    chart.setOption({ backgroundColor:'transparent', title:{text:'暂无回测数据',left:'center',top:'middle',textStyle:{color:'#94a3b8',fontSize:13,fontWeight:'normal'}}, xAxis:{type:'category',data:[]}, yAxis:{type:'value'}, series:[] });
+  });
+
+  initChart('chart-backtest-drawdown', theme, (chart) => {
+    chart.setOption({ backgroundColor:'transparent', grid:{top:20,right:20,bottom:30,left:50}, xAxis:{type:'category',data:[]}, yAxis:{type:'value',axisLabel:{formatter:'{value}%'}}, series:[{type:'line',data:[],areaStyle:{opacity:0.2,color:'#ef4444'},lineStyle:{color:'#ef4444',width:1.5},symbol:'none'}] });
+  });
+
+  initChart('chart-backtest-monthly', theme, (chart) => {
+    chart.setOption({ backgroundColor:'transparent', grid:{top:20,right:20,bottom:30,left:50}, xAxis:{type:'category',data:[]}, yAxis:{type:'value',axisLabel:{formatter:'{value}%'}}, series:[{type:'bar',data:[],itemStyle:{color: params => (params.data >= 0 ? '#10b981' : '#ef4444'), borderRadius:[4,4,0,0]}}], tooltip:{trigger:'axis'} });
   });
 
   initChart('chart-cost', theme, (chart) => {
@@ -59,3 +65,86 @@ function initChart(id, theme, setup) {
 
 // Init on load
 setTimeout(initCharts, 300);
+
+function renderBacktestVisualization(data) {
+  if (!data) return;
+  ['chart-backtest', 'chart-backtest-drawdown', 'chart-backtest-monthly'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el._needsReinit = true;
+  });
+  const theme = getChartTheme();
+  const curve = data.equity_curve || {};
+  const dates = curve.dates || [];
+  const portfolio = curve.portfolio_values || [];
+  const benchmark = curve.benchmark_values || [];
+  const drawdown = curve.drawdown_pct || [];
+  const closePrices = curve.close_prices || [];
+  const markers = data.trade_markers || [];
+
+  const buyPoints = markers.filter(m => m.side === 'buy').map(m => [m.date, m.price]);
+  const sellPoints = markers.filter(m => m.side === 'sell').map(m => [m.date, m.price]);
+
+  initChart('chart-backtest', theme, (chart) => {
+    chart.setOption({
+      backgroundColor: 'transparent',
+      title: dates.length ? undefined : { text: '暂无回测数据', left: 'center', top: 'middle', textStyle: { color: '#94a3b8', fontSize: 13, fontWeight: 'normal' } },
+      grid: { top: 55, right: 55, bottom: 30, left: 65 },
+      legend: { top: 5, textStyle: { fontSize: 11 } },
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
+      yAxis: [
+        { type: 'value', name: '净值', axisLabel: { formatter: v => '¥' + (v / 10000).toFixed(1) + '万' } },
+        { type: 'value', name: '股价', show: closePrices.length > 0, axisLabel: { formatter: v => v.toFixed(0) }, splitLine: { show: false } }
+      ],
+      series: [
+        { name: '策略净值', type: 'line', data: portfolio, smooth: true, yAxisIndex: 0, lineStyle: { color: '#6366f1', width: 2 }, itemStyle: { color: '#6366f1' }, symbol: 'none' },
+        { name: '买入持有', type: 'line', data: benchmark, smooth: true, yAxisIndex: 0, lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' }, itemStyle: { color: '#94a3b8' }, symbol: 'none' },
+        { name: '股价', type: 'line', data: closePrices, smooth: true, yAxisIndex: 1, lineStyle: { color: '#f59e0b', width: 1, opacity: 0.5 }, itemStyle: { color: '#f59e0b' }, symbol: 'none' },
+        { name: '买入', type: 'scatter', yAxisIndex: 1, data: buyPoints, symbol: 'triangle', symbolSize: 12, itemStyle: { color: '#10b981' } },
+        { name: '卖出', type: 'scatter', yAxisIndex: 1, data: sellPoints, symbol: 'triangle', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#ef4444' } }
+      ]
+    }, true);
+  });
+
+  initChart('chart-backtest-drawdown', theme, (chart) => {
+    chart.setOption({
+      backgroundColor: 'transparent', grid: { top: 20, right: 20, bottom: 30, left: 50 },
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].axisValue}<br/>回撤: -${Number(p[0].data).toFixed(2)}%` },
+      xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
+      yAxis: { type: 'value', axisLabel: { formatter: '-{value}%' } },
+      series: [{ type: 'line', data: drawdown.map(v => -Math.abs(v)), areaStyle: { opacity: 0.18, color: '#ef4444' }, lineStyle: { color: '#ef4444', width: 1.5 }, symbol: 'none' }]
+    }, true);
+  });
+
+  const monthly = data.monthly_returns || [];
+  initChart('chart-backtest-monthly', theme, (chart) => {
+    chart.setOption({
+      backgroundColor: 'transparent', grid: { top: 20, right: 20, bottom: 30, left: 50 },
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].axisValue}<br/>收益: ${Number(p[0].data).toFixed(2)}%` },
+      xAxis: { type: 'category', data: monthly.map(m => m.month), axisLabel: { fontSize: 10, rotate: monthly.length > 8 ? 35 : 0 } },
+      yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+      series: [{ type: 'bar', data: monthly.map(m => Number(m.return_pct || 0).toFixed(2)),
+        itemStyle: { color: params => (params.data >= 0 ? '#10b981' : '#ef4444'), borderRadius: [4, 4, 0, 0] } }]
+    }, true);
+  });
+
+  const summary = data.summary || {};
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  setText('bt-total-return', summary.total_return_pct != null ? Number(summary.total_return_pct).toFixed(2) + '%' : '-');
+  setText('bt-max-drawdown', summary.max_drawdown_pct != null ? '-' + Number(summary.max_drawdown_pct).toFixed(2) + '%' : '-');
+  setText('bt-sharpe', summary.sharpe_ratio != null ? Number(summary.sharpe_ratio).toFixed(2) : '-');
+  setText('bt-win-rate', summary.win_rate_pct != null ? Number(summary.win_rate_pct).toFixed(1) + '%' : '-');
+
+  const tbody = document.getElementById('backtest-trades-body');
+  const trades = data.trades || [];
+  if (tbody) {
+    if (!trades.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">本次回测无成交记录</td></tr>';
+    } else {
+      tbody.innerHTML = trades.map(t => {
+        const side = t.side === 'buy' ? '<span class="badge badge-success">买入</span>' : '<span class="badge badge-danger">卖出</span>';
+        return `<tr><td>${t.date || '-'}</td><td>${side}</td><td>${Number(t.price || 0).toFixed(2)}</td><td>${t.shares || 0}</td><td>${Number(t.amount || 0).toFixed(0)}</td><td>${Number(t.commission || 0).toFixed(2)}</td><td>${Number(t.stamp_tax || 0).toFixed(2)}</td><td>${t.reason || '-'}</td></tr>`;
+      }).join('');
+    }
+  }
+}

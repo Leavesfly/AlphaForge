@@ -1,6 +1,9 @@
 package io.leavesfly.stock.presentation.api;
 
 import io.leavesfly.stock.application.service.BacktestService;
+import io.leavesfly.stock.application.service.BacktestVisualizationService;
+import io.leavesfly.stock.presentation.api.dto.BacktestRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,25 +18,23 @@ import java.util.Map;
 public class BacktestController {
 
     private final BacktestService backtestService;
+    private final BacktestVisualizationService visualizationService;
 
-    public BacktestController(BacktestService backtestService) {
+    public BacktestController(BacktestService backtestService,
+                              BacktestVisualizationService visualizationService) {
         this.backtestService = backtestService;
+        this.visualizationService = visualizationService;
     }
 
     /** 运行回测 */
     @PostMapping("/run")
-    public ResponseEntity<?> run(@RequestBody Map<String, Object> body) {
-        String stockCode = (String) body.get("stock_code");
-        if (stockCode == null || stockCode.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "stock_code is required"));
-        }
-        String strategy = (String) body.getOrDefault("strategy", "ma_golden_cross");
-        String startStr = (String) body.getOrDefault("start_date", LocalDate.now().minusMonths(6).toString());
-        String endStr = (String) body.getOrDefault("end_date", LocalDate.now().toString());
-        double capital = body.containsKey("initial_capital") ? ((Number) body.get("initial_capital")).doubleValue() : 100000;
+    public ResponseEntity<?> run(@Valid @RequestBody BacktestRequest request) {
+        String startStr = request.getStartDate() != null ? request.getStartDate()
+                : LocalDate.now().minusMonths(6).toString();
+        String endStr = request.getEndDate() != null ? request.getEndDate() : LocalDate.now().toString();
 
-        var record = backtestService.runBacktest(stockCode, strategy,
-                LocalDate.parse(startStr), LocalDate.parse(endStr), capital);
+        var record = backtestService.runBacktest(request.getStockCode(), request.getStrategy(),
+                LocalDate.parse(startStr), LocalDate.parse(endStr), request.getInitialCapital());
         if (record == null) {
             return ResponseEntity.ok(Map.of("status", "failed", "message", "历史数据不足"));
         }
@@ -44,5 +45,13 @@ public class BacktestController {
     @GetMapping("/history")
     public ResponseEntity<?> history(@RequestParam(required = false) String stockCode) {
         return ResponseEntity.ok(backtestService.getHistory(stockCode));
+    }
+
+    /** 回测可视化数据（净值曲线、回撤、买卖点、月度收益） */
+    @GetMapping("/{id}/visualization")
+    public ResponseEntity<?> visualization(@PathVariable long id) {
+        return visualizationService.buildVisualization(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

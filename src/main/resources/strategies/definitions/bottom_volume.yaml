@@ -1,0 +1,19 @@
+# ──────────────────────────────────────────────────────────────
+# 底部放量策略（综合分析评分）
+# 引擎：scoring → CompositeScoringEngine
+# 逻辑：股价在低位区间显著放量，视为主力建仓信号
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: bottom_volume
+label: 底部放量
+description: 股价在低位区间出现显著放量，可能是主力建仓信号
+category: momentum
+risk_level: medium
+
+# 综合分析评分段（CompositeScoringEngine 多策略加权）
+scoring:
+  score_weight: 15                  # 在组合评分中的权重
+  conditions:
+    price_near_low: true            # 价格处于近期低位区间
+    volume_ratio_min: 2.0           # 量比 ≥ 2 倍
+    consecutive_days: 2             # 连续放量天数

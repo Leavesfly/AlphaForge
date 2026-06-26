@@ -90,6 +90,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
       投资组合
     </div>
+    <div class="nav-item" data-page="paper-trading">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+      模拟交易
+    </div>
     <div class="nav-item" data-page="backtest">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       策略回测
@@ -274,29 +278,103 @@
   </div>
 </div>
 
+<!-- ===== Paper Trading ===== -->
+<div class="page" id="page-paper-trading">
+  <div class="page-header"><div class="page-header-left"><h2>模拟交易</h2><p>实时行情模拟下单 · 自动结算资金与持仓 · 零风险策略验证</p></div><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="openModal('modal-paper-account')">+ 创建模拟账户</button><button class="btn btn-outline btn-sm" onclick="resetPaperAccount()">重置账户</button></div></div>
+
+  <!-- 账户选择 -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="form-group" style="margin-bottom:0;min-width:200px"><label>选择账户</label><select class="form-select" id="paper-account-select" onchange="onPaperAccountChange()"><option value="">-- 请选择账户 --</option></select></div>
+      <button class="btn btn-outline btn-sm" onclick="refreshPaperPositions()" style="height:38px">刷新行情</button>
+    </div>
+  </div>
+
+  <!-- 资产概览 -->
+  <div class="grid grid-4" style="margin-bottom:20px">
+    <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:22px" id="paper-net-assets">¥0</div><div class="stat-label">净资产</div></div>
+    <div class="card stat-card accent-success"><div class="stat-value" style="font-size:22px" id="paper-cash">¥0</div><div class="stat-label">可用资金</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:22px" id="paper-positions-value">¥0</div><div class="stat-label">持仓市值</div></div>
+    <div class="card stat-card"><div class="stat-value" style="font-size:22px" id="paper-pnl">¥0</div><div class="stat-label">累计盈亏</div></div>
+  </div>
+
+  <!-- 融资信息 -->
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+      <div><span style="color:var(--text-dim)">融资负债:</span> <strong id="paper-loan-balance">¥0</strong></div>
+      <div><span style="color:var(--text-dim)">融资额度:</span> <strong id="paper-loan-limit">¥0</strong></div>
+      <div><span style="color:var(--text-dim)">可用额度:</span> <strong id="paper-available-loan">¥0</strong></div>
+    </div>
+  </div>
+
+  <!-- 下单 + 融资面板 -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+    <div class="card" style="flex:1;min-width:300px">
+      <div class="card-title">模拟下单</div>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:120px"><label>股票代码</label><input class="form-input" id="paper-order-code" placeholder="如 600519" /></div>
+        <div class="form-group" style="margin-bottom:0;width:120px"><label>数量（股）</label><input class="form-input" type="number" id="paper-order-qty" placeholder="100" step="100" value="100" /></div>
+        <button class="btn btn-success" style="height:38px" onclick="paperBuy()">买入</button>
+        <button class="btn btn-danger" style="height:38px" onclick="paperSell()">卖出</button>
+      </div>
+    </div>
+    <div class="card" style="min-width:280px">
+      <div class="card-title">融资操作</div>
+      <div style="display:flex;gap:12px;align-items:flex-end">
+        <div class="form-group" style="margin-bottom:0;flex:1"><label>金额</label><input class="form-input" type="number" id="paper-loan-amount" placeholder="50000" step="1000" /></div>
+        <button class="btn btn-primary" style="height:38px" onclick="paperBorrow()">借款</button>
+        <button class="btn btn-outline" style="height:38px" onclick="paperRepay()">归还</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 面板 -->
+  <div class="tabs-wrapper"><div class="tabs" data-tab-group="paper"><div class="tab active" data-tab="paper-positions">持仓</div><div class="tab" data-tab="paper-trades">交易记录</div></div></div>
+  <div class="tab-panel active" data-panel="paper-positions" data-group="paper">
+    <div class="card"><div class="card-title">当前持仓</div><div class="table-container"><table>
+      <thead><tr><th>股票</th><th>数量</th><th>成本价</th><th>现价</th><th>市值</th><th>盈亏</th><th>盈亏率</th><th>仓位</th></tr></thead>
+      <tbody id="paper-positions-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr></tbody>
+    </table></div></div>
+  </div>
+  <div class="tab-panel" data-panel="paper-trades" data-group="paper">
+    <div class="card"><div class="card-title">交易记录</div><div class="table-container"><table>
+      <thead><tr><th>日期</th><th>股票</th><th>方向</th><th>数量</th><th>价格</th><th>金额</th><th>手续费</th><th>税费</th><th>备注</th></tr></thead>
+      <tbody id="paper-trades-body"><tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr></tbody>
+    </table></div></div>
+  </div>
+</div>
+
 <!-- ===== Backtest ===== -->
 <div class="page" id="page-backtest">
-  <div class="page-header"><div class="page-header-left"><h2>策略回测</h2><p>历史数据验证策略 · AI 信号事后评估</p></div></div>
+  <div class="page-header"><div class="page-header-left"><h2>策略回测</h2><p>历史数据验证策略 · 净值曲线 · 回撤 · 买卖点</p></div></div>
   <div class="card" style="margin-bottom:20px">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
       <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px"><label>股票代码</label><input class="form-input" id="backtest-code" placeholder="600519" /></div>
-      <div class="form-group" style="margin-bottom:0;width:160px"><label>策略</label><select class="form-select" id="backtest-strategy"><option value="ma_golden_cross">均线金叉策略</option><option value="rsi_oversold">RSI 超卖反弹</option><option value="macd_divergence">MACD 背离</option><option value="bollinger_breakout">布林带突破</option></select></div>
-      <div class="form-group" style="margin-bottom:0;width:140px"><label>起始日期</label><input class="form-input" type="date" id="backtest-start" value="2023-01-01" /></div>
-      <div class="form-group" style="margin-bottom:0;width:140px"><label>结束日期</label><input class="form-input" type="date" id="backtest-end" value="2024-03-15" /></div>
+      <div class="form-group" style="margin-bottom:0;width:180px"><label>策略</label><select class="form-select" id="backtest-strategy"><option value="ma_golden_cross">均线金叉策略</option></select></div>
+      <div class="form-group" style="margin-bottom:0;width:140px"><label>起始日期</label><input class="form-input" type="date" id="backtest-start" /></div>
+      <div class="form-group" style="margin-bottom:0;width:140px"><label>结束日期</label><input class="form-input" type="date" id="backtest-end" /></div>
       <div class="form-group" style="margin-bottom:0;width:130px"><label>初始资金</label><input class="form-input" id="backtest-capital" value="100000" /></div>
       <button class="btn btn-primary" style="height:38px" onclick="runBacktest()">运行回测</button>
     </div>
   </div>
-  <div class="grid grid-4" style="margin-bottom:20px">
-    <div class="card stat-card accent-success"><div class="stat-value" style="font-size:20px">-</div><div class="stat-label">总收益率</div></div>
-    <div class="card stat-card accent-danger"><div class="stat-value" style="font-size:20px">-</div><div class="stat-label">最大回撤</div></div>
-    <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
-    <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:20px">-</div><div class="stat-label">胜率</div></div>
+  <div class="grid grid-4" style="margin-bottom:20px" id="backtest-summary-cards">
+    <div class="card stat-card accent-success"><div class="stat-value" id="bt-total-return" style="font-size:20px">-</div><div class="stat-label">总收益率</div></div>
+    <div class="card stat-card accent-danger"><div class="stat-value" id="bt-max-drawdown" style="font-size:20px">-</div><div class="stat-label">最大回撤</div></div>
+    <div class="card stat-card accent-primary"><div class="stat-value" id="bt-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-value" id="bt-win-rate" style="font-size:20px">-</div><div class="stat-label">胜率</div></div>
   </div>
-  <div class="card" style="margin-bottom:16px"><div class="card-title">回测净值曲线</div><div class="chart-box" id="chart-backtest"></div></div>
-  <div class="card"><div class="card-title">信号事后评估</div><div class="table-container"><table>
-    <thead><tr><th>日期</th><th>股票</th><th>动作</th><th>预期</th><th>实际</th><th>收益</th><th>评估</th><th>阶段</th></tr></thead>
-    <tbody><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录，请在上方运行回测</td></tr></tbody>
+  <div class="card" style="margin-bottom:16px"><div class="card-title">策略净值 vs 基准</div><div class="chart-box" id="chart-backtest"></div></div>
+  <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="card"><div class="card-title">回撤曲线</div><div class="chart-box-sm" id="chart-backtest-drawdown"></div></div>
+    <div class="card"><div class="card-title">月度收益</div><div class="chart-box-sm" id="chart-backtest-monthly"></div></div>
+  </div>
+  <div class="card" style="margin-bottom:16px"><div class="card-title">成交明细</div><div class="table-container"><table>
+    <thead><tr><th>日期</th><th>方向</th><th>价格</th><th>数量</th><th>金额</th><th>佣金</th><th>印花税</th><th>原因</th></tr></thead>
+    <tbody id="backtest-trades-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行回测后显示成交明细</td></tr></tbody>
+  </table></div></div>
+  <div class="card"><div class="card-title">历史回测记录</div><div class="table-container"><table>
+    <thead><tr><th>时间</th><th>股票</th><th>策略</th><th>收益</th><th>回撤</th><th>胜率</th><th>夏普</th><th>操作</th></tr></thead>
+    <tbody id="backtest-history-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录</td></tr></tbody>
   </table></div></div>
 </div>
 
@@ -416,6 +494,18 @@
     <div class="form-group"><label>监控范围</label><select class="form-select"><option>指定个股</option><option>自选股全部</option><option>全市场</option></select></div>
     <div class="form-group"><label>通知渠道</label><div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" checked> 微信</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox"> Email</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox" checked> Bark</label><label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="checkbox"> Webhook</label></div></div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-alert')">取消</button><button class="btn btn-primary" onclick="saveAlertRule()">保存规则</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-paper-account" onclick="if(event.target===this)closeModal('modal-paper-account')">
+  <div class="modal">
+    <div class="modal-header"><h3>创建模拟账户</h3><button class="modal-close" onclick="closeModal('modal-paper-account')">×</button></div>
+    <div class="form-row">
+      <div class="form-group"><label>账户名称</label><input class="form-input" id="paper-account-name" placeholder="如：A股模拟账户" /></div>
+      <div class="form-group"><label>市场</label><select class="form-select" id="paper-account-market"><option value="cn">A股</option><option value="hk">港股</option><option value="us">美股</option></select></div>
+    </div>
+    <div class="form-group"><label>初始资金（元）</label><input class="form-input" type="number" id="paper-account-capital" value="100000" step="10000" /></div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-paper-account')">取消</button><button class="btn btn-primary" onclick="createPaperAccount()">创建</button></div>
   </div>
 </div>
 

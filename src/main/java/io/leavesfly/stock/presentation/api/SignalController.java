@@ -1,5 +1,6 @@
 package io.leavesfly.stock.presentation.api;
 
+import io.leavesfly.stock.application.service.DecisionSignalOutcomeService;
 import io.leavesfly.stock.application.service.DecisionSignalService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,9 +15,12 @@ import java.util.Map;
 public class SignalController {
 
     private final DecisionSignalService signalService;
+    private final DecisionSignalOutcomeService outcomeService;
 
-    public SignalController(DecisionSignalService signalService) {
+    public SignalController(DecisionSignalService signalService,
+                            DecisionSignalOutcomeService outcomeService) {
         this.signalService = signalService;
+        this.outcomeService = outcomeService;
     }
 
     /** 决策信号列表 */
@@ -43,8 +47,13 @@ public class SignalController {
     @PostMapping("/{id}/feedback")
     public ResponseEntity<Map<String, Object>> signalFeedback(
             @PathVariable Long id, @RequestBody Map<String, Object> body) {
-        String feedback = (String) body.get("feedback");
+        Map<String, Object> request = new java.util.LinkedHashMap<>();
+        request.put("feedback_value", body.getOrDefault("feedback", body.get("feedback_value")));
+        request.put("reason_code", body.get("reason_code"));
+        request.put("note", body.get("note"));
+        request.put("source", body.getOrDefault("source", "web"));
+        Map<String, Object> saved = outcomeService.saveFeedback(id, request);
         signalService.updateSignalStatus(id, "verified");
-        return ResponseEntity.ok(Map.of("status", "ok", "feedback", feedback != null ? feedback : "none"));
+        return ResponseEntity.ok(saved);
     }
 }

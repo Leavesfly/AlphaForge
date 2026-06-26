@@ -1,0 +1,29 @@
+# ──────────────────────────────────────────────────────────────
+# 动量策略（智能选股）
+# 按当日涨跌幅分档计分，规则按顺序匹配，命中第一条即停止
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: momentum
+label: 动量策略
+description: 近期涨幅强势的标的筛选
+category: momentum
+risk_level: high
+
+screening:
+  parameters:
+    strong_change_pct: 1.5   # 「强势」涨幅门槛（%）
+
+  # 条件公式规则（when + formula），自上而下匹配
+  scoring_rules:
+    # 涨幅 > 1.5%：得分 = 50 + 涨幅 × 8
+    - when: change_pct_gt
+      threshold: 1.5
+      formula: "50 + change_pct * 8"
+    # 涨幅 > 0%（弱势上涨）：得分 = 30 + 涨幅 × 12
+    - when: change_pct_gt
+      threshold: 0
+      formula: "30 + change_pct * 12"
+
+  reason_templates:
+    high: 强势突破   # 分数 > 70
+    low: 趋势向好    # 分数 ≤ 70

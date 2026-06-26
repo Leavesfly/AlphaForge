@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────
+# 事件驱动策略
+# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 逻辑：重大利好事件触发买入，持仓期满或止损卖出
+# 注意：event_trigger 条件类型尚未完全实现
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: event_driven
+label: 事件驱动
+description: 基于重大事件（财报/政策/行业变化）驱动的交易
+category: event
+risk_level: high
+
+backtest:
+  parameters:
+    event_types: [earnings, policy, industry]   # 关注的事件类型
+    holding_days: 5                             # 默认持仓天数
+
+  entry_conditions:
+    - type: event_trigger
+      category: positive                        # 正面事件触发（引擎待实现）
+
+  exit_conditions:
+    - type: holding_days
+      max: 5                                    # 持仓满 5 日卖出
+    - type: stop_loss
+      pct: -5
+
+  position_size: 0.50
+
+scoring:
+  score_weight: 15
+  conditions:
+    has_major_event: true           # 存在重大事件
+    event_freshness_days: 3         # 事件发生不超过 3 日

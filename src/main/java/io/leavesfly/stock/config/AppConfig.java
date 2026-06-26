@@ -101,6 +101,11 @@ public class AppConfig {
     private String agentMode = "standard"; // quick/standard/full/specialist
     private int agentMaxIterations = 10;
 
+    // ========== 评分配置 ==========
+    private double llmScoreBlendRatio = 0.6;
+    private int buyScoreThreshold = 70;
+    private int sellScoreThreshold = 30;
+
     @PostConstruct
     public void init() {
         try {
@@ -258,6 +263,10 @@ public class AppConfig {
         // Agent配置
         agentMode = getEnv("AGENT_MODE", "standard");
         agentMaxIterations = getIntEnv("AGENT_MAX_ITERATIONS", 10);
+
+        llmScoreBlendRatio = getDoubleEnv("LLM_SCORE_BLEND_RATIO", 0.6);
+        buyScoreThreshold = getIntEnv("BUY_SCORE_THRESHOLD", 70);
+        sellScoreThreshold = getIntEnv("SELL_SCORE_THRESHOLD", 30);
     }
 
     /**
@@ -423,10 +432,14 @@ public class AppConfig {
     public boolean isAuthEnabled() { return authEnabled; }
     public void setAuthPasswordRuntime(String password) { this.authPassword = password; }
     public void setAuthEnabledRuntime(boolean enabled) { this.authEnabled = enabled; }
+    public void setAuthSecretRuntime(String secret) { this.authSecret = secret; }
     public String getScheduleCron() { return scheduleCron; }
     public String getTimezone() { return timezone; }
     public String getAgentMode() { return agentMode; }
     public int getAgentMaxIterations() { return agentMaxIterations; }
+    public double getLlmScoreBlendRatio() { return llmScoreBlendRatio; }
+    public int getBuyScoreThreshold() { return buyScoreThreshold; }
+    public int getSellScoreThreshold() { return sellScoreThreshold; }
     public String getEmailSmtpHost() { return emailSmtpHost; }
     public int getEmailSmtpPort() { return emailSmtpPort; }
     public String getEmailUser() { return emailUser; }

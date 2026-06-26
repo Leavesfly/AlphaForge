@@ -779,32 +779,6 @@ function saveAlertRule() {
     .catch(() => showToast('创建失败','error'));
 }
 
-/** 回测调用API */
-function runBacktest() {
-  const page = document.getElementById('page-backtest');
-  const inputs = page.querySelectorAll('.form-input, .form-select');
-  const stockCode = inputs[0]?.value?.trim();
-  if (!stockCode) { showToast('请输入股票代码', 'warning'); return; }
-  const strategy = inputs[1]?.value || 'ma_golden_cross';
-  const startDate = inputs[2]?.value || '';
-  const endDate = inputs[3]?.value || '';
-  const capital = parseFloat((inputs[4]?.value||'100000').replace(/,/g,'')) || 100000;
-  showToast('回测任务已提交...', 'info');
-  fetch('/api/v1/backtest/run', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({stock_code: stockCode, strategy, start_date: startDate, end_date: endDate, initial_capital: capital})
-  }).then(r => r.json()).then(data => {
-    if (data.status === 'failed') { showToast(data.message || '回测失败', 'error'); return; }
-    // 更新统计卡片
-    const cards = document.querySelectorAll('#page-backtest .stat-card');
-    if (cards[0]) cards[0].querySelector('.stat-value').textContent = (data.totalReturnPct!=null?data.totalReturnPct.toFixed(1):'-')+'%';
-    if (cards[1]) cards[1].querySelector('.stat-value').textContent = (data.maxDrawdownPct!=null?'-'+data.maxDrawdownPct.toFixed(1):'-')+'%';
-    if (cards[2]) cards[2].querySelector('.stat-value').textContent = data.sharpeRatio!=null?data.sharpeRatio.toFixed(2):'-';
-    if (cards[3]) cards[3].querySelector('.stat-value').textContent = (data.winRatePct!=null?data.winRatePct.toFixed(1):'-')+'%';
-    showToast('回测完成', 'success');
-  }).catch(err => showToast('回测失败: '+err.message, 'error'));
-}
-
 /** 投资组合加载 */
 function loadPortfolio() {
   // 加载概要
@@ -934,35 +908,313 @@ function loadPortfolio() {
 }
 
 // ===== Backtest =====
-function loadBacktestHistory() {
-  fetch('/api/v1/backtest/history').then(r => r.json()).then(records => {
-    const tbody = document.querySelector('#page-backtest table tbody');
-    if (!tbody) return;
-    if (!records || !records.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录，请在上方运行回测</td></tr>'; return; }
-    tbody.innerHTML = records.map(r => `<tr><td>${r.createdAt||r.created_at||'-'}</td><td>${r.stockName||r.stock_name||''} ${r.stockCode||r.stock_code||''}</td><td><span class="badge badge-info">${r.strategy||'-'}</span></td><td>${r.totalReturnPct||r.total_return_pct||'-'}%</td><td>${r.maxDrawdownPct||r.max_drawdown_pct||'-'}%</td><td>${r.winRatePct||r.win_rate_pct||'-'}%</td><td>${r.sharpeRatio||r.sharpe_ratio||'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('查看详情','info')">详情</button></td></tr>`).join('');
+function initBacktestPage() {
+  const start = document.getElementById('backtest-start');
+  const end = document.getElementById('backtest-end');
+  if (start && !start.value) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 12);
+    start.value = d.toISOString().slice(0, 10);
+  }
+  if (end && !end.value) {
+    end.value = new Date().toISOString().slice(0, 10);
+  }
+  loadBacktestStrategies();
+  loadBacktestHistory();
+}
+
+function loadBacktestStrategies() {
+  fetch('/api/v1/strategies?capability=backtest').then(r => r.json()).then(resp => {
+    const list = resp.strategies || resp;
+    const select = document.getElementById('backtest-strategy');
+    if (!select || !Array.isArray(list) || !list.length) return;
+    select.innerHTML = list
+      .filter(s => s.available !== false)
+      .map(s => `<option value="${s.id}">${s.label || s.id}</option>`)
+      .join('');
   }).catch(() => {});
 }
+
+function viewBacktestVisualization(recordId) {
+  if (!recordId) return;
+  fetch(`/api/v1/backtest/${recordId}/visualization`).then(r => {
+    if (!r.ok) throw new Error('not found');
+    return r.json();
+  }).then(data => {
+    renderBacktestVisualization(data);
+    showToast('已加载回测可视化', 'success');
+  }).catch(() => showToast('加载可视化数据失败', 'error'));
+}
+
+function loadBacktestHistory() {
+  fetch('/api/v1/backtest/history').then(r => r.json()).then(records => {
+    const tbody = document.getElementById('backtest-history-body');
+    if (!tbody) return;
+    if (!records || !records.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录，请在上方运行回测</td></tr>';
+      return;
+    }
+    tbody.innerHTML = records.map(r => {
+      const id = r.id;
+      const created = (r.createdAt || r.created_at || '-').toString().replace('T', ' ').slice(0, 16);
+      const code = r.stockCode || r.stock_code || '';
+      const name = r.stockName || r.stock_name || '';
+      const strategy = r.strategyName || r.strategy_name || '-';
+      const ret = r.totalReturnPct ?? r.total_return_pct;
+      const dd = r.maxDrawdownPct ?? r.max_drawdown_pct;
+      const win = r.winRatePct ?? r.win_rate_pct;
+      const sharpe = r.sharpeRatio ?? r.sharpe_ratio;
+      return `<tr>
+        <td>${created}</td>
+        <td><strong>${name}</strong> ${code}</td>
+        <td><span class="badge badge-info">${strategy}</span></td>
+        <td class="${Number(ret) >= 0 ? 'text-up' : 'text-down'}">${ret != null ? Number(ret).toFixed(2) + '%' : '-'}</td>
+        <td>${dd != null ? '-' + Number(dd).toFixed(2) + '%' : '-'}</td>
+        <td>${win != null ? Number(win).toFixed(1) + '%' : '-'}</td>
+        <td>${sharpe != null ? Number(sharpe).toFixed(2) : '-'}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="viewBacktestVisualization(${id})">查看图表</button></td>
+      </tr>`;
+    }).join('');
+    if (records[0]?.id) {
+      viewBacktestVisualization(records[0].id);
+    }
+  }).catch(() => {});
+}
+
 function runBacktest() {
   const code = document.getElementById('backtest-code')?.value?.trim();
   if (!code) { showToast('请输入股票代码', 'warning'); return; }
   const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
   const startDate = document.getElementById('backtest-start')?.value;
   const endDate = document.getElementById('backtest-end')?.value;
-  const capital = parseFloat((document.getElementById('backtest-capital')?.value||'100000').replace(/,/g,''));
+  const capital = parseFloat((document.getElementById('backtest-capital')?.value || '100000').replace(/,/g, ''));
   showToast('回测运行中...', 'info');
   fetch('/api/v1/backtest/run', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stock_code: code, strategy, start_date: startDate, end_date: endDate, initial_capital: capital })
   }).then(r => r.json()).then(data => {
+    if (data.status === 'failed') { showToast(data.message || '回测失败', 'error'); return; }
     if (data.error) { showToast(data.error, 'error'); return; }
-    const cards = document.querySelectorAll('#page-backtest .stat-card');
-    if (cards[0]) cards[0].querySelector('.stat-value').textContent = Number(data.totalReturnPct||data.total_return_pct||0).toFixed(1) + '%';
-    if (cards[1]) cards[1].querySelector('.stat-value').textContent = Number(data.maxDrawdownPct||data.max_drawdown_pct||0).toFixed(1) + '%';
-    if (cards[2]) cards[2].querySelector('.stat-value').textContent = data.sharpeRatio||data.sharpe_ratio||'-';
-    if (cards[3]) cards[3].querySelector('.stat-value').textContent = Number(data.winRatePct||data.win_rate_pct||0).toFixed(1) + '%';
     showToast('回测完成', 'success');
     loadBacktestHistory();
+    if (data.id) {
+      viewBacktestVisualization(data.id);
+    }
   }).catch(() => showToast('回测请求失败', 'error'));
+}
+
+// ===== Paper Trading =====
+let currentPaperAccountId = null;
+
+function loadPaperTrading() {
+  fetch('/api/v1/paper-trading/accounts').then(r => r.json()).then(accounts => {
+    const select = document.getElementById('paper-account-select');
+    if (!select) return;
+    if (!accounts.length) {
+      select.innerHTML = '<option value="">-- 暂无模拟账户，请创建 --</option>';
+      resetPaperUI();
+      return;
+    }
+    select.innerHTML = '<option value="">-- 请选择账户 --</option>' +
+      accounts.map(a => `<option value="${a.id}">${a.name} (资金¥${Number(a.cashBalance||0).toLocaleString()})</option>`).join('');
+    // 自动选择第一个账户
+    if (currentPaperAccountId && accounts.some(a => a.id == currentPaperAccountId)) {
+      select.value = currentPaperAccountId;
+      renderPaperAccountDetail(currentPaperAccountId);
+    }
+  }).catch(() => {
+    const select = document.getElementById('paper-account-select');
+    if (select) select.innerHTML = '<option value="">-- 加载失败 --</option>';
+  });
+}
+
+function onPaperAccountChange() {
+  const select = document.getElementById('paper-account-select');
+  if (!select) return;
+  const accountId = select.value;
+  currentPaperAccountId = accountId || null;
+  if (accountId) {
+    renderPaperAccountDetail(accountId);
+  } else {
+    resetPaperUI();
+  }
+}
+
+function resetPaperUI() {
+  document.getElementById('paper-net-assets').textContent = '¥0';
+  document.getElementById('paper-cash').textContent = '¥0';
+  document.getElementById('paper-positions-value').textContent = '¥0';
+  document.getElementById('paper-pnl').textContent = '¥0';
+  document.getElementById('paper-pnl').className = 'stat-value';
+  document.getElementById('paper-loan-balance').textContent = '¥0';
+  document.getElementById('paper-loan-limit').textContent = '¥0';
+  document.getElementById('paper-available-loan').textContent = '¥0';
+  document.getElementById('paper-positions-body').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr>';
+  document.getElementById('paper-trades-body').innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr>';
+}
+
+function renderPaperAccountDetail(accountId) {
+  fetch(`/api/v1/paper-trading/accounts/${accountId}`).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    const cash = Number(data.cashBalance || 0);
+    const posVal = Number(data.positionsValue || 0);
+    const netAssets = Number(data.netAssets || 0);
+    const pnl = Number(data.totalProfitLoss || 0);
+    const loanBal = Number(data.loanBalance || 0);
+    const loanLim = Number(data.loanLimit || 0);
+    const availLoan = Number(data.availableLoan || 0);
+    document.getElementById('paper-net-assets').textContent = '¥' + netAssets.toLocaleString();
+    document.getElementById('paper-cash').textContent = '¥' + cash.toLocaleString();
+    document.getElementById('paper-positions-value').textContent = '¥' + posVal.toLocaleString();
+    document.getElementById('paper-loan-balance').textContent = '¥' + loanBal.toLocaleString();
+    document.getElementById('paper-loan-limit').textContent = '¥' + loanLim.toLocaleString();
+    document.getElementById('paper-available-loan').textContent = '¥' + availLoan.toLocaleString();
+    const pnlEl = document.getElementById('paper-pnl');
+    pnlEl.textContent = (pnl >= 0 ? '+' : '') + '¥' + Math.abs(pnl).toLocaleString();
+    pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'text-up' : 'text-down');
+    // 渲染持仓
+    const posBody = document.getElementById('paper-positions-body');
+    const positions = data.positions || [];
+    if (!positions.length) {
+      posBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无持仓</td></tr>';
+    } else {
+      posBody.innerHTML = positions.map(p => {
+        const pnlVal = Number(p.profitLoss || 0);
+        const pnlPct = Number(p.profitLossPct || 0);
+        const cls = pnlVal >= 0 ? 'text-up' : 'text-down';
+        return `<tr><td><strong>${p.stockName || p.stockCode}</strong> ${p.stockCode}</td><td>${p.quantity || 0}</td><td>${Number(p.costPrice || 0).toFixed(2)}</td><td>${Number(p.currentPrice || 0).toFixed(2)}</td><td>¥${Number(p.marketValue || 0).toLocaleString()}</td><td class="${cls}">${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(0)}</td><td class="${cls}">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%</td><td>${Number(p.positionPct || 0).toFixed(1)}%</td></tr>`;
+      }).join('');
+    }
+  }).catch(() => showToast('加载账户详情失败', 'error'));
+  // 加载交易记录
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/trades`).then(r => r.json()).then(trades => {
+    const tradeBody = document.getElementById('paper-trades-body');
+    if (!trades || !trades.length) {
+      tradeBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无交易记录</td></tr>';
+      return;
+    }
+    tradeBody.innerHTML = trades.map(t => {
+      const sideBadge = t.side === 'buy' ? '<span class="badge badge-success">买入</span>' : '<span class="badge badge-danger">卖出</span>';
+      const amount = Number(t.quantity || 0) * Number(t.price || 0);
+      return `<tr><td>${t.tradeDate || '-'}</td><td>${t.note || t.symbol || ''}</td><td>${sideBadge}</td><td>${t.quantity || 0}</td><td>${Number(t.price || 0).toFixed(2)}</td><td>¥${amount.toLocaleString()}</td><td>${Number(t.fee || 0).toFixed(2)}</td><td>${Number(t.tax || 0).toFixed(2)}</td><td>${t.note || ''}</td></tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
+function createPaperAccount() {
+  const name = document.getElementById('paper-account-name')?.value?.trim();
+  if (!name) { showToast('请输入账户名称', 'warning'); return; }
+  const market = document.getElementById('paper-account-market')?.value || 'cn';
+  const capital = parseFloat(document.getElementById('paper-account-capital')?.value || '100000');
+  fetch('/api/v1/paper-trading/accounts', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name, market, initialCapital: capital })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    closeModal('modal-paper-account');
+    showToast('模拟账户创建成功', 'success');
+    currentPaperAccountId = data.id;
+    loadPaperTrading();
+  }).catch(() => showToast('创建失败', 'error'));
+}
+
+function paperBuy() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  const stockCode = document.getElementById('paper-order-code')?.value?.trim();
+  if (!stockCode) { showToast('请输入股票代码', 'warning'); return; }
+  const quantity = parseInt(document.getElementById('paper-order-qty')?.value || '0');
+  if (!quantity || quantity <= 0) { showToast('请输入有效数量', 'warning'); return; }
+  showToast('买入下单中...', 'info');
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/buy`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stockCode, quantity })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`买入成功: ${data.stockName} ${data.quantity}股 @${Number(data.price).toFixed(2)} 手续费${Number(data.fee).toFixed(2)}`, 'success');
+    renderPaperAccountDetail(accountId);
+    loadPaperTrading();
+  }).catch(() => showToast('买入失败', 'error'));
+}
+
+function paperSell() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  const stockCode = document.getElementById('paper-order-code')?.value?.trim();
+  if (!stockCode) { showToast('请输入股票代码', 'warning'); return; }
+  const quantity = parseInt(document.getElementById('paper-order-qty')?.value || '0');
+  if (!quantity || quantity <= 0) { showToast('请输入有效数量', 'warning'); return; }
+  showToast('卖出下单中...', 'info');
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/sell`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stockCode, quantity })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`卖出成功: ${data.stockName} ${data.quantity}股 @${Number(data.price).toFixed(2)} 手续费${Number(data.fee).toFixed(2)} 税${Number(data.tax).toFixed(2)}`, 'success');
+    renderPaperAccountDetail(accountId);
+    loadPaperTrading();
+  }).catch(() => showToast('卖出失败', 'error'));
+}
+
+function refreshPaperPositions() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  showToast('刷新行情中...', 'info');
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/positions/refresh`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { showToast(data.error, 'error'); return; }
+      showToast('持仓行情已刷新', 'success');
+      renderPaperAccountDetail(accountId);
+    }).catch(() => showToast('刷新失败', 'error'));
+}
+
+function resetPaperAccount() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  if (!confirm('确认重置该模拟账户？所有持仓和交易记录将被清空，资金将重置。')) return;
+  const capital = parseFloat(prompt('请输入重置后的资金金额:', '100000') || '100000');
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/reset`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ capital })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('账户已重置', 'success');
+    renderPaperAccountDetail(accountId);
+    loadPaperTrading();
+  }).catch(() => showToast('重置失败', 'error'));
+}
+
+function paperBorrow() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  const amount = parseFloat(document.getElementById('paper-loan-amount')?.value || '0');
+  if (!amount || amount <= 0) { showToast('请输入借款金额', 'warning'); return; }
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/borrow`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ amount })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`借款成功: ¥${data.amount} 当前负债¥${data.loanBalance}`, 'success');
+    renderPaperAccountDetail(accountId);
+    loadPaperTrading();
+  }).catch(() => showToast('借款失败', 'error'));
+}
+
+function paperRepay() {
+  const accountId = currentPaperAccountId;
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  const amount = parseFloat(document.getElementById('paper-loan-amount')?.value || '0');
+  if (!amount || amount <= 0) { showToast('请输入归还金额', 'warning'); return; }
+  fetch(`/api/v1/paper-trading/accounts/${accountId}/repay`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ amount })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`归还成功: ¥${data.amount} 剩余负债¥${data.loanBalance}`, 'success');
+    renderPaperAccountDetail(accountId);
+    loadPaperTrading();
+  }).catch(() => showToast('归还失败', 'error'));
 }
 
 // ===== 页面导航时加载数据 =====
@@ -974,10 +1226,11 @@ navigateTo = function(page) {
     case 'analysis': loadHistory(); break;
     case 'signals': loadSignals(); break;
     case 'portfolio': loadPortfolio(); break;
+    case 'paper-trading': loadPaperTrading(); break;
     case 'watchlist': loadWatchlist(); break;
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
-    case 'backtest': loadBacktestHistory(); break;
+    case 'backtest': initBacktestPage(); break;
   }
 };
 

@@ -1,17 +1,22 @@
-package io.leavesfly.stock.presentation.api;
+package io.leavesfly.stock.application.service;
 
+import io.leavesfly.stock.application.strategy.StrategyCatalog;
+import io.leavesfly.stock.application.strategy.StrategyCatalogLoader;
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.application.service.AnalysisHistoryService;
-import io.leavesfly.stock.application.service.DecisionSignalService;
 import io.leavesfly.stock.infrastructure.llm.LlmUsageTracker;
+import io.leavesfly.stock.infrastructure.persistence.AnalysisTaskRepository;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.*;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
- * 系统管理 API
- * 健康检查、系统配置、LLM用量统计、仪表盘数据
+ * 系统管理 API — 扩展健康检查。
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -21,26 +26,48 @@ public class SystemController {
     private final AnalysisHistoryService historyService;
     private final DecisionSignalService signalService;
     private final LlmUsageTracker usageTracker;
+    private final DataSource dataSource;
+    private final StrategyCatalog strategyCatalog;
+    private final AnalysisTaskRepository analysisTaskRepository;
 
     public SystemController(AppConfig config, AnalysisHistoryService historyService,
-                           DecisionSignalService signalService, LlmUsageTracker usageTracker) {
+                           DecisionSignalService signalService, LlmUsageTracker usageTracker,
+                           DataSource dataSource, StrategyCatalog strategyCatalog,
+                           AnalysisTaskRepository analysisTaskRepository) {
         this.config = config;
         this.historyService = historyService;
         this.signalService = signalService;
         this.usageTracker = usageTracker;
+        this.dataSource = dataSource;
+        this.strategyCatalog = strategyCatalog;
+        this.analysisTaskRepository = analysisTaskRepository;
     }
 
-    /** 健康检查 */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("status", "ok");
         result.put("service", "daily-stock-analysis");
         result.put("timestamp", System.currentTimeMillis());
+
+        Map<String, Object> checks = new LinkedHashMap<>();
+        checks.put("database", checkDatabase());
+        checks.put("strategies_loaded", strategyCatalog.listAll().size());
+        checks.put("strategies_available", strategyCatalog.listAll().stream().filter(s -> s.isAvailable()).count());
+        checks.put("llm_configured", config.getLlmApiKey() != null && !config.getLlmApiKey().isEmpty());
+        checks.put("pending_tasks", analysisTaskRepository.findByStatus("running").size());
+        result.put("checks", checks);
         return ResponseEntity.ok(result);
     }
 
-    /** 系统配置概要 */
+    private String checkDatabase() {
+        try (Connection conn = dataSource.getConnection()) {
+            return conn.isValid(2) ? "ok" : "degraded";
+        } catch (Exception e) {
+            return "error";
+        }
+    }
+
     @GetMapping("/system-config")
     public ResponseEntity<Map<String, Object>> systemConfig() {
         Map<String, Object> cfg = new LinkedHashMap<>();
@@ -53,10 +80,11 @@ public class SystemController {
         cfg.put("stock_count", config.getStockList().size());
         cfg.put("notification_channels", config.getNotificationChannels());
         cfg.put("auth_enabled", config.isAuthEnabled());
+        cfg.put("buy_score_threshold", config.getBuyScoreThreshold());
+        cfg.put("sell_score_threshold", config.getSellScoreThreshold());
         return ResponseEntity.ok(cfg);
     }
 
-    /** LLM用量统计 */
     @GetMapping("/usage")
     public ResponseEntity<Map<String, Object>> usage() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -70,7 +98,6 @@ public class SystemController {
         return ResponseEntity.ok(result);
     }
 
-    /** 仪表盘统计数据 */
     @GetMapping("/dashboard/stats")
     public ResponseEntity<Map<String, Object>> dashboardStats() {
         Map<String, Object> stats = new LinkedHashMap<>();

@@ -13,6 +13,12 @@ public class PortfolioAccount {
     private String broker;
     private String market;
     private String baseCurrency;
+    /** 当前现金余额 */
+    private Double cashBalance;
+    /** 当前融资负债 */
+    private Double loanBalance;
+    /** 融资额度上限 */
+    private Double loanLimit;
     private String ownerId;
     private Boolean isActive;
     private LocalDateTime createdAt;
@@ -29,6 +35,12 @@ public class PortfolioAccount {
     public void setMarket(String market) { this.market = market; }
     public String getBaseCurrency() { return baseCurrency; }
     public void setBaseCurrency(String baseCurrency) { this.baseCurrency = baseCurrency; }
+    public Double getCashBalance() { return cashBalance; }
+    public void setCashBalance(Double cashBalance) { this.cashBalance = cashBalance; }
+    public Double getLoanBalance() { return loanBalance; }
+    public void setLoanBalance(Double loanBalance) { this.loanBalance = loanBalance; }
+    public Double getLoanLimit() { return loanLimit; }
+    public void setLoanLimit(Double loanLimit) { this.loanLimit = loanLimit; }
     public String getOwnerId() { return ownerId; }
     public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
     public Boolean getIsActive() { return isActive; }

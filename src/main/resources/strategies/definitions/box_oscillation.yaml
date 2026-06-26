@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────
+# 箱体震荡策略
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
+# 逻辑：箱体下沿低吸、上沿高抛，跌破箱体止损
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: box_oscillation
+label: 箱体震荡
+description: 识别箱体整理形态，在箱体下沿买入、上沿卖出
+category: mean_reversion
+risk_level: low
+
+backtest:
+  parameters:
+    lookback_days: 20             # 箱体识别回溯天数
+    box_threshold_pct: 10         # 箱体振幅上限参考（%）
+
+  entry_conditions:
+    - type: near_box_low
+      tolerance_pct: 2              # 收盘价距箱体下沿 2% 以内买入
+
+  exit_conditions:
+    - type: near_box_high
+      tolerance_pct: 2              # 距箱体上沿 2% 以内卖出
+    - type: box_break_down
+      pct: -3                       # 跌破箱体下沿 3% 止损
+
+  position_size: 0.70
+
+scoring:
+  score_weight: 10
+  conditions:
+    range_days: 20
+    amplitude_max_pct: 15           # 箱体振幅不超过 15%
+    breakout_volume_ratio: 1.8      # 突破时量比

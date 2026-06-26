@@ -48,6 +48,10 @@
         DELETE FROM portfolio_trades WHERE id = #{id}
     </delete>
 
+    <delete id="deleteByAccountId">
+        DELETE FROM portfolio_trades WHERE account_id = #{accountId}
+    </delete>
+
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM portfolio_trades
     </select>

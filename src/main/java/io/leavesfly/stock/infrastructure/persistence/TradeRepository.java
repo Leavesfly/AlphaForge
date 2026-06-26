@@ -27,6 +27,8 @@ public interface TradeRepository {
 
     void deleteById(@Param("id") Long id);
 
+    void deleteByAccountId(@Param("accountId") Long accountId);
+
     long count();
 
     default PortfolioTrade save(PortfolioTrade trade) {

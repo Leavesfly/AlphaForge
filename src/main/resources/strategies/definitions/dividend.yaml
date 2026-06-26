@@ -1,0 +1,31 @@
+# ──────────────────────────────────────────────────────────────
+# 高股息策略（智能选股）
+# 股息率越高分越高，适合稳健分红型标的
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: dividend
+label: 高股息
+description: 股息率 > 3% 的稳健分红标的
+category: dividend
+risk_level: low
+
+screening:
+  parameters:
+    min_dividend_yield: 3   # 股息率合格线（%）
+
+  # 公式（operator: gt）：得分 = 实际值 × weight，越高越好
+  scoring_rules:
+    - metric: dividend_yield   # 兼容行情字段 dy
+      operator: gt              # 大于阈值才计分
+      threshold: 3              # 股息率 > 3%
+      weight: 15                # 得分 = 股息率 × 15
+
+  reason_templates:
+    high: 高股息稳健标的
+    low: 分红较好
+
+  # 没有股息率字段时走兜底（35~75 分）
+  fallback:
+    metrics: [dividend_yield]
+    score_min: 35
+    score_max: 75

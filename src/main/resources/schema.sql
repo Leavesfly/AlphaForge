@@ -208,13 +208,16 @@ CREATE TABLE IF NOT EXISTS decision_signal_feedback (
 -- ========== 投资组合系统 ==========
 -- 支持多账户、多市场的持仓管理，包含交易记录、资金流水、公司行动
 
--- 投资账户表：一个用户可有多个账户（如 A 股户、港股户）
+-- 投资账户表：管理模拟交易账户的现金余额与融资
 CREATE TABLE IF NOT EXISTS portfolio_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(100) NOT NULL,                 -- 账户名称（用户自定义）
-    broker VARCHAR(50),                         -- 券商名称
+    broker VARCHAR(50),                         -- 券商名称（记录用，不对接）
     market VARCHAR(10),                         -- 主要市场: cn/us/hk
     base_currency VARCHAR(10) DEFAULT 'CNY',    -- 基础货币: CNY/USD/HKD
+    cash_balance REAL DEFAULT 0,                -- 当前现金余额
+    loan_balance REAL DEFAULT 0,                -- 当前融资负债
+    loan_limit REAL DEFAULT 0,                  -- 融资额度上限
     owner_id VARCHAR(50),                       -- 所属用户 ID（预留多用户扩展）
     is_active INTEGER DEFAULT 1,                -- 是否活跃: 1=活跃, 0=已归档
     created_at TIMESTAMP,

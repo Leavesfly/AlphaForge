@@ -1,0 +1,32 @@
+# ──────────────────────────────────────────────────────────────
+# 价值成长策略（智能选股）
+# 核心指标 PEG = PE ÷ 预估增速，由引擎现场计算
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: value_growth
+label: 价值成长
+description: PEG < 1.5 的成长价值兼具标的
+category: value
+risk_level: medium
+
+screening:
+  parameters:
+    peg_max: 1.5                  # PEG 合格线
+    growth_estimate_offset: 15  # 预估增速 ≈ 涨跌幅 + 15（简化估算）
+
+  # PEG 越低分越高：得分 = (1.5 - PEG) × 60
+  scoring_rules:
+    - metric: peg       # 引擎计算：PE ÷ max(涨跌幅 + offset, 5)
+      operator: lt
+      threshold: 1.5
+      weight: 60
+
+  reason_templates:
+    high: 成长性突出
+    low: 价值成长兼具
+
+  # 没有 PE 时走兜底（30~80 分）
+  fallback:
+    metrics: [pe]
+    score_min: 30
+    score_max: 80

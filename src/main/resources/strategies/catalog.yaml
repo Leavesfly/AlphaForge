@@ -1,0 +1,133 @@
+# ──────────────────────────────────────────────────────────────
+# 策略总目录（catalog）
+#
+# 加载顺序：本文件 → definitions/{id}.yaml
+# 引擎对应关系：
+#   backtest  → BacktestSignalEngine（历史 K 线回测）
+#   screening → ScreeningScoreEngine（实时行情选股）
+#   scoring   → CompositeScoringEngine（综合分析加权评分）
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+
+# 能力说明
+capabilities:
+  backtest: 历史回测（入场/出场信号模拟）
+  screening: 智能选股（AlphaSift 全市场打分筛选）
+  scoring: 综合分析（多策略加权评分，CompositeScoringEngine）
+
+# 策略分类（中文标签）
+categories:
+  trend_following: 趋势跟踪
+  momentum: 动量
+  pullback: 回调
+  mean_reversion: 均值回归
+  pattern: 形态
+  contrarian: 逆向
+  event: 事件驱动
+  hot_theme: 热点题材
+  fundamental: 基本面
+  value: 价值
+  dividend: 股息
+
+# runtime 状态说明：
+#   implemented — 引擎已完整支持 YAML 中定义的条件
+#   partial     — 部分条件类型尚未实现（如 wave_position、sentiment_extreme）
+#   planned     — 仅配置定义，引擎尚未实现
+strategies:
+  # ── 回测策略 ──────────────────────────────────────────────
+  ma_golden_cross:
+    file: definitions/ma_golden_cross.yaml
+    capabilities: [backtest]
+    runtime: implemented
+
+  volume_breakout:
+    file: definitions/volume_breakout.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  bull_trend:
+    file: definitions/bull_trend.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  shrink_pullback:
+    file: definitions/shrink_pullback.yaml
+    capabilities: [backtest, scoring]
+    runtime: implemented
+
+  box_oscillation:
+    file: definitions/box_oscillation.yaml
+    capabilities: [backtest, scoring]
+    runtime: implemented
+
+  dragon_head:
+    file: definitions/dragon_head.yaml
+    capabilities: [backtest, scoring]
+    runtime: implemented
+
+  wave_theory:
+    file: definitions/wave_theory.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  emotion_cycle:
+    file: definitions/emotion_cycle.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  event_driven:
+    file: definitions/event_driven.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  growth_quality:
+    file: definitions/growth_quality.yaml
+    capabilities: [backtest, scoring]
+    runtime: partial
+
+  # ── 综合评分策略（scoring 段，CompositeScoringEngine）──
+  bottom_volume:
+    file: definitions/bottom_volume.yaml
+    capabilities: [scoring]
+    runtime: implemented
+
+  chan_theory:
+    file: definitions/chan_theory.yaml
+    capabilities: [scoring]
+    runtime: partial
+
+  expectation_repricing:
+    file: definitions/expectation_repricing.yaml
+    capabilities: [scoring]
+    runtime: partial
+
+  hot_theme:
+    file: definitions/hot_theme.yaml
+    capabilities: [scoring]
+    runtime: partial
+
+  one_yang_three_yin:
+    file: definitions/one_yang_three_yin.yaml
+    capabilities: [scoring]
+    runtime: implemented
+
+  # ── 智能选股策略（screening 段）──────────────────────────
+  dual_low:
+    file: definitions/dual_low.yaml
+    capabilities: [screening]
+    runtime: implemented
+
+  value_growth:
+    file: definitions/value_growth.yaml
+    capabilities: [screening]
+    runtime: implemented
+
+  momentum:
+    file: definitions/momentum.yaml
+    capabilities: [screening]
+    runtime: implemented
+
+  dividend:
+    file: definitions/dividend.yaml
+    capabilities: [screening]
+    runtime: implemented

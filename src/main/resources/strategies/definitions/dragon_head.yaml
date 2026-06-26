@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────
+# 龙头战法策略
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
+# 逻辑：连涨后首阴/缩量回调买入，破短期均线或止损卖出
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: dragon_head
+label: 龙头战法
+description: 识别板块龙头股首阴或缩量回调买入
+category: hot_theme
+risk_level: high
+
+backtest:
+  parameters:
+    min_consec_up_days: 3           # 最少连涨天数
+    pullback_pct: -3                # 回调幅度参考（%）
+
+  entry_conditions:
+    - type: consecutive_up
+      days: 3                       # 连续 3 日收涨
+    - type: first_pullback
+      max_pct: -5                   # 当日小幅回调（-5% ~ 0%）
+
+  exit_conditions:
+    - type: break_below_ma
+      ma: 5                         # 跌破 MA5
+    - type: stop_loss
+      pct: -8
+
+  position_size: 0.50               # 高风险策略，半仓
+
+scoring:
+  label: 龙头首板                   # 评分场景下的展示名称
+  score_weight: 18
+  conditions:
+    limit_up: true                  # 涨停
+    is_sector_leader: true          # 板块龙头
+    turnover_ratio_min: 5         # 换手率下限（%）

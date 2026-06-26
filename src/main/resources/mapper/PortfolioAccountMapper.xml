@@ -8,6 +8,9 @@
         <result property="broker" column="broker"/>
         <result property="market" column="market"/>
         <result property="baseCurrency" column="base_currency"/>
+        <result property="cashBalance" column="cash_balance"/>
+        <result property="loanBalance" column="loan_balance"/>
+        <result property="loanLimit" column="loan_limit"/>
         <result property="ownerId" column="owner_id"/>
         <result property="isActive" column="is_active"/>
         <result property="createdAt" column="created_at"/>
@@ -15,12 +18,12 @@
     </resultMap>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO portfolio_accounts (name, broker, market, base_currency, owner_id, is_active, created_at, updated_at)
-        VALUES (#{name}, #{broker}, #{market}, #{baseCurrency}, #{ownerId}, #{isActive}, #{createdAt}, #{updatedAt})
+        INSERT INTO portfolio_accounts (name, broker, market, base_currency, cash_balance, loan_balance, loan_limit, owner_id, is_active, created_at, updated_at)
+        VALUES (#{name}, #{broker}, #{market}, #{baseCurrency}, #{cashBalance}, #{loanBalance}, #{loanLimit}, #{ownerId}, #{isActive}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update">
-        UPDATE portfolio_accounts SET name=#{name}, broker=#{broker}, market=#{market}, base_currency=#{baseCurrency}, owner_id=#{ownerId}, is_active=#{isActive}, updated_at=#{updatedAt}
+        UPDATE portfolio_accounts SET name=#{name}, broker=#{broker}, market=#{market}, base_currency=#{baseCurrency}, cash_balance=#{cashBalance}, loan_balance=#{loanBalance}, loan_limit=#{loanLimit}, owner_id=#{ownerId}, is_active=#{isActive}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 

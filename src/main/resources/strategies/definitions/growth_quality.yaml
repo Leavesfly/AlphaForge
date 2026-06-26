@@ -1,0 +1,38 @@
+# ──────────────────────────────────────────────────────────────
+# 成长质量策略
+# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 逻辑：高成长 + 高质量基本面标的，中长线持有
+# 注意：fundamental_filter / fundamental_deterioration 尚未实现
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: growth_quality
+label: 成长质量
+description: 选择高成长 + 高质量的中长线标的
+category: fundamental
+risk_level: low
+
+backtest:
+  parameters:
+    min_revenue_growth: 20          # 营收增速下限（%）
+    min_roe: 15                     # ROE 下限（%）
+    max_pe: 50                      # PE 上限
+
+  entry_conditions:
+    - type: fundamental_filter
+      revenue_growth_min: 20        # 基本面过滤（引擎待实现）
+      roe_min: 15
+    - type: price_near_support      # 价格接近支撑位（引擎待实现）
+
+  exit_conditions:
+    - type: fundamental_deterioration   # 基本面恶化（引擎待实现）
+    - type: stop_loss
+      pct: -15
+
+  position_size: 0.80
+
+scoring:
+  score_weight: 15
+  conditions:
+    revenue_growth_min: 20          # 营收增速 ≥ 20%
+    profit_growth_min: 25           # 利润增速 ≥ 25%
+    roe_min: 15

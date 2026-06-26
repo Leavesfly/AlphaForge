@@ -1,5 +1,9 @@
 package io.leavesfly.stock.application.pipeline;
 
+import io.leavesfly.stock.config.AppConfig;
+import io.leavesfly.stock.application.strategy.engine.CompositeScoringEngine;
+import io.leavesfly.stock.application.strategy.engine.CompositeScoringResult;
+import io.leavesfly.stock.application.strategy.engine.ScoringContext;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +27,13 @@ import java.util.Map;
 public class AnalysisPostProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisPostProcessor.class);
+    private final CompositeScoringEngine compositeScoringEngine;
+    private final AppConfig appConfig;
+
+    public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, AppConfig appConfig) {
+        this.compositeScoringEngine = compositeScoringEngine;
+        this.appConfig = appConfig;
+    }
 
     /**
      * 执行完整的后处理链
@@ -30,6 +41,7 @@ public class AnalysisPostProcessor {
     public void process(AnalysisResult result, TrendAnalysisResult trend,
                         Map<String, Object> technicalResult, Map<String, Object> realtimeQuote,
                         Map<String, Object> marketContext, List<StockDailyData> historyData) {
+        applyCompositeScoring(result, technicalResult, realtimeQuote, marketContext, historyData);
         applyTrendFallback(result, trend);
         refreshDecisionAction(result, technicalResult, trend);
         applyMarketContextGuardrail(result, marketContext);
@@ -39,10 +51,55 @@ public class AnalysisPostProcessor {
     }
 
     /**
+     * YAML 多策略加权评分 — 用 CompositeScoringEngine 产出 0~100 综合分。
+     */
+    public void applyCompositeScoring(AnalysisResult result, Map<String, Object> technicalResult,
+                                      Map<String, Object> realtimeQuote, Map<String, Object> marketContext,
+                                      List<StockDailyData> historyData) {
+        if (historyData == null || historyData.isEmpty()) {
+            return;
+        }
+        ScoringContext ctx = ScoringContext.of(historyData, technicalResult, realtimeQuote, marketContext);
+        CompositeScoringResult scoring = compositeScoringEngine.evaluate(ctx);
+        result.compositeScoring = scoring.toMap();
+
+        if (technicalResult != null) {
+            technicalResult.put("composite_scoring", scoring.toMap());
+        }
+
+        Integer llmScore = result.score;
+        double llmRatio = appConfig.getLlmScoreBlendRatio();
+        if (llmScore == null || llmScore == 50) {
+            result.score = scoring.getTotalScore();
+            result.fallbackSource = "composite_scoring";
+        } else {
+            result.score = (int) Math.round(llmScore * llmRatio + scoring.getTotalScore() * (1 - llmRatio));
+            result.fallbackSource = result.fallbackSource != null ? result.fallbackSource : "llm_blend";
+        }
+
+        int buyThreshold = appConfig.getBuyScoreThreshold();
+        int sellThreshold = appConfig.getSellScoreThreshold();
+        if (result.signal == null || "neutral".equals(result.signal)) {
+            if (result.score >= buyThreshold) result.signal = "buy";
+            else if (result.score <= sellThreshold) result.signal = "sell";
+        }
+
+        log.debug("[{}] 综合策略评分: {} (命中权重 {}/{})",
+                result.stockCode, scoring.getTotalScore(), scoring.getEarnedWeight(), scoring.getMaxWeight());
+    }
+
+    /**
      * 趋势分析Fallback - 当LLM未能给出明确信号时用技术分析兜底
      */
     public void applyTrendFallback(AnalysisResult result, TrendAnalysisResult trend) {
         if (trend == null) return;
+        // 已由综合评分或 LLM 混合给出分数时，不再用趋势覆盖
+        if ("composite_scoring".equals(result.fallbackSource) || "llm_blend".equals(result.fallbackSource)) {
+            if (result.trendLabel == null) {
+                result.trendLabel = trend.trendLabel;
+            }
+            return;
+        }
 
         if (result.score == null || result.score == 50) {
             result.score = trend.score;
@@ -50,8 +107,10 @@ public class AnalysisPostProcessor {
         }
 
         if (result.signal == null || "neutral".equals(result.signal)) {
-            if (trend.score >= 70) result.signal = "buy";
-            else if (trend.score <= 30) result.signal = "sell";
+            int buyThreshold = appConfig.getBuyScoreThreshold();
+            int sellThreshold = appConfig.getSellScoreThreshold();
+            if (trend.score >= buyThreshold) result.signal = "buy";
+            else if (trend.score <= sellThreshold) result.signal = "sell";
         }
 
         if (result.trendLabel == null) {
@@ -163,6 +222,7 @@ public class AnalysisPostProcessor {
         public Double targetPrice;
         public Double stopLossPrice;
         public Double pricePosition;
+        public Map<String, Object> compositeScoring;
 
         public static AnalysisResult dryRun(String code, String name) {
             AnalysisResult r = new AnalysisResult();

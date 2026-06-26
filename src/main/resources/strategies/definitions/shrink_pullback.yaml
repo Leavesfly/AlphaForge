@@ -1,0 +1,40 @@
+# ──────────────────────────────────────────────────────────────
+# 缩量回调策略
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
+# 逻辑：上升趋势中缩量回踩支撑位买入，破趋势或止损卖出
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: shrink_pullback
+label: 缩量回调
+description: 上升趋势中缩量回调至支撑位附近买入
+category: pullback
+risk_level: medium
+
+backtest:
+  parameters:
+    trend_ma: 60                  # 判断大趋势的均线
+    support_ma: 20                # 支撑位均线
+    volume_shrink_ratio: 0.5      # 缩量比例（近期均量 ≤ 基线均量 × 0.5）
+
+  entry_conditions:
+    - type: trend_above
+      ma: 60                      # 股价站在 MA60 之上（上升趋势）
+    - type: pullback_to
+      ma: 20                      # 回调至 MA20 附近（容差 2%）
+    - type: volume_shrink
+      ratio: 0.5                  # 成交量萎缩
+
+  exit_conditions:
+    - type: price_below_ma
+      ma: 60                      # 跌破 MA60，趋势破坏
+    - type: stop_loss
+      pct: -7
+
+  position_size: 0.85
+
+scoring:
+  score_weight: 16
+  conditions:
+    trend_up: true
+    volume_shrink_ratio: 0.6
+    pullback_days_max: 5          # 回调持续不超过 5 日

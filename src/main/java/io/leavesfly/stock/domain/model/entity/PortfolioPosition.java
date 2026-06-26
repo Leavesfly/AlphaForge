@@ -9,6 +9,9 @@ public class PortfolioPosition {
 
     private Long id;
 
+    /** 所属账户 ID（模拟交易持仓关联） */
+    private Long accountId;
+
     /** 股票代码 */
     private String stockCode;
 
@@ -61,6 +64,8 @@ public class PortfolioPosition {
     // Getters & Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Long getAccountId() { return accountId; }
+    public void setAccountId(Long accountId) { this.accountId = accountId; }
     public String getStockCode() { return stockCode; }
     public void setStockCode(String stockCode) { this.stockCode = stockCode; }
     public String getStockName() { return stockName; }

@@ -1,0 +1,17 @@
+# ──────────────────────────────────────────────────────────────
+# 预期重定价策略（综合分析评分）
+# 引擎：scoring → CompositeScoringEngine
+# 逻辑：盈利预期大幅上调或分析师集体看好，引发估值重估
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: expectation_repricing
+label: 预期重定价
+description: 基本面预期发生重大变化导致估值重估
+category: fundamental
+risk_level: medium
+
+scoring:
+  score_weight: 12
+  conditions:
+    eps_revision_pct: 20            # EPS 预期上调幅度 ≥ 20%
+    analyst_upgrade: true           # 分析师评级上调

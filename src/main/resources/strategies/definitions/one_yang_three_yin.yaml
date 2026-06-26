@@ -1,0 +1,17 @@
+# ──────────────────────────────────────────────────────────────
+# 一阳穿三阴策略（综合分析评分）
+# 引擎：scoring → CompositeScoringEngine
+# 逻辑：一根阳线收复前三根阴线，伴随放量，视为强势反转
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: one_yang_three_yin
+label: 一阳穿三阴
+description: 一根阳线收复前三根阴线的失地，强势反转
+category: pattern
+risk_level: medium
+
+scoring:
+  score_weight: 14
+  conditions:
+    yang_covers_yin_count: 3        # 阳线覆盖前 3 根阴线
+    volume_amplify: 1.5             # 成交量放大 1.5 倍

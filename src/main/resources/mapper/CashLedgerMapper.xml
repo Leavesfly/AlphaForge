@@ -38,6 +38,10 @@
         DELETE FROM cash_ledger WHERE id = #{id}
     </delete>
 
+    <delete id="deleteByAccountId">
+        DELETE FROM cash_ledger WHERE account_id = #{accountId}
+    </delete>
+
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM cash_ledger
     </select>

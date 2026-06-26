@@ -17,8 +17,10 @@ public class NotificationRouter {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationRouter.class);
 
-    /** 降噪记录: 内容hash -> 上次发送时间 */
+    /** 降噪记录: 内容hash -> 上次发送时间（内存缓存） */
     private final Map<String, LocalDateTime> sentHistory = new ConcurrentHashMap<>();
+
+    private final NotificationDedupStore dedupStore;
 
     /** 默认降噪间隔(分钟) */
     private static final int DEDUP_MINUTES = 30;
@@ -29,6 +31,10 @@ public class NotificationRouter {
     /** 本小时已发送计数 */
     private int hourlyCount = 0;
     private int currentHour = -1;
+
+    public NotificationRouter(NotificationDedupStore dedupStore) {
+        this.dedupStore = dedupStore;
+    }
 
     /**
      * 判断消息是否应该发送(降噪过滤)
@@ -49,16 +55,20 @@ public class NotificationRouter {
             return false;
         }
 
-        // 去重检查
+        // 去重检查（DB 持久化 + 内存缓存）
         String hash = computeHash(title + content);
+        if (dedupStore.recentlySent(hash, DEDUP_MINUTES)) {
+            log.debug("通知去重(DB): 相同内容在 {} 分钟内已发送", DEDUP_MINUTES);
+            return false;
+        }
         LocalDateTime lastSent = sentHistory.get(hash);
         if (lastSent != null && lastSent.plusMinutes(DEDUP_MINUTES).isAfter(LocalDateTime.now())) {
             log.debug("通知去重: 相同内容在 {} 分钟内已发送", DEDUP_MINUTES);
             return false;
         }
 
-        // 记录发送
         sentHistory.put(hash, LocalDateTime.now());
+        dedupStore.recordSent(hash);
         hourlyCount++;
 
         // 清理过期记录(保留最近100条)

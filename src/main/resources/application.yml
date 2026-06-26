@@ -39,13 +39,6 @@ spring:
       mode: always
       schema-locations: classpath:schema.sql
 
-# MyBatis配置
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-
   # Jackson JSON配置
   jackson:
     serialization:
@@ -53,6 +46,13 @@ mybatis:
     default-property-inclusion: non_null
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
+
+# MyBatis配置
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 # 日志配置
 logging:

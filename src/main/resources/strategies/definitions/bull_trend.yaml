@@ -1,0 +1,35 @@
+# ──────────────────────────────────────────────────────────────
+# 牛趋势策略
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
+# 逻辑：多头排列时持有，跌破长期均线清仓
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: bull_trend
+label: 牛趋势
+description: 股价在 MA10 和 MA30 之上持有，跌破 MA30 清仓
+category: trend_following
+risk_level: medium
+
+backtest:
+  parameters:
+    short_ma: 10           # 短期均线
+    long_ma: 30            # 长期均线
+
+  entry_conditions:
+    - type: price_above_ma
+      ma: [10, 30]         # 收盘价同时站上 MA10、MA30
+    - type: ma_arrangement
+      direction: bullish   # 短期均线 > 长期均线（多头排列）
+
+  exit_conditions:
+    - type: price_below_ma
+      ma: 30               # 跌破 MA30 清仓
+
+  position_size: 0.90
+
+scoring:
+  score_weight: 20
+  conditions:
+    ma_alignment: bullish  # 均线多头排列
+    min_days: 5            # 趋势持续至少 5 日
+    pullback_max_pct: 5    # 回调幅度不超过 5%
