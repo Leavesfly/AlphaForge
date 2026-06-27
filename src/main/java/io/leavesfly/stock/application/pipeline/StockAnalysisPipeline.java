@@ -12,7 +12,7 @@ import io.leavesfly.stock.domain.model.enums.MarketType;
 import io.leavesfly.stock.infrastructure.notification.NotificationService;
 import io.leavesfly.stock.infrastructure.notification.NotificationRouter;
 
-import io.leavesfly.stock.application.agent.ReactAgent;
+import io.leavesfly.stock.application.agent.ReActAgent;
 import io.leavesfly.stock.application.service.*;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import io.leavesfly.stock.domain.service.TradingCalendar;
@@ -54,7 +54,7 @@ public class StockAnalysisPipeline {
     private final AnalysisHistoryService historyService;
     private final AnalysisContextBuilder contextBuilder;
     private final AnalysisResultAggregator resultAggregator;
-    private final ReactAgent reactAgent;
+    private final ReActAgent reactAgent;
     private final DecisionSignalService decisionSignalService;
     private final DailyMarketContextService dailyMarketContextService;
     private final TradingCalendar tradingCalendar;
@@ -76,7 +76,7 @@ public class StockAnalysisPipeline {
             LlmService llmService, LlmUsageTracker usageTracker,
             NotificationService notificationService, NotificationRouter notificationRouter,
             AnalysisHistoryService historyService, AnalysisContextBuilder contextBuilder,
-            AnalysisResultAggregator resultAggregator, ReactAgent reactAgent,
+            AnalysisResultAggregator resultAggregator, ReActAgent reactAgent,
             DecisionSignalService decisionSignalService, DailyMarketContextService dailyMarketContextService,
             TradingCalendar tradingCalendar, NameToCodeResolver nameResolver,
             AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer,
@@ -279,7 +279,7 @@ public class StockAnalysisPipeline {
     private AnalysisResult analyzeWithAgent(String stockCode, String stockName,
                                             Map<String, Object> context, DiagnosticContext diag) {
         try {
-            ReactAgent.ReactResult reactResult = reactAgent.analyze(stockCode, stockName, context);
+            ReActAgent.ReactResult reactResult = reactAgent.analyze(stockCode, stockName, context);
             diag.record("agent_mode", "react");
             diag.record("agent_tool_calls", reactResult.totalToolCalls());
             diag.record("agent_duration_ms", reactResult.durationMs());
@@ -293,7 +293,7 @@ public class StockAnalysisPipeline {
     /**
      * ReactAgent结果转换为标准AnalysisResult
      */
-    private AnalysisResult reactResultToAnalysisResult(ReactAgent.ReactResult reactResult,
+    private AnalysisResult reactResultToAnalysisResult(ReActAgent.ReactResult reactResult,
                                                        String stockCode, String stockName) {
         AnalysisResult result = new AnalysisResult();
         result.stockCode = stockCode;

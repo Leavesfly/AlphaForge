@@ -1,7 +1,7 @@
 package io.leavesfly.stock.application.service;
 
 import io.leavesfly.stock.application.agent.LlmToolAdapter;
-import io.leavesfly.stock.application.agent.ReactAgent;
+import io.leavesfly.stock.application.agent.ReActAgent;
 import io.leavesfly.stock.infrastructure.llm.LlmService;
 import io.leavesfly.stock.infrastructure.persistence.ChatRepository;
 import org.slf4j.Logger;
@@ -33,10 +33,10 @@ public class ChatService {
 
     private final LlmService llmService;
     private final ChatRepository chatRepository;
-    private final ReactAgent reactAgent;
+    private final ReActAgent reactAgent;
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public ChatService(LlmService llmService, ChatRepository chatRepository, ReactAgent reactAgent) {
+    public ChatService(LlmService llmService, ChatRepository chatRepository, ReActAgent reactAgent) {
         this.llmService = llmService;
         this.chatRepository = chatRepository;
         this.reactAgent = reactAgent;

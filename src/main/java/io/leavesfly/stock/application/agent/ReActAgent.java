@@ -28,16 +28,16 @@ import java.util.Map;
  * - Pipeline和ChatController共享同一套Agent流程
  */
 @Component
-public class ReactAgent {
+public class ReActAgent {
 
-    private static final Logger log = LoggerFactory.getLogger(ReactAgent.class);
+    private static final Logger log = LoggerFactory.getLogger(ReActAgent.class);
 
     private final LlmService llmService;
     private final LlmToolAdapter toolAdapter;
     private final ToolRegistry toolRegistry;
     private final SkillsLoader skillsLoader;
 
-    public ReactAgent(LlmService llmService, LlmToolAdapter toolAdapter,
+    public ReActAgent(LlmService llmService, LlmToolAdapter toolAdapter,
                       ToolRegistry toolRegistry, SkillsLoader skillsLoader) {
         this.llmService = llmService;
         this.toolAdapter = toolAdapter;
