@@ -1,9 +1,11 @@
 package io.leavesfly.stock.infrastructure.dataprovider;
 
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.enums.MarketType;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 数据获取器基础接口
@@ -25,6 +27,27 @@ public interface BaseDataFetcher {
      * 检查数据源是否可用
      */
     boolean isAvailable();
+
+    /**
+     * 获取最小请求间隔(毫秒) — 差异化限流
+     *
+     * 按封 IP 风险分级：
+     * - 不封 IP 的源(腾讯/通达信): 100ms
+     * - 低风险的源(新浪): 200ms
+     * - 东财系(有风控): 1000ms + 随机抖动
+     */
+    default long getRateLimitMs() {
+        return 200;
+    }
+
+    /**
+     * 获取该数据源支持的市场类型 — 能力感知路由
+     *
+     * 默认支持所有市场，仅支持特定市场的数据源应重写此方法
+     */
+    default Set<MarketType> getSupportedMarkets() {
+        return Set.of(MarketType.A, MarketType.HK, MarketType.US, MarketType.JP, MarketType.KR);
+    }
 
     /**
      * 获取股票历史日K线数据
@@ -101,6 +124,42 @@ public interface BaseDataFetcher {
      * @return K线数据列表
      */
     default List<Map<String, Object>> getMinuteData(String stockCode, int period, int count) {
+        return List.of();
+    }
+
+    // ========== 资金面数据 ==========
+
+    /**
+     * 获取日级资金流数据（主力/大单/中单/小单净流入）
+     *
+     * @param stockCode 股票代码
+     * @param days      返回最近天数
+     * @return 每日资金流数据 [{date, main_net, big_net, mid_net, small_net, ...}]
+     */
+    default List<Map<String, Object>> getFundFlow(String stockCode, int days) {
+        return List.of();
+    }
+
+    // ========== 基本面数据 ==========
+
+    /**
+     * 获取财报三表数据
+     *
+     * @param stockCode      股票代码
+     * @param statementType 报表类型: "balance" / "income" / "cashflow"
+     * @return 财务数据列表，每行一个科目
+     */
+    default List<Map<String, Object>> getFinancialStatements(String stockCode, String statementType) {
+        return List.of();
+    }
+
+    /**
+     * 获取关键财务指标（ROE/ROA/EPS/毛利率/资产负债率等）
+     *
+     * @param stockCode 股票代码
+     * @return 关键指标列表，每期一行
+     */
+    default List<Map<String, Object>> getKeyIndicators(String stockCode) {
         return List.of();
     }
 }

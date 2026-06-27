@@ -1,9 +1,11 @@
-package io.leavesfly.stock.infrastructure.dataprovider;
+package io.leavesfly.stock.infrastructure.dataprovider.impl;
 
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.enums.MarketType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.leavesfly.stock.infrastructure.dataprovider.BaseDataFetcher;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +52,14 @@ public class YFinanceFetcher implements BaseDataFetcher {
     @Override
     public boolean isAvailable() {
         return true;
+    }
+
+    /** Yahoo Finance 不封IP，限流间隔 200ms */
+    @Override public long getRateLimitMs() { return 200; }
+
+    /** Yahoo 覆盖港美股/日韩，不支持A股 */
+    @Override public Set<MarketType> getSupportedMarkets() {
+        return Set.of(MarketType.HK, MarketType.US, MarketType.JP, MarketType.KR);
     }
 
     @Override

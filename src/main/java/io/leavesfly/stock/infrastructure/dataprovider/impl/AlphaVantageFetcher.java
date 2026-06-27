@@ -1,9 +1,10 @@
-package io.leavesfly.stock.infrastructure.dataprovider;
+package io.leavesfly.stock.infrastructure.dataprovider.impl;
 
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.leavesfly.stock.infrastructure.dataprovider.BaseDataFetcher;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

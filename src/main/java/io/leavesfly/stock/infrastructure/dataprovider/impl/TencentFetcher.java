@@ -1,9 +1,11 @@
-package io.leavesfly.stock.infrastructure.dataprovider;
+package io.leavesfly.stock.infrastructure.dataprovider.impl;
 
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.enums.MarketType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.leavesfly.stock.infrastructure.dataprovider.BaseDataFetcher;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +38,12 @@ public class TencentFetcher implements BaseDataFetcher {
     @Override public String getName() { return "tencent"; }
     @Override public int getPriority() { return 3; }
     @Override public boolean isAvailable() { return true; }
+
+    /** 腾讯财经不封IP，限流间隔 100ms */
+    @Override public long getRateLimitMs() { return 100; }
+
+    /** 腾讯支持A股和港股 */
+    @Override public Set<MarketType> getSupportedMarkets() { return Set.of(MarketType.A, MarketType.HK); }
 
     @Override
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate) {
@@ -125,6 +133,55 @@ public class TencentFetcher implements BaseDataFetcher {
         double cur = parseDoubleSafe(fields[3]);
         if (prev > 0) quote.put("change_pct", (cur - prev) / prev * 100);
         return quote;
+    }
+
+    /**
+     * 获取分钟级K线数据
+     * 通过腾讯分时K线接口获取
+     *
+     * @param stockCode 股票代码
+     * @param period    周期(1/5/15/30/60分钟)
+     * @param count     数据条数
+     * @return K线数据列表
+     */
+    @Override
+    public List<Map<String, Object>> getMinuteData(String stockCode, int period, int count) {
+        try {
+            String symbol = convertToTencentSymbol(stockCode);
+            // 腾讯分钟K线类型: 1=1分钟, 5=5分钟, 15=15分钟, 30=30分钟, 60=60分钟
+            String minuteType = period + "min";
+            String url = HISTORY_URL + "?param=" + symbol + "," + minuteType + ",,,," + count + ",qfq";
+
+            Request request = new Request.Builder().url(url)
+                    .header("User-Agent", "Mozilla/5.0").build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode root = objectMapper.readTree(response.body().string());
+                JsonNode data = root.path("data").path(symbol);
+
+                // 腾讯分钟数据字段名取决于周期
+                String dataKey = minuteType;
+                JsonNode minuteData = data.has(dataKey) ? data.get(dataKey) : data.get("qfq" + dataKey);
+                if (minuteData == null || !minuteData.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode row : minuteData) {
+                    if (row.size() < 6) continue;
+                    Map<String, Object> bar = new LinkedHashMap<>();
+                    bar.put("time", row.get(0).asText(""));
+                    bar.put("open", row.get(1).asDouble());
+                    bar.put("close", row.get(2).asDouble());
+                    bar.put("high", row.get(3).asDouble());
+                    bar.put("low", row.get(4).asDouble());
+                    bar.put("volume", row.get(5).asLong());
+                    result.add(bar);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("腾讯分钟数据失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     private String convertToTencentSymbol(String stockCode) {
