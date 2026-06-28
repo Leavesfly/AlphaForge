@@ -114,6 +114,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
       用量监控
     </div>
+    <div class="nav-item" data-page="loop-monitor">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+      Loop 监控
+    </div>
   </div>
   <div class="nav-section">
     <div class="nav-section-title">AI 助手</div>
@@ -453,6 +457,66 @@
   </table></div></div>
 </div>
 
+<!-- ===== Loop Monitor ===== -->
+<div class="page" id="page-loop-monitor">
+  <div class="page-header">
+    <div class="page-header-left"><h2>Loop 健康监控</h2><p>系统自我感知层 · AI 循环健康状态与信号性能指标</p></div>
+    <div><button class="btn btn-outline btn-sm" onclick="loadLoopStatus();showToast('数据已刷新', 'success')">刷新状态</button></div>
+  </div>
+  <div class="grid grid-4" style="margin-bottom:24px">
+    <div class="card stat-card" id="loop-health-card"><div class="stat-icon">💚</div><div class="stat-value" id="loop-healthy">-</div><div class="stat-label">系统健康</div></div>
+    <div class="card stat-card accent-primary"><div class="stat-icon">🔄</div><div class="stat-value" id="loop-total-runs">0</div><div class="stat-label">累计循环次数</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-icon">⏱</div><div class="stat-value" id="loop-avg-duration">-</div><div class="stat-label">平均每轮耗时</div></div>
+    <div class="card stat-card accent-danger"><div class="stat-icon">❌</div><div class="stat-value" id="loop-consecutive-errors">0</div><div class="stat-label">连续失败次数</div></div>
+  </div>
+  <div class="grid grid-3" style="margin-bottom:24px">
+    <div class="card">
+      <div class="card-title">信号准确率</div>
+      <div style="font-size:36px;font-weight:700;color:var(--success);text-align:center;padding:20px 0" id="loop-signal-accuracy">未评估</div>
+      <div style="font-size:12px;color:var(--text-dim);text-align:center">由 SignalOutcomeEvaluator 定期更新</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Verifier 调整率</div>
+      <div style="font-size:36px;font-weight:700;color:var(--warning);text-align:center;padding:20px 0" id="loop-verifier-rate">0%</div>
+      <div style="font-size:12px;color:var(--text-dim);text-align:center">被 Verifier 调整的信号占比</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Verifier 处理量</div>
+      <div style="font-size:36px;font-weight:700;color:var(--info);text-align:center;padding:20px 0" id="loop-signals-verified">0</div>
+      <div style="font-size:12px;color:var(--text-dim);text-align:center" id="loop-signals-adjusted-text">已调整: 0 个</div>
+    </div>
+  </div>
+  <div class="grid grid-2">
+    <div class="card">
+      <div class="card-title">运行时间线</div>
+      <div style="padding:8px 0">
+        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--text-dim);font-size:13px">最近循环时间</span>
+          <span style="font-size:13px;font-weight:500" id="loop-last-run-time">-</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--text-dim);font-size:13px">最近评估时间</span>
+          <span style="font-size:13px;font-weight:500" id="loop-last-eval-time">-</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px 0">
+          <span style="color:var(--text-dim);font-size:13px">当前运行状态</span>
+          <span style="font-size:13px;font-weight:500" id="loop-status-text">-</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">健康评估标准</div>
+      <div style="padding:8px 0;font-size:13px;color:var(--text-muted);line-height:2">
+        <div>✅ <strong>健康</strong>：连续失败次数 &lt; 3</div>
+        <div>⚠️ <strong>降级模式</strong>：连续失败次数 ≥ 3，跳过耗时 Agent</div>
+        <div>🔄 <strong>自我修复</strong>：成功后自动重置失败计数</div>
+        <div>📊 <strong>准确率驱动</strong>：评估结果同步至策略权重调优</div>
+        <div style="margin-top:8px;padding:8px 12px;background:var(--bg);border-radius:6px;font-size:11px;color:var(--text-dim);">Loop 状态管理器追踪系统是否处于健康、退化状态，并触发相应的降级或恢复策略，实现 AI 系统自我感知闭环。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Chat ===== -->
 <div class="page" id="page-chat">
   <div class="page-header"><div class="page-header-left"><h2>AI 对话</h2><p>自然语言交互 · 分析个股 / 解读行情 / 制定策略</p></div></div>
@@ -535,8 +599,8 @@
     <div class="modal-header"><h3 id="signal-detail-title">信号详情</h3><button class="modal-close" onclick="closeModal('modal-signal')">×</button></div>
     <div id="signal-detail-content"></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="showToast('反馈已提交：有用','success');closeModal('modal-signal')">👍 有用</button>
-      <button class="btn btn-outline" onclick="showToast('反馈已提交：无用','warning');closeModal('modal-signal')">👎 无用</button>
+      <button class="btn btn-outline" onclick="submitSignalFeedback('useful')">👍 有用</button>
+      <button class="btn btn-outline" onclick="submitSignalFeedback('useless')">👎 无用</button>
       <button class="btn btn-primary" onclick="closeModal('modal-signal')">关闭</button>
     </div>
   </div>

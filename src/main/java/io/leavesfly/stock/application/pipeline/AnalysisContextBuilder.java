@@ -1,12 +1,12 @@
 package io.leavesfly.stock.application.pipeline;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
 
-import io.leavesfly.stock.application.service.MarketAnalysisService;
-import io.leavesfly.stock.application.service.NewsSearchService;
+import io.leavesfly.stock.application.service.market.MarketAnalysisService;
+import io.leavesfly.stock.application.service.market.NewsSearchService;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,13 +24,13 @@ import java.util.*;
 public class AnalysisContextBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisContextBuilder.class);
-    private final DataFetcherManager dataFetcher;
+    private final MarketDataPort dataFetcher;
     private final TechnicalAnalysisService technicalService;
     private final NewsSearchService newsService;
     private final MarketAnalysisService marketService;
     private final AppConfig config;
 
-    public AnalysisContextBuilder(DataFetcherManager dataFetcher, TechnicalAnalysisService technicalService,
+    public AnalysisContextBuilder(MarketDataPort dataFetcher, TechnicalAnalysisService technicalService,
                                   NewsSearchService newsService, MarketAnalysisService marketService, AppConfig config) {
         this.dataFetcher = dataFetcher;
         this.technicalService = technicalService;

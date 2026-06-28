@@ -1,10 +1,11 @@
 package io.leavesfly.stock.application.pipeline;
 
 import io.leavesfly.stock.config.AppConfig;
+import io.leavesfly.stock.application.strategy.engine.AdaptiveScoreBlender;
 import io.leavesfly.stock.application.strategy.engine.CompositeScoringEngine;
 import io.leavesfly.stock.application.strategy.engine.CompositeScoringResult;
 import io.leavesfly.stock.application.strategy.engine.ScoringContext;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -29,10 +30,18 @@ public class AnalysisPostProcessor {
     private static final Logger log = LoggerFactory.getLogger(AnalysisPostProcessor.class);
     private final CompositeScoringEngine compositeScoringEngine;
     private final AppConfig appConfig;
+    private final AdaptiveScoreBlender adaptiveBlender;
 
     public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, AppConfig appConfig) {
         this.compositeScoringEngine = compositeScoringEngine;
         this.appConfig = appConfig;
+        this.adaptiveBlender = new AdaptiveScoreBlender(
+                appConfig.getAdaptiveBlendBaseRatio(),
+                appConfig.getAdaptiveStrategyConfidenceImpact(),
+                appConfig.getAdaptiveMarketClarityImpact(),
+                appConfig.getAdaptiveLlmConfidenceImpact(),
+                appConfig.getAdaptiveBlendMinRatio(),
+                appConfig.getAdaptiveBlendMaxRatio());
     }
 
     /**
@@ -68,13 +77,22 @@ public class AnalysisPostProcessor {
         }
 
         Integer llmScore = result.score;
-        double llmRatio = appConfig.getLlmScoreBlendRatio();
-        if (llmScore == null || llmScore == 50) {
-            result.score = scoring.getTotalScore();
-            result.fallbackSource = "composite_scoring";
+        if (appConfig.isAdaptiveBlendEnabled()) {
+            AdaptiveScoreBlender.BlendResult blend = adaptiveBlender.blend(
+                    llmScore, scoring.getTotalScore(),
+                    scoring.getEarnedWeight(), scoring.getMaxWeight(),
+                    marketContext, result.confidence);
+            result.score = blend.score();
+            result.fallbackSource = blend.source();
         } else {
-            result.score = (int) Math.round(llmScore * llmRatio + scoring.getTotalScore() * (1 - llmRatio));
-            result.fallbackSource = result.fallbackSource != null ? result.fallbackSource : "llm_blend";
+            double llmRatio = appConfig.getLlmScoreBlendRatio();
+            if (llmScore == null || llmScore == 50) {
+                result.score = scoring.getTotalScore();
+                result.fallbackSource = "composite_scoring";
+            } else {
+                result.score = (int) Math.round(llmScore * llmRatio + scoring.getTotalScore() * (1 - llmRatio));
+                result.fallbackSource = result.fallbackSource != null ? result.fallbackSource : "llm_blend";
+            }
         }
 
         int buyThreshold = appConfig.getBuyScoreThreshold();

@@ -3,17 +3,21 @@ package io.leavesfly.stock.application.pipeline;
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.application.pipeline.AnalysisPostProcessor.AnalysisResult;
 import io.leavesfly.stock.application.pipeline.AnalysisPostProcessor.TrendAnalysisResult;
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.stock.infrastructure.llm.LlmService;
-import io.leavesfly.stock.infrastructure.llm.LlmUsageTracker;
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
-import io.leavesfly.stock.infrastructure.notification.NotificationService;
-import io.leavesfly.stock.infrastructure.notification.NotificationRouter;
+import io.leavesfly.stock.domain.service.port.LlmPort;
+import io.leavesfly.stock.domain.service.port.LlmUsagePort;
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
+import io.leavesfly.stock.domain.service.port.NotificationPort;
 
 import io.leavesfly.stock.application.agent.ReActAgent;
-import io.leavesfly.stock.application.service.*;
+import io.leavesfly.stock.application.service.market.NewsSearchService;
+import io.leavesfly.stock.application.service.market.DailyMarketContextService;
+import io.leavesfly.stock.application.service.report.AnalysisHistoryService;
+import io.leavesfly.stock.application.service.signal.DecisionSignalService;
+import io.leavesfly.stock.application.service.loop.LoopStateManager;
+import io.leavesfly.stock.domain.service.NameToCodeResolver;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import io.leavesfly.stock.domain.service.TradingCalendar;
 import org.slf4j.Logger;
@@ -44,13 +48,12 @@ public class StockAnalysisPipeline {
     private static final Logger log = LoggerFactory.getLogger(StockAnalysisPipeline.class);
 
     private final AppConfig config;
-    private final DataFetcherManager dataFetcherManager;
+    private final MarketDataPort dataFetcherManager;
     private final TechnicalAnalysisService technicalAnalysisService;
     private final NewsSearchService newsSearchService;
-    private final LlmService llmService;
-    private final LlmUsageTracker usageTracker;
-    private final NotificationService notificationService;
-    private final NotificationRouter notificationRouter;
+    private final LlmPort llmService;
+    private final LlmUsagePort usageTracker;
+    private final NotificationPort notificationService;
     private final AnalysisHistoryService historyService;
     private final AnalysisContextBuilder contextBuilder;
     private final AnalysisResultAggregator resultAggregator;
@@ -62,6 +65,8 @@ public class StockAnalysisPipeline {
     private final AnalysisPostProcessor postProcessor;
     private final AnalysisContextEnhancer contextEnhancer;
     private final PipelineMetrics pipelineMetrics;
+    private final SignalVerifier signalVerifier;
+    private final LoopStateManager loopStateManager;
 
     /** 并发线程池 */
     private final ExecutorService executorService;
@@ -71,16 +76,17 @@ public class StockAnalysisPipeline {
     private BiConsumer<Integer, String> progressCallback;
 
     public StockAnalysisPipeline(
-            AppConfig config, DataFetcherManager dataFetcherManager,
+            AppConfig config, MarketDataPort dataFetcherManager,
             TechnicalAnalysisService technicalAnalysisService, NewsSearchService newsSearchService,
-            LlmService llmService, LlmUsageTracker usageTracker,
-            NotificationService notificationService, NotificationRouter notificationRouter,
+            LlmPort llmService, LlmUsagePort usageTracker,
+            NotificationPort notificationService,
             AnalysisHistoryService historyService, AnalysisContextBuilder contextBuilder,
             AnalysisResultAggregator resultAggregator, ReActAgent reactAgent,
             DecisionSignalService decisionSignalService, DailyMarketContextService dailyMarketContextService,
             TradingCalendar tradingCalendar, NameToCodeResolver nameResolver,
             AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer,
-            PipelineMetrics pipelineMetrics) {
+            PipelineMetrics pipelineMetrics, SignalVerifier signalVerifier,
+            LoopStateManager loopStateManager) {
         this.config = config;
         this.dataFetcherManager = dataFetcherManager;
         this.technicalAnalysisService = technicalAnalysisService;
@@ -88,7 +94,6 @@ public class StockAnalysisPipeline {
         this.llmService = llmService;
         this.usageTracker = usageTracker;
         this.notificationService = notificationService;
-        this.notificationRouter = notificationRouter;
         this.historyService = historyService;
         this.contextBuilder = contextBuilder;
         this.resultAggregator = resultAggregator;
@@ -100,6 +105,8 @@ public class StockAnalysisPipeline {
         this.postProcessor = postProcessor;
         this.contextEnhancer = contextEnhancer;
         this.pipelineMetrics = pipelineMetrics;
+        this.signalVerifier = signalVerifier;
+        this.loopStateManager = loopStateManager;
         this.executorService = Executors.newFixedThreadPool(
                 Math.min(Runtime.getRuntime().availableProcessors(), 4));
     }
@@ -222,6 +229,25 @@ public class StockAnalysisPipeline {
                 enhancedContext.put("intelligence", intelligenceContext);
             }
 
+            // ===== Step 7.5: 跨轮记忆——注入上次分析结论供 Agent 参考 =====
+            try {
+                List<AnalysisReport> prevReports = historyService.getRecentReports(stockCode, 2);
+                if (!prevReports.isEmpty()) {
+                    AnalysisReport prev = prevReports.get(0);
+                    String prevSummary = String.format("[历史参考|%s] 信号:%s 评分:%d %s",
+                            prev.getAnalysisDate(),
+                            prev.getSignal() != null ? prev.getSignal() : "-",
+                            prev.getTotalScore() != null ? prev.getTotalScore() : 0,
+                            prev.getSummary() != null ? prev.getSummary().substring(
+                                    0, Math.min(150, prev.getSummary().length())) : "");
+                    enhancedContext.put("last_analysis_summary", prevSummary);
+                    log.debug("[{}] 历史参考已注入: {}",
+                            stockCode, prevSummary.substring(0, Math.min(80, prevSummary.length())));
+                }
+            } catch (Exception e) {
+                log.debug("[{}] 历史参考加载失败，跳过: {}", stockCode, e.getMessage());
+            }
+
             // ===== Step 8: LLM分析(统一使用ReactAgent) =====
             diag.stage("llm_analysis");
             AnalysisResult analysisResult;
@@ -235,6 +261,24 @@ public class StockAnalysisPipeline {
 
             long llmDuration = System.currentTimeMillis() - llmStart;
             diag.record("llm_duration_ms", llmDuration);
+
+            // ===== Step 8.5: 独立信号验证 (Maker-Checker 分离) =====
+            diag.stage("signal_verify");
+            if (!dryRun && analysisResult != null && analysisResult.signal != null) {
+                SignalVerifier.VerificationResult vr = signalVerifier.verify(
+                        analysisResult, technicalResult, marketContext, historyData, null);
+                signalVerifier.applyVerification(analysisResult, vr);
+                diag.record("verifier_passed", vr.passed);
+                diag.record("verifier_confidence", vr.confidence);
+                diag.record("verifier_consensus", String.format("%.0f%%", vr.consensusRatio * 100));
+                if (vr.wasAdjusted()) {
+                    diag.record("verifier_adjustment", vr.originalSignal + "→" + vr.adjustedSignal);
+                    log.info("[{}] Verifier调整信号: {} → {} | {}",
+                            stockCode, vr.originalSignal, vr.adjustedSignal, vr.adjustmentReason);
+                }
+                // 通知 LoopStateManager 记录 Verifier 统计（修复之前的断路）
+                loopStateManager.onSignalVerified(vr.wasAdjusted());
+            }
 
             // ===== Step 9-14: 后处理链(委托给 PostProcessor) =====
             postProcessor.process(analysisResult, trendResult, technicalResult, realtimeQuote, marketContext, historyData);
@@ -350,7 +394,7 @@ public class StockAnalysisPipeline {
      */
     public void sendSingleStockNotification(AnalysisReport report) {
         synchronized (singleStockNotifyLock) {
-            if (!notificationRouter.shouldSend(report.getStockCode(), report.getSignal())) {
+            if (!notificationService.shouldSend(report.getStockCode(), report.getSignal())) {
                 log.debug("[{}] 通知被降噪过滤", report.getStockCode());
                 return;
             }

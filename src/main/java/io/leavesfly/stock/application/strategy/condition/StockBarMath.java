@@ -1,6 +1,6 @@
 package io.leavesfly.stock.application.strategy.condition;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 
 import java.util.List;
 import java.util.Map;

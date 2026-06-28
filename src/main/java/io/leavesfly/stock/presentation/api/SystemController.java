@@ -1,46 +1,33 @@
-package io.leavesfly.stock.application.service;
+package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.strategy.StrategyCatalog;
-import io.leavesfly.stock.application.strategy.StrategyCatalogLoader;
+import io.leavesfly.stock.application.service.task.SystemService;
+import io.leavesfly.stock.application.service.loop.LoopStateManager;
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.infrastructure.llm.LlmUsageTracker;
-import io.leavesfly.stock.infrastructure.persistence.AnalysisTaskRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 系统管理 API — 扩展健康检查。
+ * 系统管理 API — 健康检查、用量、仪表盘。
+ * 业务逻辑下沉至 {@link SystemService}，Controller 仅处理 HTTP 协议。
  */
 @RestController
 @RequestMapping("/api/v1")
 public class SystemController {
 
     private final AppConfig config;
-    private final AnalysisHistoryService historyService;
-    private final DecisionSignalService signalService;
-    private final LlmUsageTracker usageTracker;
-    private final DataSource dataSource;
-    private final StrategyCatalog strategyCatalog;
-    private final AnalysisTaskRepository analysisTaskRepository;
+    private final SystemService systemService;
+    private final LoopStateManager loopStateManager;
 
-    public SystemController(AppConfig config, AnalysisHistoryService historyService,
-                           DecisionSignalService signalService, LlmUsageTracker usageTracker,
-                           DataSource dataSource, StrategyCatalog strategyCatalog,
-                           AnalysisTaskRepository analysisTaskRepository) {
+    public SystemController(AppConfig config, SystemService systemService,
+                            LoopStateManager loopStateManager) {
         this.config = config;
-        this.historyService = historyService;
-        this.signalService = signalService;
-        this.usageTracker = usageTracker;
-        this.dataSource = dataSource;
-        this.strategyCatalog = strategyCatalog;
-        this.analysisTaskRepository = analysisTaskRepository;
+        this.systemService = systemService;
+        this.loopStateManager = loopStateManager;
     }
 
     @GetMapping("/health")
@@ -49,23 +36,8 @@ public class SystemController {
         result.put("status", "ok");
         result.put("service", "daily-stock-analysis");
         result.put("timestamp", System.currentTimeMillis());
-
-        Map<String, Object> checks = new LinkedHashMap<>();
-        checks.put("database", checkDatabase());
-        checks.put("strategies_loaded", strategyCatalog.listAll().size());
-        checks.put("strategies_available", strategyCatalog.listAll().stream().filter(s -> s.isAvailable()).count());
-        checks.put("llm_configured", config.getLlmApiKey() != null && !config.getLlmApiKey().isEmpty());
-        checks.put("pending_tasks", analysisTaskRepository.findByStatus("running").size());
-        result.put("checks", checks);
+        result.put("checks", systemService.healthChecks());
         return ResponseEntity.ok(result);
-    }
-
-    private String checkDatabase() {
-        try (Connection conn = dataSource.getConnection()) {
-            return conn.isValid(2) ? "ok" : "degraded";
-        } catch (Exception e) {
-            return "error";
-        }
     }
 
     @GetMapping("/system-config")
@@ -87,24 +59,20 @@ public class SystemController {
 
     @GetMapping("/usage")
     public ResponseEntity<Map<String, Object>> usage() {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("today", usageTracker.getTodayUsage());
-        result.put("overall", usageTracker.getOverallStats());
-        result.put("monthly_total", usageTracker.getMonthlyStats());
-        result.put("by_model", usageTracker.getModelBreakdown());
-        result.put("daily_detail", usageTracker.getDailyDetail(30));
-        result.put("cost_trend", usageTracker.getCostTrend(14));
-        result.put("model_distribution", usageTracker.getModelDistribution(30));
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(systemService.getUsage());
     }
 
     @GetMapping("/dashboard/stats")
     public ResponseEntity<Map<String, Object>> dashboardStats() {
-        Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("total_reports", historyService.getTotalAnalysisCount());
-        stats.put("active_signals", signalService.getActiveSignals().size());
-        stats.put("recent_signals", signalService.getRecentSignals());
-        stats.put("usage_today", usageTracker.getTodayUsage());
-        return ResponseEntity.ok(stats);
+        return ResponseEntity.ok(systemService.getDashboardStats());
+    }
+
+    /**
+     * Loop 循环健康状态 - 展示系统自我感知数据
+     * 包含: 准确率、Verifier调整率、循环次数、健康模式等
+     */
+    @GetMapping("/loop/status")
+    public ResponseEntity<Map<String, Object>> loopStatus() {
+        return ResponseEntity.ok(loopStateManager.getHealthReport());
     }
 }

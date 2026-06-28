@@ -3,7 +3,8 @@ package io.leavesfly.stock.application.strategy;
 import io.leavesfly.stock.application.strategy.engine.CompositeScoringEngine;
 import io.leavesfly.stock.application.strategy.engine.CompositeScoringResult;
 import io.leavesfly.stock.application.strategy.engine.ScoringContext;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.application.strategy.engine.StrategyPerformanceTracker;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +24,7 @@ class CompositeScoringEngineTest {
 
     @BeforeEach
     void setUp() {
-        engine = new CompositeScoringEngine(StrategyTestData.loadCatalog());
+        engine = new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker());
         technicalAnalysisService = new TechnicalAnalysisService();
     }
 

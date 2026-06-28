@@ -1,10 +1,9 @@
 package io.leavesfly.stock.application.strategy.engine;
 
 import io.leavesfly.stock.application.strategy.StrategyCatalog;
-import io.leavesfly.stock.application.strategy.StrategyCatalog;
 import io.leavesfly.stock.application.strategy.model.ScoringProfile;
 import io.leavesfly.stock.application.strategy.model.StrategyDefinition;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -23,9 +22,11 @@ import java.util.Map;
 public class CompositeScoringEngine {
 
     private final StrategyCatalog catalog;
+    private final StrategyPerformanceTracker performanceTracker;
 
-    public CompositeScoringEngine(StrategyCatalog catalog) {
+    public CompositeScoringEngine(StrategyCatalog catalog, StrategyPerformanceTracker performanceTracker) {
         this.catalog = catalog;
+        this.performanceTracker = performanceTracker;
     }
 
     /**
@@ -46,11 +47,18 @@ public class CompositeScoringEngine {
             if (profile == null || profile.getScoreWeight() <= 0) {
                 continue;
             }
-            int weight = profile.getScoreWeight();
+            int rawWeight = profile.getScoreWeight();
+            // 衰减追踪：启用 auto_decay 的策略使用有效权重
+            int weight = performanceTracker.getEffectiveWeight(
+                    strategy.getId(), rawWeight, profile.isAutoDecay(), profile.getMinWeight());
             maxWeight += weight;
             boolean matched = matchesConditions(profile.getConditions(), ctx);
             if (matched) {
                 earned += weight;
+            }
+            // 记录命中情况，供衰减追踪器更新
+            if (profile.isAutoDecay()) {
+                performanceTracker.recordMatch(strategy.getId(), matched, profile.getDecayWindow());
             }
             String label = profile.getLabel() != null ? profile.getLabel() : strategy.getLabel();
             hits.add(new CompositeScoringResult.StrategyHit(strategy.getId(), label, weight, matched));

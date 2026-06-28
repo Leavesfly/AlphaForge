@@ -1,7 +1,7 @@
 package io.leavesfly.stock.application.pipeline;
 
-import io.leavesfly.stock.application.service.ReportFormatterService;
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
+import io.leavesfly.stock.application.service.report.ReportFormatterService;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.stock.infrastructure.notification.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

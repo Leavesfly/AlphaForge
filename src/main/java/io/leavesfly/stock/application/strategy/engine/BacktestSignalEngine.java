@@ -5,7 +5,7 @@ import io.leavesfly.stock.application.strategy.condition.StockBarMath;
 import io.leavesfly.stock.application.strategy.condition.ValueCoercion;
 import io.leavesfly.stock.application.strategy.model.BacktestProfile;
 import io.leavesfly.stock.application.strategy.model.StrategyDefinition;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

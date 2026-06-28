@@ -148,7 +148,11 @@ document.getElementById('btn-run-analysis').addEventListener('click', () => {
 });
 
 // ===== Signal Detail Modal =====
-function openSignalDetail(name, code, action) {
+let currentSignalFeedbackId = null;
+let _signalsCache = {};
+
+function openSignalDetail(name, code, action, id) {
+  currentSignalFeedbackId = id || null;
   document.getElementById('signal-detail-title').textContent = `${name} (${code}) 信号详情`;
   const actionLabels = { strong_buy: '强买入', buy: '买入', sell: '卖出', hold: '持有' };
   const actionColors = { strong_buy: 'success', buy: 'success', sell: 'danger', hold: 'warning' };
@@ -610,14 +614,118 @@ function loadSignals() {
     const items = data.items || [];
     const grid = document.getElementById('signals-grid');
     if (!grid) return;
+    // 缓存信号数据以支持详情弹窗
+    _signalsCache = {};
+    items.forEach(s => { if (s.id) _signalsCache[s.id] = s; });
     if (!items.length) { grid.innerHTML = '<div class="empty-state">暂无决策信号，分析股票后将自动生成</div>'; return; }
     grid.innerHTML = items.map(s => {
       const actionCls = (s.action||'').includes('buy') ? 'buy' : s.action === 'sell' ? 'sell' : 'hold';
       const actionLabel = s.action === 'buy' ? '买入' : s.action === 'strong_buy' ? '强买入' : s.action === 'sell' ? '卖出' : '持有';
       const badgeCls = actionCls === 'buy' ? 'success' : actionCls === 'sell' ? 'danger' : 'warning';
-      return `<div class="card signal-card ${actionCls}" data-status="${s.status||'active'}"><div class="signal-header"><div><div class="signal-stock">${s.stockName||''}<span>${s.stockCode||''}</span></div><div style="font-size:12px;color:var(--text-muted);margin-top:4px">置信度 ${s.confidence?Math.round(s.confidence*100)+'%':'-'}</div></div><span class="badge badge-${badgeCls}">${actionLabel}</span></div><div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:4px">${s.reason||''}</div><div class="signal-meta"><div class="signal-meta-item"><div class="label">止损</div><div class="value text-down">${s.stopLoss||'-'}</div></div><div class="signal-meta-item"><div class="label">目标价</div><div class="value text-up">${s.targetPrice||'-'}</div></div><div class="signal-meta-item"><div class="label">评分</div><div class="value">${s.score||'-'}</div></div></div></div>`;
+      return `<div class="card signal-card ${actionCls}" data-status="${s.status||'active'}" style="cursor:pointer" onclick="openSignalDetailDyn(${s.id||0})"><div class="signal-header"><div><div class="signal-stock">${s.stockName||''}<span>${s.stockCode||''}</span></div><div style="font-size:12px;color:var(--text-muted);margin-top:4px">置信度 ${s.confidence?Math.round(s.confidence*100)+'%':'-'}</div></div><span class="badge badge-${badgeCls}">${actionLabel}</span></div><div style="font-size:13px;color:var(--text-muted);line-height:1.6;margin-bottom:4px">${s.reason||''}</div><div class="signal-meta"><div class="signal-meta-item"><div class="label">止损</div><div class="value text-down">${s.stopLoss||'-'}</div></div><div class="signal-meta-item"><div class="label">目标价</div><div class="value text-up">${s.targetPrice||'-'}</div></div><div class="signal-meta-item"><div class="label">评分</div><div class="value">${s.score||'-'}</div></div></div></div>`;
     }).join('');
   }).catch(() => {});
+}
+
+/** 通过居青 ID 打开信号详情（调用后端 API 获取详情） */
+function openSignalDetailDyn(id) {
+  if (!id) return;
+  const cached = _signalsCache[id];
+  if (cached) {
+    openSignalDetail(cached.stockName||'', cached.stockCode||'', cached.action||'', id);
+    return;
+  }
+  fetch(`/api/v1/decision-signals/${id}`).then(r => r.json()).then(s => {
+    openSignalDetail(s.stockName||'', s.stockCode||'', s.action||'', s.id||id);
+  }).catch(() => showToast('加载信号详情失败', 'error'));
+}
+
+/** 提交信号反馈 */
+function submitSignalFeedback(feedback) {
+  if (!currentSignalFeedbackId) {
+    showToast('无法获取信号 ID', 'error');
+    closeModal('modal-signal');
+    return;
+  }
+  const feedbackLabel = feedback === 'useful' ? '有用' : '无用';
+  fetch(`/api/v1/decision-signals/${currentSignalFeedbackId}/feedback`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ feedback_value: feedback, source: 'web' })
+  }).then(r => r.json()).then(() => {
+    showToast(`反馈已提交：${feedbackLabel}`, feedback === 'useful' ? 'success' : 'warning');
+    closeModal('modal-signal');
+    loadSignals();
+  }).catch(() => {
+    showToast('反馈提交失败', 'error');
+    closeModal('modal-signal');
+  });
+}
+
+/** Loop 循环健康状态加载 */
+function loadLoopStatus() {
+  fetch('/api/v1/loop/status').then(r => r.json()).then(data => {
+    const healthy = data.healthy;
+    const healthCard = document.getElementById('loop-health-card');
+    if (healthCard) {
+      healthCard.className = 'card stat-card ' + (healthy ? 'accent-success' : 'accent-danger');
+      healthCard.querySelector('.stat-icon').textContent = healthy ? '🟢' : '🔴';
+    }
+    const healthEl = document.getElementById('loop-healthy');
+    if (healthEl) healthEl.textContent = healthy ? '健康' : '降级中';
+
+    const totalRuns = document.getElementById('loop-total-runs');
+    if (totalRuns) totalRuns.textContent = data.total_loop_runs || 0;
+
+    const avgDuration = document.getElementById('loop-avg-duration');
+    if (avgDuration) {
+      const ms = Number(data.avg_loop_duration_ms) || 0;
+      avgDuration.textContent = ms >= 60000 ? (ms/60000).toFixed(1)+'min' : ms >= 1000 ? (ms/1000).toFixed(1)+'s' : ms+'ms';
+    }
+
+    const consErrors = document.getElementById('loop-consecutive-errors');
+    if (consErrors) {
+      const n = data.consecutive_errors || 0;
+      consErrors.textContent = n;
+      consErrors.style.color = n >= 3 ? 'var(--danger)' : n > 0 ? 'var(--warning)' : '';
+    }
+
+    const accuracyEl = document.getElementById('loop-signal-accuracy');
+    if (accuracyEl) accuracyEl.textContent = data.signal_accuracy_pct || '未评估';
+
+    const verifierRateEl = document.getElementById('loop-verifier-rate');
+    if (verifierRateEl) verifierRateEl.textContent = data.verifier_adjustment_rate || '0%';
+
+    const verifiedEl = document.getElementById('loop-signals-verified');
+    if (verifiedEl) verifiedEl.textContent = data.total_signals_verified || 0;
+
+    const adjustedText = document.getElementById('loop-signals-adjusted-text');
+    if (adjustedText) adjustedText.textContent = `已调整: ${data.total_signals_adjusted || 0} 个`;
+
+    const lastRunEl = document.getElementById('loop-last-run-time');
+    if (lastRunEl) lastRunEl.textContent = data.last_run_time === 'never' ? '从未运行' : String(data.last_run_time||'-').replace('T',' ').slice(0,19);
+
+    const lastEvalEl = document.getElementById('loop-last-eval-time');
+    if (lastEvalEl) lastEvalEl.textContent = data.last_eval_time === 'never' ? '从未评估' : String(data.last_eval_time||'-').replace('T',' ').slice(0,19);
+
+    const statusEl = document.getElementById('loop-status-text');
+    if (statusEl) {
+      const status = data.status || '-';
+      if (status.startsWith('running:')) {
+        statusEl.textContent = '运行中: ' + status.replace('running:','');
+        statusEl.style.color = 'var(--info)';
+      } else if (status.startsWith('error:')) {
+        statusEl.textContent = '错误: ' + status.replace('error:','');
+        statusEl.style.color = 'var(--danger)';
+      } else if (status === 'idle') {
+        statusEl.textContent = '空闲';
+        statusEl.style.color = 'var(--success)';
+      } else {
+        statusEl.textContent = status;
+        statusEl.style.color = '';
+      }
+    }
+  }).catch(() => showToast('加载 Loop 状态失败', 'error'));
 }
 
 /** 用量监控加载 */
@@ -1231,6 +1339,7 @@ navigateTo = function(page) {
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
     case 'backtest': initBacktestPage(); break;
+    case 'loop-monitor': loadLoopStatus(); break;
   }
 };
 

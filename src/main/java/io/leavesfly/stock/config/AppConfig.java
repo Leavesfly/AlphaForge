@@ -1,8 +1,13 @@
 package io.leavesfly.stock.config;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import io.leavesfly.stock.domain.service.NameToCodeResolver;
+import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
+import io.leavesfly.stock.domain.service.TechnicalIndicatorCalculator;
+import io.leavesfly.stock.domain.service.TradingCalendar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import jakarta.annotation.PostConstruct;
 
@@ -105,6 +110,14 @@ public class AppConfig {
     private double llmScoreBlendRatio = 0.6;
     private int buyScoreThreshold = 70;
     private int sellScoreThreshold = 30;
+    // ========== 自适应评分混合配置 ==========
+    private boolean adaptiveBlendEnabled = true;
+    private double adaptiveBlendBaseRatio = 0.5;
+    private double adaptiveStrategyConfidenceImpact = 0.2;
+    private double adaptiveMarketClarityImpact = 0.15;
+    private double adaptiveLlmConfidenceImpact = 0.1;
+    private double adaptiveBlendMinRatio = 0.2;
+    private double adaptiveBlendMaxRatio = 0.8;
 
     @PostConstruct
     public void init() {
@@ -267,6 +280,15 @@ public class AppConfig {
         llmScoreBlendRatio = getDoubleEnv("LLM_SCORE_BLEND_RATIO", 0.6);
         buyScoreThreshold = getIntEnv("BUY_SCORE_THRESHOLD", 70);
         sellScoreThreshold = getIntEnv("SELL_SCORE_THRESHOLD", 30);
+
+        // 自适应评分混合
+        adaptiveBlendEnabled = getBoolEnv("ADAPTIVE_BLEND_ENABLED", true);
+        adaptiveBlendBaseRatio = getDoubleEnv("ADAPTIVE_BLEND_BASE_RATIO", 0.5);
+        adaptiveStrategyConfidenceImpact = getDoubleEnv("ADAPTIVE_STRATEGY_CONFIDENCE_IMPACT", 0.2);
+        adaptiveMarketClarityImpact = getDoubleEnv("ADAPTIVE_MARKET_CLARITY_IMPACT", 0.15);
+        adaptiveLlmConfidenceImpact = getDoubleEnv("ADAPTIVE_LLM_CONFIDENCE_IMPACT", 0.1);
+        adaptiveBlendMinRatio = getDoubleEnv("ADAPTIVE_BLEND_MIN_RATIO", 0.2);
+        adaptiveBlendMaxRatio = getDoubleEnv("ADAPTIVE_BLEND_MAX_RATIO", 0.8);
     }
 
     /**
@@ -440,11 +462,40 @@ public class AppConfig {
     public double getLlmScoreBlendRatio() { return llmScoreBlendRatio; }
     public int getBuyScoreThreshold() { return buyScoreThreshold; }
     public int getSellScoreThreshold() { return sellScoreThreshold; }
+    public boolean isAdaptiveBlendEnabled() { return adaptiveBlendEnabled; }
+    public double getAdaptiveBlendBaseRatio() { return adaptiveBlendBaseRatio; }
+    public double getAdaptiveStrategyConfidenceImpact() { return adaptiveStrategyConfidenceImpact; }
+    public double getAdaptiveMarketClarityImpact() { return adaptiveMarketClarityImpact; }
+    public double getAdaptiveLlmConfidenceImpact() { return adaptiveLlmConfidenceImpact; }
+    public double getAdaptiveBlendMinRatio() { return adaptiveBlendMinRatio; }
+    public double getAdaptiveBlendMaxRatio() { return adaptiveBlendMaxRatio; }
     public String getEmailSmtpHost() { return emailSmtpHost; }
     public int getEmailSmtpPort() { return emailSmtpPort; }
     public String getEmailUser() { return emailUser; }
     public String getEmailPassword() { return emailPassword; }
     public String getEmailTo() { return emailTo; }
+
+    // ========== 领域服务 Bean 装配（domain 层不依赖 Spring，由配置层统一注册） ==========
+
+    @Bean
+    public TechnicalAnalysisService technicalAnalysisService() {
+        return new TechnicalAnalysisService();
+    }
+
+    @Bean
+    public TradingCalendar tradingCalendar() {
+        return new TradingCalendar();
+    }
+
+    @Bean
+    public NameToCodeResolver nameToCodeResolver() {
+        return new NameToCodeResolver();
+    }
+
+    @Bean
+    public TechnicalIndicatorCalculator technicalIndicatorCalculator() {
+        return new TechnicalIndicatorCalculator();
+    }
 
     /**
      * LLM渠道配置

@@ -2,9 +2,9 @@ package io.leavesfly.stock.application.agent.tools.impl;
 
 import io.leavesfly.stock.application.agent.tools.Tool;
 import io.leavesfly.stock.application.agent.tools.ToolException;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -20,10 +20,10 @@ import java.util.Map;
 @Component
 public class TechnicalAnalysisTool implements Tool {
 
-    private final DataFetcherManager dataFetcher;
+    private final MarketDataPort dataFetcher;
     private final TechnicalAnalysisService technicalService;
 
-    public TechnicalAnalysisTool(DataFetcherManager dataFetcher,
+    public TechnicalAnalysisTool(MarketDataPort dataFetcher,
                                   TechnicalAnalysisService technicalService) {
         this.dataFetcher = dataFetcher;
         this.technicalService = technicalService;

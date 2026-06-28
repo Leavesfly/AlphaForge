@@ -1,9 +1,9 @@
 package io.leavesfly.stock.application.pipeline;
 
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
-import io.leavesfly.stock.application.service.IntelligenceService;
+import io.leavesfly.stock.application.service.market.IntelligenceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -25,10 +25,10 @@ import java.util.*;
 public class AnalysisContextEnhancer {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisContextEnhancer.class);
-    private final DataFetcherManager dataFetcherManager;
+    private final MarketDataPort dataFetcherManager;
     private final IntelligenceService intelligenceService;
 
-    public AnalysisContextEnhancer(DataFetcherManager dataFetcherManager, IntelligenceService intelligenceService) {
+    public AnalysisContextEnhancer(MarketDataPort dataFetcherManager, IntelligenceService intelligenceService) {
         this.dataFetcherManager = dataFetcherManager;
         this.intelligenceService = intelligenceService;
     }

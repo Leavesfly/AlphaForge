@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.infrastructure.persistence.WatchlistRepository">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.watchlist.WatchlistRepository">
 
-    <resultMap id="watchlistMap" type="io.leavesfly.stock.domain.model.entity.WatchlistItem">
+    <resultMap id="watchlistMap" type="io.leavesfly.stock.domain.model.entity.watchlist.WatchlistItem">
         <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
         <result property="stockName" column="stock_name"/>

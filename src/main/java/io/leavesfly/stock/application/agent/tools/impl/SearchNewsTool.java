@@ -2,7 +2,7 @@ package io.leavesfly.stock.application.agent.tools.impl;
 
 import io.leavesfly.stock.application.agent.tools.Tool;
 import io.leavesfly.stock.application.agent.tools.ToolException;
-import io.leavesfly.stock.application.service.NewsSearchService;
+import io.leavesfly.stock.application.service.market.NewsSearchService;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;

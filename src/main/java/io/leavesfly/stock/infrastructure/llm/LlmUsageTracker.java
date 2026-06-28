@@ -1,7 +1,9 @@
 package io.leavesfly.stock.infrastructure.llm;
 
-import io.leavesfly.stock.domain.model.entity.LlmUsageDaily;
-import io.leavesfly.stock.infrastructure.persistence.LlmUsageDailyRepository;
+import io.leavesfly.stock.domain.service.port.LlmUsagePort;
+
+import io.leavesfly.stock.domain.model.entity.usage.LlmUsageDaily;
+import io.leavesfly.stock.infrastructure.persistence.usage.LlmUsageDailyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -17,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 内存快速统计 + 异步持久化到 llm_usage_daily 表
  */
 @Component
-public class LlmUsageTracker {
+public class LlmUsageTracker implements LlmUsagePort {
 
     private static final Logger log = LoggerFactory.getLogger(LlmUsageTracker.class);
 

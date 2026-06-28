@@ -2,7 +2,7 @@ package io.leavesfly.stock.application.agent.tools.impl;
 
 import io.leavesfly.stock.application.agent.tools.Tool;
 import io.leavesfly.stock.application.agent.tools.ToolException;
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -14,9 +14,9 @@ import java.util.Map;
 @Component
 public class GetStockPriceTool implements Tool {
 
-    private final DataFetcherManager dataFetcher;
+    private final MarketDataPort dataFetcher;
 
-    public GetStockPriceTool(DataFetcherManager dataFetcher) {
+    public GetStockPriceTool(MarketDataPort dataFetcher) {
         this.dataFetcher = dataFetcher;
     }
 

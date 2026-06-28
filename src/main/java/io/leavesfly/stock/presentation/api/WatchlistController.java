@@ -1,7 +1,7 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.WatchlistService;
-import io.leavesfly.stock.domain.model.entity.WatchlistItem;
+import io.leavesfly.stock.application.service.watchlist.WatchlistService;
+import io.leavesfly.stock.domain.model.entity.watchlist.WatchlistItem;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

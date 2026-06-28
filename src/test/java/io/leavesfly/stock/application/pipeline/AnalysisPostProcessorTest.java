@@ -4,6 +4,7 @@ import io.leavesfly.stock.application.pipeline.AnalysisPostProcessor.AnalysisRes
 import io.leavesfly.stock.application.pipeline.AnalysisPostProcessor.TrendAnalysisResult;
 import io.leavesfly.stock.application.strategy.StrategyTestData;
 import io.leavesfly.stock.application.strategy.engine.CompositeScoringEngine;
+import io.leavesfly.stock.application.strategy.engine.StrategyPerformanceTracker;
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.service.TechnicalAnalysisService;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,8 +39,9 @@ class AnalysisPostProcessorTest {
         when(appConfig.getLlmScoreBlendRatio()).thenReturn(0.6);
         when(appConfig.getBuyScoreThreshold()).thenReturn(70);
         when(appConfig.getSellScoreThreshold()).thenReturn(30);
+        when(appConfig.isAdaptiveBlendEnabled()).thenReturn(false);
         processor = new AnalysisPostProcessor(
-                new CompositeScoringEngine(StrategyTestData.loadCatalog()), appConfig);
+                new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker()), appConfig);
         technicalAnalysisService = new TechnicalAnalysisService();
     }
 

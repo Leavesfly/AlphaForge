@@ -9,6 +9,9 @@ label: 底部放量
 description: 股价在低位区间出现显著放量，可能是主力建仓信号
 category: momentum
 risk_level: medium
+applicable_market: [bear, range]
+applicable_cap: [mid, small]
+tags: [底部, 放量, 主力, 抄底]
 
 # 综合分析评分段（CompositeScoringEngine 多策略加权）
 scoring:

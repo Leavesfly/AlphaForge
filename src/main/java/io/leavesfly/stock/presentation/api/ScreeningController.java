@@ -1,7 +1,7 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.AlphaSiftScreeningEngine;
-import io.leavesfly.stock.domain.model.entity.AlphaSiftTask;
+import io.leavesfly.stock.application.service.screening.AlphaSiftScreeningEngine;
+import io.leavesfly.stock.domain.model.entity.screening.AlphaSiftTask;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

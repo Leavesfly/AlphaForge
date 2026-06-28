@@ -1,6 +1,5 @@
 package io.leavesfly.stock.domain.service;
 
-import org.springframework.stereotype.Component;
 import java.time.*;
 import java.util.*;
 
@@ -9,7 +8,6 @@ import java.util.*;
  *
  * 判断交易日、节假日、连续交易时段等
  */
-@Component
 public class TradingCalendar {
 
     /** 中国法定节假日(简化版，实际应从外部数据源加载) */

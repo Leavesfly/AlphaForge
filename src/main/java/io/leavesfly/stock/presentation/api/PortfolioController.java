@@ -1,11 +1,14 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.PortfolioExtService;
-import io.leavesfly.stock.application.service.PortfolioRiskService;
-import io.leavesfly.stock.application.service.PortfolioService;
-import io.leavesfly.stock.domain.model.entity.*;
+import io.leavesfly.stock.application.service.portfolio.CsvImportService;
+import io.leavesfly.stock.application.service.portfolio.PortfolioExtService;
+import io.leavesfly.stock.application.service.portfolio.PortfolioRiskService;
+import io.leavesfly.stock.application.service.portfolio.PortfolioService;
+import io.leavesfly.stock.domain.model.entity.portfolio.*;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
 
@@ -20,13 +23,16 @@ public class PortfolioController {
     private final PortfolioService portfolioService;
     private final PortfolioExtService portfolioExtService;
     private final PortfolioRiskService riskService;
+    private final CsvImportService csvImportService;
 
     public PortfolioController(PortfolioService portfolioService,
                               PortfolioExtService portfolioExtService,
-                              PortfolioRiskService riskService) {
+                              PortfolioRiskService riskService,
+                              CsvImportService csvImportService) {
         this.portfolioService = portfolioService;
         this.portfolioExtService = portfolioExtService;
         this.riskService = riskService;
+        this.csvImportService = csvImportService;
     }
 
     // ==================== 持仓 ====================
@@ -147,5 +153,59 @@ public class PortfolioController {
     @GetMapping("/risk")
     public ResponseEntity<Map<String, Object>> risk() {
         return ResponseEntity.ok(riskService.assessRisk());
+    }
+
+    // ==================== CSV导入 ====================
+
+    /** 获取支持的券商列表 */
+    @GetMapping("/import/brokers")
+    public ResponseEntity<List<Map<String, String>>> supportedBrokers() {
+        return ResponseEntity.ok(List.of(
+            Map.of("id", "eastmoney", "name", "东方财富"),
+            Map.of("id", "tonghuashun", "name", "同花顺"),
+            Map.of("id", "futu", "name", "富途"),
+            Map.of("id", "tiger", "name", "老虎证券"),
+            Map.of("id", "longbridge", "name", "长桥证券"),
+            Map.of("id", "huatai", "name", "华泰证券"),
+            Map.of("id", "citic", "name", "中信证券"),
+            Map.of("id", "cmb", "name", "招商证券")
+        ));
+    }
+
+    /** CSV导入预览(解析不落库) */
+    @PostMapping(value = "/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> importPreview(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "eastmoney") String broker) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "文件不能为空"));
+        }
+        try {
+            Map<String, Object> result = csvImportService.parseCsv(
+                    broker, file.getBytes(), file.getOriginalFilename());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** CSV导入确认(落库) */
+    @PostMapping(value = "/import/commit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> importCommit(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "eastmoney") String broker,
+            @RequestParam Long accountId,
+            @RequestParam(defaultValue = "false") boolean dryRun) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "文件不能为空"));
+        }
+        try {
+            Map<String, Object> result = csvImportService.commitCsv(
+                    accountId, broker, file.getBytes(), file.getOriginalFilename(), dryRun,
+                    portfolioExtService);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
     }
 }

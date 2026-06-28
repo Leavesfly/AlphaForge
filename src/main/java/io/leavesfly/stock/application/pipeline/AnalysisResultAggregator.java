@@ -1,8 +1,8 @@
 package io.leavesfly.stock.application.pipeline;
 
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
-import io.leavesfly.stock.infrastructure.notification.NotificationService;
-import io.leavesfly.stock.application.service.ReportFormatterService;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
+import io.leavesfly.stock.domain.service.port.NotificationPort;
+import io.leavesfly.stock.application.service.report.ReportFormatterService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -23,10 +23,10 @@ import java.util.stream.Collectors;
 public class AnalysisResultAggregator {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisResultAggregator.class);
-    private final NotificationService notificationService;
+    private final NotificationPort notificationService;
     private final ReportFormatterService formatterService;
 
-    public AnalysisResultAggregator(NotificationService notificationService, ReportFormatterService formatterService) {
+    public AnalysisResultAggregator(NotificationPort notificationService, ReportFormatterService formatterService) {
         this.notificationService = notificationService;
         this.formatterService = formatterService;
     }

@@ -4,7 +4,7 @@ import io.leavesfly.stock.application.strategy.StrategyTestData;
 import io.leavesfly.stock.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.stock.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.stock.application.strategy.model.StrategyDefinition;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

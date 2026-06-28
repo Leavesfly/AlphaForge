@@ -19,6 +19,8 @@ public class BacktestProfile {
     private double positionSize = 0.95;
     /** 回测仿真参数覆盖，如 commission_rate、slippage_rate */
     private Map<String, Object> simulation = Collections.emptyMap();
+    /** 参数搜索空间，如 {"fast_period": [3,5,8], "slow_period": [15,20,30]}，供 ParameterOptimizer 使用 */
+    private Map<String, List<Object>> paramSpace = Collections.emptyMap();
 
     public Map<String, Object> getParameters() { return parameters; }
     public void setParameters(Map<String, Object> parameters) {
@@ -41,5 +43,15 @@ public class BacktestProfile {
     public Map<String, Object> getSimulation() { return simulation; }
     public void setSimulation(Map<String, Object> simulation) {
         this.simulation = simulation != null ? simulation : Collections.emptyMap();
+    }
+
+    public Map<String, List<Object>> getParamSpace() { return paramSpace; }
+    public void setParamSpace(Map<String, List<Object>> paramSpace) {
+        this.paramSpace = paramSpace != null ? paramSpace : Collections.emptyMap();
+    }
+
+    /** 是否声明了参数搜索空间 */
+    public boolean hasParamSpace() {
+        return !paramSpace.isEmpty();
     }
 }

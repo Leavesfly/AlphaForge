@@ -2,7 +2,7 @@ package io.leavesfly.stock.application.agent;
 
 import io.leavesfly.stock.application.agent.skills.SkillsLoader;
 import io.leavesfly.stock.application.agent.tools.ToolRegistry;
-import io.leavesfly.stock.infrastructure.llm.LlmService;
+import io.leavesfly.stock.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -32,12 +32,12 @@ public class ReActAgent {
 
     private static final Logger log = LoggerFactory.getLogger(ReActAgent.class);
 
-    private final LlmService llmService;
+    private final LlmPort llmService;
     private final LlmToolAdapter toolAdapter;
     private final ToolRegistry toolRegistry;
     private final SkillsLoader skillsLoader;
 
-    public ReActAgent(LlmService llmService, LlmToolAdapter toolAdapter,
+    public ReActAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
                       ToolRegistry toolRegistry, SkillsLoader skillsLoader) {
         this.llmService = llmService;
         this.toolAdapter = toolAdapter;
@@ -150,6 +150,7 @@ public class ReActAgent {
             appendContextData(sb, "技术分析", context.get("technical_analysis"));
             appendContextData(sb, "实时行情", context.get("realtime_quote"));
             appendContextData(sb, "历史数据", context.get("history_data"));
+            appendContextData(sb, "上次分析结论（供参考，请根据最新数据独立判断）", context.get("last_analysis_summary"));
             Object news = context.get("news");
             if (news instanceof List<?> newsList && !newsList.isEmpty()) {
                 sb.append("相关新闻:\n");

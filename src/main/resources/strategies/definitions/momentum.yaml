@@ -8,6 +8,9 @@ label: 动量策略
 description: 近期涨幅强势的标的筛选
 category: momentum
 risk_level: high
+applicable_market: [bull, range]
+applicable_cap: [mid, small]
+tags: [动量, 涨幅, 强势, 短线]
 
 screening:
   parameters:

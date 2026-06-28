@@ -1,9 +1,10 @@
 package io.leavesfly.stock.infrastructure.search;
 
+import io.leavesfly.stock.domain.service.port.NewsSearchPort;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.domain.port.NewsSearchPort;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

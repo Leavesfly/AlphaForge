@@ -1,11 +1,12 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.TaskService;
+import io.leavesfly.stock.application.service.report.AnalysisHistoryService;
+import io.leavesfly.stock.application.service.market.MarketAnalysisService;
+import io.leavesfly.stock.application.service.market.MarketLightService;
+import io.leavesfly.stock.application.service.task.TaskService;
 import io.leavesfly.stock.application.pipeline.StockAnalysisPipeline;
-import io.leavesfly.stock.application.service.*;
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
-import io.leavesfly.stock.domain.model.entity.AnalysisTask;
-import io.leavesfly.stock.infrastructure.dataprovider.DataFetcherManager;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -24,18 +25,15 @@ public class AnalysisController {
 
     private final StockAnalysisPipeline pipeline;
     private final AnalysisHistoryService historyService;
-    private final DataFetcherManager dataFetcher;
     private final MarketAnalysisService marketService;
     private final MarketLightService marketLightService;
     private final TaskService taskService;
 
     public AnalysisController(StockAnalysisPipeline pipeline, AnalysisHistoryService historyService,
-                             DataFetcherManager dataFetcher,
                              MarketAnalysisService marketService, MarketLightService marketLightService,
                              TaskService taskService) {
         this.pipeline = pipeline;
         this.historyService = historyService;
-        this.dataFetcher = dataFetcher;
         this.marketService = marketService;
         this.marketLightService = marketLightService;
         this.taskService = taskService;
@@ -87,7 +85,7 @@ public class AnalysisController {
 
     @GetMapping("/stocks/{code}/quote")
     public ResponseEntity<Map<String, Object>> quote(@PathVariable String code) {
-        Map<String, Object> quote = dataFetcher.getRealtimeQuote(code);
+        Map<String, Object> quote = marketService.getQuote(code);
         if (quote == null || quote.isEmpty()) {
             quote = Map.of("stock_code", code, "status", "no_data");
         }

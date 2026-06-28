@@ -1,6 +1,6 @@
 package io.leavesfly.stock.infrastructure.dataprovider;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
 import io.leavesfly.stock.domain.service.TradingCalendar;
 import org.slf4j.Logger;

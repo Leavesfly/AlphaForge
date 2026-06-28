@@ -3,7 +3,7 @@ package io.leavesfly.stock.application.backtest;
 import io.leavesfly.stock.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.stock.application.strategy.model.BacktestProfile;
 import io.leavesfly.stock.application.strategy.model.StrategyDefinition;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;

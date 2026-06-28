@@ -1,7 +1,7 @@
 package io.leavesfly.stock.infrastructure.dataprovider.impl;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -395,6 +395,361 @@ public class EFinanceFetcher implements BaseDataFetcher {
             }
         } catch (Exception e) {
             log.error("EFinance获取关键指标失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ========== 信号层数据 ==========
+
+    /**
+     * 获取龙虎榜数据 — 东财 datacenter
+     * 上榜记录 + 买卖席位 TOP5 + 机构动向
+     */
+    @Override
+    public List<Map<String, Object>> getDragonTigerList(String stockCode, int days) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_DAILYBILLBOARD_DETAILS"
+                    + "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=" + days
+                    + "&sortColumns=TRADE_DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("trade_date", item.path("TRADE_DATE").asText(""));
+                    row.put("reason", item.path("EXPLAIN").asText(""));          // 上榜原因
+                    row.put("net_buy", item.path("NET").asDouble(0));              // 净买入额
+                    row.put("buy_amount", item.path("BUY").asDouble(0));           // 买入额
+                    row.put("sell_amount", item.path("SELL").asDouble(0));         // 卖出额
+                    row.put("close_price", item.path("CLOSE_PRICE").asDouble(0));
+                    row.put("change_pct", item.path("CHANGE_RATE").asDouble(0));    // 涨跌幅%
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取龙虎榜失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取北向资金流向 — 东财 datacenter
+     * 沪股通/深股通日级净买入数据
+     */
+    @Override
+    public List<Map<String, Object>> getNorthboundFlow(int days) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_MUTUAL_DEAL_HISTORY"
+                    + "&columns=ALL"
+                    + "&pageNumber=1&pageSize=" + days
+                    + "&sortColumns=TRADE_DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("trade_date", item.path("TRADE_DATE").asText(""));
+                    row.put("board_type", item.path("BOARD_TYPE").asText(""));   // 沪股通/深股通
+                    row.put("buy_amount", item.path("BUY_AMOUNT").asDouble(0));   // 买入额
+                    row.put("sell_amount", item.path("SELL_AMOUNT").asDouble(0)); // 卖出额
+                    row.put("net_amount", item.path("NET_AMOUNT").asDouble(0));   // 净买入额
+                    row.put("accumulate_amount", item.path("ACCUMULATE_AMOUNT").asDouble(0)); // 累计净买入
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取北向资金失败: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取个股板块归属详情 — 东财 slist
+     * 行业/概念/地域 + BK码 + 当日涨跌幅 + 龙头股
+     */
+    @Override
+    public List<Map<String, Object>> getStockBoardsDetail(String stockCode) {
+        try {
+            // 东财数据中心：个股所属板块
+            String url = DATACENTER_URL + "?reportName=RPT_F10_CORETHEME_BOARDTYPE"
+                    + "&columns=BOARD_NAME,BOARD_CODE,BOARD_TYPE"
+                    + "&filter=(SECURITY_CODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=50"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("board_name", item.path("BOARD_NAME").asText(""));
+                    row.put("board_code", item.path("BOARD_CODE").asText(""));
+                    row.put("board_type", item.path("BOARD_TYPE").asText("")); // 行业/概念/地域
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取板块归属失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ========== 杠杆与筹码数据 ==========
+
+    /**
+     * 获取融资融券明细 — 东财 datacenter
+     * 日级融资余额/买入/偿还 + 融券余额/卖出/偿还
+     */
+    @Override
+    public List<Map<String, Object>> getMarginTrading(String stockCode, int days) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_RZRQ_DETAIL"
+                    + "&columns=ALL&filter=(SCODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=" + days
+                    + "&sortColumns=DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("date", item.path("DATE").asText(""));
+                    row.put("rzye", item.path("RZYE").asDouble(0));    // 融资余额
+                    row.put("rzmre", item.path("RZMRE").asDouble(0));  // 融资买入额
+                    row.put("rzche", item.path("RZCHE").asDouble(0));  // 融资偿还额
+                    row.put("rqye", item.path("RQYE").asDouble(0));    // 融券余额
+                    row.put("rqmcl", item.path("RQMCL").asDouble(0));  // 融券卖出量
+                    row.put("rzrqye", item.path("RZRQYE").asDouble(0)); // 融资融券余额
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取融资融券失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取股东户数变化 — 东财 datacenter
+     * 季度股东数 + 环比变化 + 户均持股（筹码集中度）
+     */
+    @Override
+    public List<Map<String, Object>> getShareholderCount(String stockCode) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_F10_EH_HOLDERNUM"
+                    + "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=8"
+                    + "&sortColumns=END_DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("end_date", item.path("END_DATE").asText(""));
+                    row.put("holder_num", item.path("HOLDER_NUM").asInt(0));         // 股东户数
+                    row.put("holder_num_change", item.path("HOLDER_NUM_CHANGE").asDouble(0)); // 环比变化%
+                    row.put("avg_hold_amount", item.path("AVG_HOLD_AMOUNT").asDouble(0)); // 户均持股
+                    row.put("avg_hold_ratio", item.path("AVG_HOLD_RATIO").asDouble(0));   // 户均持股比例%
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取股东户数失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取分红送转历史 — 东财 datacenter
+     * 每股派息/送股/转增 + 进度状态
+     */
+    @Override
+    public List<Map<String, Object>> getDividendHistory(String stockCode) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_F10_EH_DIVIDENT"
+                    + "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=20"
+                    + "&sortColumns=REPORT_DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("report_date", item.path("REPORT_DATE").asText(""));
+                    row.put("dps", item.path("DPS").asDouble(0));               // 每股派息(税前)
+                    row.put("send_stock", item.path("SEND_STOCK").asDouble(0));  // 每股送股
+                    row.put("convert_stock", item.path("CONVERT_STOCK").asDouble(0)); // 每股转增
+                    row.put("progress", item.path("PROGRESS").asText(""));      // 进度状态
+                    row.put("ex_date", item.path("EX_DIVIDEND_DATE").asText("")); // 除权除息日
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取分红送转失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ========== 研报与公告数据 ==========
+
+    /** 东财研报 API */
+    private static final String REPORT_URL = "https://reportapi.eastmoney.com/report/list";
+    /** 东财公告 API */
+    private static final String ANNOUNCE_URL = "https://np-anotice.eastmoney.com/api/security/ann";
+
+    /**
+     * 获取个股研报列表 — 东财 reportapi
+     * 包含评级 + 三年EPS预测
+     */
+    @Override
+    public List<Map<String, Object>> getResearchReports(String stockCode, int count) {
+        try {
+            String url = REPORT_URL + "?industryCode=*&industry=*&rating=*&ratingChange=*&beginTime=&endTime=&pageNo=1&pageSize="
+                    + count + "&code=" + stockCode;
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode dataNode = objectMapper.readTree(response.body().string()).path("data");
+                if (!dataNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : dataNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("title", item.path("title").asText(""));
+                    row.put("org_name", item.path("orgSName").asText(""));    // 研究机构
+                    row.put("author", item.path("researcher").asText(""));      // 研究员
+                    row.put("rating", item.path("emRatingName").asText(""));    // 评级
+                    row.put("publish_date", item.path("publishDate").asText(""));
+                    row.put("predict_eps_this_year", item.path("predictThisEps").asDouble(0)); // 今年EPS预测
+                    row.put("predict_eps_next_year", item.path("predictNextEps").asDouble(0)); // 明年EPS预测
+                    row.put("predict_pe_this_year", item.path("predictThisPe").asDouble(0));   // 今年PE预测
+                    row.put("predict_pe_next_year", item.path("predictNextPe").asDouble(0));   // 明年PE预测
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取研报失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取机构一致预期EPS — 东财 datacenter 业绩预告
+     * 预增/预减/续盈/扭亏 等业绩预告数据
+     */
+    @Override
+    public List<Map<String, Object>> getConsensusEPS(String stockCode) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_F10_FINANCE_YJBG"
+                    + "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")"
+                    + "&pageNumber=1&pageSize=8"
+                    + "&sortColumns=NOTICE_DATE&sortTypes=-1"
+                    + "&source=WEB&client=WEB";
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("notice_date", item.path("NOTICE_DATE").asText(""));
+                    row.put("report_date", item.path("REPORT_DATE").asText(""));
+                    row.put("forecast_type", item.path("FORECAST_TYPE").asText(""));     // 预增/预减/续盈/扭亏
+                    row.put("profit_forecast", item.path("PROFIT_FORECAST").asDouble(0));  // 预测净利润
+                    row.put("profit_change_pct", item.path("CHANGE_PCT").asDouble(0));    // 净利润变动幅度%
+                    row.put("eps_forecast", item.path("EPS_FORECAST").asDouble(0));      // 预测每股收益
+                    row.put("summary", item.path("SUMMARY").asText(""));                 // 业绩变动原因
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取一致预期失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取个股公告列表 — 东财公告 API
+     * 沪深北全量公告
+     */
+    @Override
+    public List<Map<String, Object>> getAnnouncements(String stockCode, int count) {
+        try {
+            String url = ANNOUNCE_URL + "?srp=&page_size=" + count
+                    + "&page_index=1&ann_type=A&client_source=web&stock_list=" + stockCode;
+
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode listNode = objectMapper.readTree(response.body().string()).path("data").path("list");
+                if (!listNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : listNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("title", item.path("title").asText(""));
+                    row.put("notice_date", item.path("notice_date").asText(""));
+                    row.put("ann_type", item.path("ann_type").asText(""));
+                    row.put("art_code", item.path("art_code").asText(""));
+                    // 构建公告详情URL
+                    String artCode = item.path("art_code").asText("");
+                    if (!artCode.isEmpty()) {
+                        row.put("url", "https://np-cnotice.eastmoney.com/api/content/ann?art_code=" + artCode);
+                    } else {
+                        row.put("url", "");
+                    }
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取公告失败: {} - {}", stockCode, e.getMessage());
             return Collections.emptyList();
         }
     }

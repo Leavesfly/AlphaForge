@@ -1,7 +1,7 @@
 package io.leavesfly.stock.infrastructure.dataprovider.impl;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.stock.infrastructure.dataprovider.BaseDataFetcher;

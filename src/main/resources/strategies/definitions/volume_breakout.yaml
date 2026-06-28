@@ -9,12 +9,20 @@ label: 放量突破
 description: 成交量超过 20 日均量 2 倍且涨幅 > 3% 时买入
 category: momentum
 risk_level: high
+applicable_market: [bull, range]
+applicable_cap: [mid, small]
+tags: [突破, 放量, 动量, 短线]
 
 backtest:
   parameters:
     volume_multiple: 2.0   # 成交量需超过均量的倍数
     min_change_pct: 3.0    # 最低涨幅要求（%）
     ma_period: 20          # 均量计算周期（日）
+
+  # 参数搜索空间
+  param_space:
+    volume_multiple: [1.5, 2.0, 2.5, 3.0]
+    min_change_pct: [2.0, 3.0, 4.0]
 
   entry_conditions:
     - type: volume_breakout

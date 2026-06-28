@@ -1,6 +1,6 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.ChatService;
+import io.leavesfly.stock.application.service.chat.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

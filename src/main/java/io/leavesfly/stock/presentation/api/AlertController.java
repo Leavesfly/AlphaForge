@@ -1,7 +1,7 @@
 package io.leavesfly.stock.presentation.api;
 
-import io.leavesfly.stock.application.service.AlertService;
-import io.leavesfly.stock.domain.model.entity.AlertRule;
+import io.leavesfly.stock.application.service.alert.AlertService;
+import io.leavesfly.stock.domain.model.entity.alert.AlertRule;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

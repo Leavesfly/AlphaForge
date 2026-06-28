@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -170,6 +171,12 @@ public class StrategyCatalogLoader {
                 definition.setCapabilities(list.stream().map(String::valueOf).toList());
             }
             definition.setRuntime(stringVal(meta.get("runtime"), "planned"));
+
+            // 解析策略元数据（供 LLM 策略编排使用）
+            definition.setApplicableMarket(parseStringList(raw.get("applicable_market")));
+            definition.setApplicableCap(parseStringList(raw.get("applicable_cap")));
+            definition.setTags(parseStringList(raw.get("tags")));
+
             return definition;
         }
     }
@@ -189,6 +196,9 @@ public class StrategyCatalogLoader {
         profile.setPositionSize(doubleVal(raw.get("position_size"), 0.95));
         if (raw.get("simulation") instanceof Map<?, ?> simulation) {
             profile.setSimulation((Map<String, Object>) simulation);
+        }
+        if (raw.get("param_space") instanceof Map<?, ?> paramSpace) {
+            profile.setParamSpace(parseParamSpace((Map<String, Object>) paramSpace));
         }
         return profile;
     }
@@ -219,6 +229,10 @@ public class StrategyCatalogLoader {
             profile.setConditions((Map<String, Object>) conditions);
         }
         profile.setLabel(stringVal(raw.get("label"), null));
+        // 解析自动衰减配置
+        profile.setAutoDecay(Boolean.TRUE.equals(raw.get("auto_decay")));
+        profile.setDecayWindow(intVal(raw.get("decay_window"), 30));
+        profile.setMinWeight(intVal(raw.get("min_weight"), 5));
         return profile;
     }
 
@@ -243,6 +257,29 @@ public class StrategyCatalogLoader {
             return number.doubleValue();
         }
         return defaultValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> parseStringList(Object value) {
+        if (value instanceof List<?> list) {
+            return list.stream().map(String::valueOf).toList();
+        }
+        if (value instanceof String str && !str.isBlank()) {
+            return List.of(str.split(","))
+                    .stream().map(String::trim).filter(s -> !s.isEmpty()).toList();
+        }
+        return List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, List<Object>> parseParamSpace(Map<String, Object> raw) {
+        Map<String, List<Object>> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : raw.entrySet()) {
+            if (entry.getValue() instanceof List<?> list) {
+                result.put(entry.getKey(), new ArrayList<>(list));
+            }
+        }
+        return result;
     }
 
     public StrategyCatalog getCatalog() {

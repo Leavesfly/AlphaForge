@@ -1,11 +1,13 @@
 package io.leavesfly.stock.infrastructure.dataprovider;
 
+import io.leavesfly.stock.domain.service.port.MarketDataPort;
+
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.DataProviderType;
 import io.leavesfly.stock.domain.model.enums.MarketType;
 import io.leavesfly.stock.domain.service.TradingCalendar;
-import io.leavesfly.stock.infrastructure.persistence.StockDailyDataRepository;
+import io.leavesfly.stock.infrastructure.persistence.market.StockDailyDataRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 6. 数据质量校验 — 缺失交易日检测 + 异常价格过滤
  */
 @Component
-public class DataFetcherManager {
+public class DataFetcherManager implements MarketDataPort {
 
     private static final Logger log = LoggerFactory.getLogger(DataFetcherManager.class);
 
@@ -45,6 +47,9 @@ public class DataFetcherManager {
 
     /** 限流器状态: 数据源名称 -> 限流信息 */
     private final Map<String, RateLimiter> rateLimiters = new ConcurrentHashMap<>();
+
+    /** TTL缓存: 缓存键 -> 缓存条目 */
+    private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
     
     /** 数据源优先级排序(根据市场类型) */
     private final Map<MarketType, List<DataProviderType>> marketProviderOrder;
@@ -53,6 +58,11 @@ public class DataFetcherManager {
     private static final long JITTER_MS = 200;
     /** A股收盘时间后的缓冲(小时)，收盘后2小时内缓存视为最新 */
     private static final int POST_CLOSE_BUFFER_HOURS = 2;
+
+    // 缓存TTL常量（毫秒）
+    private static final long CACHE_TTL_HOUR = 3600_000L;       // 1小时
+    private static final long CACHE_TTL_HALF_HOUR = 1800_000L;   // 30分钟
+    private static final long CACHE_TTL_DAY = 86400_000L;        // 24小时
 
     @Autowired
     public DataFetcherManager(AppConfig config, List<BaseDataFetcher> fetchers,
@@ -312,28 +322,26 @@ public class DataFetcherManager {
      * @return 每日资金流数据 [{date, main_net, big_net, mid_net, small_net, ...}]
      */
     public List<Map<String, Object>> getFundFlow(String stockCode, int days) {
-        MarketType market = MarketType.detectFromCode(stockCode);
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
-
-        for (BaseDataFetcher fetcher : orderedFetchers) {
-            String fetcherName = fetcher.getName();
-            if (isCircuitOpen(fetcherName)) continue;
-            if (!tryAcquire(fetcher)) continue;
-
-            try {
-                List<Map<String, Object>> flow = fetcher.getFundFlow(stockCode, days);
-                if (flow != null && !flow.isEmpty()) {
-                    recordSuccess(fetcherName);
-                    return flow;
+        return getOrFetch("fundflow:" + stockCode + ":" + days, CACHE_TTL_HOUR, () -> {
+            MarketType market = MarketType.detectFromCode(stockCode);
+            List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+            for (BaseDataFetcher fetcher : orderedFetchers) {
+                String fetcherName = fetcher.getName();
+                if (isCircuitOpen(fetcherName)) continue;
+                if (!tryAcquire(fetcher)) continue;
+                try {
+                    List<Map<String, Object>> flow = fetcher.getFundFlow(stockCode, days);
+                    if (flow != null && !flow.isEmpty()) {
+                        recordSuccess(fetcherName);
+                        return flow;
+                    }
+                } catch (Exception e) {
+                    log.warn("数据源 {} 获取资金流失败: {}", fetcherName, e.getMessage());
+                    recordFailure(fetcherName);
                 }
-            } catch (Exception e) {
-                log.warn("数据源 {} 获取资金流失败: {}", fetcherName, e.getMessage());
-                recordFailure(fetcherName);
             }
-        }
-
-        log.warn("所有数据源均无法获取资金流: {}", stockCode);
-        return Collections.emptyList();
+            return Collections.emptyList();
+        });
     }
 
     // ========== 基本面数据路由 ==========
@@ -346,28 +354,26 @@ public class DataFetcherManager {
      * @return 财务数据列表
      */
     public List<Map<String, Object>> getFinancialStatements(String stockCode, String statementType) {
-        MarketType market = MarketType.detectFromCode(stockCode);
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
-
-        for (BaseDataFetcher fetcher : orderedFetchers) {
-            String fetcherName = fetcher.getName();
-            if (isCircuitOpen(fetcherName)) continue;
-            if (!tryAcquire(fetcher)) continue;
-
-            try {
-                List<Map<String, Object>> stmts = fetcher.getFinancialStatements(stockCode, statementType);
-                if (stmts != null && !stmts.isEmpty()) {
-                    recordSuccess(fetcherName);
-                    return stmts;
+        return getOrFetch("financials:" + stockCode + ":" + statementType, CACHE_TTL_DAY, () -> {
+            MarketType market = MarketType.detectFromCode(stockCode);
+            List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+            for (BaseDataFetcher fetcher : orderedFetchers) {
+                String fetcherName = fetcher.getName();
+                if (isCircuitOpen(fetcherName)) continue;
+                if (!tryAcquire(fetcher)) continue;
+                try {
+                    List<Map<String, Object>> stmts = fetcher.getFinancialStatements(stockCode, statementType);
+                    if (stmts != null && !stmts.isEmpty()) {
+                        recordSuccess(fetcherName);
+                        return stmts;
+                    }
+                } catch (Exception e) {
+                    log.warn("数据源 {} 获取财报失败: {}", fetcherName, e.getMessage());
+                    recordFailure(fetcherName);
                 }
-            } catch (Exception e) {
-                log.warn("数据源 {} 获取财报失败: {}", fetcherName, e.getMessage());
-                recordFailure(fetcherName);
             }
-        }
-
-        log.warn("所有数据源均无法获取财报: {}", stockCode);
-        return Collections.emptyList();
+            return Collections.emptyList();
+        });
     }
 
     /**
@@ -398,6 +404,227 @@ public class DataFetcherManager {
         }
 
         log.warn("所有数据源均无法获取关键指标: {}", stockCode);
+        return Collections.emptyList();
+    }
+
+    // ========== 信号层数据路由 ==========
+
+    /**
+     * 获取龙虎榜数据 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getDragonTigerList(String stockCode, int days) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getDragonTigerList(stockCode, days);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取龙虎榜失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取北向资金流向 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getNorthboundFlow(int days) {
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(MarketType.A);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getNorthboundFlow(days);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取北向资金失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取个股板块归属详情 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getStockBoardsDetail(String stockCode) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getStockBoardsDetail(stockCode);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取板块归属失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    // ========== 杠杆与筹码数据路由 ==========
+
+    /**
+     * 获取融资融券明细 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getMarginTrading(String stockCode, int days) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getMarginTrading(stockCode, days);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取融资融券失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取股东户数变化 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getShareholderCount(String stockCode) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getShareholderCount(stockCode);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取股东户数失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取分红送转历史 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getDividendHistory(String stockCode) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getDividendHistory(stockCode);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取分红送转失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    // ========== 研报与公告数据路由 ==========
+
+    /**
+     * 获取个股研报列表 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getResearchReports(String stockCode, int count) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getResearchReports(stockCode, count);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取研报失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取机构一致预期EPS — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getConsensusEPS(String stockCode) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getConsensusEPS(stockCode);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取一致预期失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取个股公告列表 — 自动故障切换 + 限流
+     */
+    public List<Map<String, Object>> getAnnouncements(String stockCode, int count) {
+        MarketType market = MarketType.detectFromCode(stockCode);
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        for (BaseDataFetcher fetcher : orderedFetchers) {
+            String fetcherName = fetcher.getName();
+            if (isCircuitOpen(fetcherName)) continue;
+            if (!tryAcquire(fetcher)) continue;
+            try {
+                List<Map<String, Object>> data = fetcher.getAnnouncements(stockCode, count);
+                if (data != null && !data.isEmpty()) {
+                    recordSuccess(fetcherName);
+                    return data;
+                }
+            } catch (Exception e) {
+                log.warn("数据源 {} 获取公告失败: {}", fetcherName, e.getMessage());
+                recordFailure(fetcherName);
+            }
+        }
         return Collections.emptyList();
     }
 
@@ -675,5 +902,43 @@ public class DataFetcherManager {
             }
             return false;
         }
+    }
+
+    // ========== TTL缓存层 ==========
+
+    /**
+     * 带缓存的获取数据 — 先查缓存，未命中再调远程
+     *
+     * @param cacheKey 缓存键
+     * @param ttlMs    缓存有效期(毫秒)
+     * @param supplier 缓存未命中时的数据获取函数
+     * @return 数据列表
+     */
+    private List<Map<String, Object>> getOrFetch(String cacheKey, long ttlMs,
+                                                  java.util.function.Supplier<List<Map<String, Object>>> supplier) {
+        CacheEntry entry = cache.get(cacheKey);
+        if (entry != null && !entry.isExpired()) {
+            log.debug("缓存命中: {}", cacheKey);
+            return entry.getValue();
+        }
+        List<Map<String, Object>> data = supplier.get();
+        if (data != null && !data.isEmpty()) {
+            cache.put(cacheKey, new CacheEntry(data, System.currentTimeMillis() + ttlMs));
+        }
+        return data != null ? data : Collections.emptyList();
+    }
+
+    /** TTL缓存条目 */
+    private static class CacheEntry {
+        private final List<Map<String, Object>> value;
+        private final long expiryTime;
+
+        public CacheEntry(List<Map<String, Object>> value, long expiryTime) {
+            this.value = value;
+            this.expiryTime = expiryTime;
+        }
+
+        public List<Map<String, Object>> getValue() { return value; }
+        public boolean isExpired() { return System.currentTimeMillis() > expiryTime; }
     }
 }

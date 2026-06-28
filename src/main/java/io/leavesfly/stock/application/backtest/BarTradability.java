@@ -1,6 +1,6 @@
 package io.leavesfly.stock.application.backtest;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 
 /**
  * 判断 K 线是否可交易（停牌、涨跌停）。

@@ -1,13 +1,13 @@
 package io.leavesfly.stock.presentation.bot.command;
 
 import io.leavesfly.stock.application.pipeline.StockAnalysisPipeline;
-import io.leavesfly.stock.application.service.AnalysisHistoryService;
-import io.leavesfly.stock.application.service.MarketLightService;
-import io.leavesfly.stock.application.service.NameToCodeResolver;
+import io.leavesfly.stock.application.service.report.AnalysisHistoryService;
+import io.leavesfly.stock.application.service.market.MarketLightService;
+import io.leavesfly.stock.domain.service.NameToCodeResolver;
 import io.leavesfly.stock.application.strategy.StrategyCatalog;
 import io.leavesfly.stock.application.strategy.model.StrategyDefinition;
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
-import io.leavesfly.stock.infrastructure.llm.LlmService;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
+import io.leavesfly.stock.application.service.chat.ChatService;
 import io.leavesfly.stock.presentation.bot.model.BotMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +28,7 @@ public class CommandDispatcher {
     private static final Logger log = LoggerFactory.getLogger(CommandDispatcher.class);
 
     private final StockAnalysisPipeline pipeline;
-    private final LlmService llmService;
+    private final ChatService chatService;
     private final AnalysisHistoryService historyService;
     private final NameToCodeResolver nameResolver;
     private final MarketLightService marketLightService;
@@ -40,11 +40,11 @@ public class CommandDispatcher {
 
     private static final long RATE_LIMIT_MS = 3000;
 
-    public CommandDispatcher(StockAnalysisPipeline pipeline, LlmService llmService,
+    public CommandDispatcher(StockAnalysisPipeline pipeline, ChatService chatService,
                              AnalysisHistoryService historyService, NameToCodeResolver nameResolver,
                              MarketLightService marketLightService, StrategyCatalog strategyCatalog) {
         this.pipeline = pipeline;
-        this.llmService = llmService;
+        this.chatService = chatService;
         this.historyService = historyService;
         this.nameResolver = nameResolver;
         this.marketLightService = marketLightService;
@@ -97,7 +97,7 @@ public class CommandDispatcher {
             if (question.isEmpty()) {
                 return "用法: /ask <问题>";
             }
-            return llmService.chat("你是一个专业的股票分析助手。", question);
+            return chatService.chat("你是一个专业的股票分析助手。", question);
         });
 
         commands.put("history", msg -> {
@@ -158,7 +158,7 @@ public class CommandDispatcher {
     }
 
     private String handleChat(BotMessage message) {
-        return llmService.chat(
+        return chatService.chat(
                 "你是一个友好的股票分析助手。用户可能会问你各种投资相关的问题。",
                 message.getContent());
     }

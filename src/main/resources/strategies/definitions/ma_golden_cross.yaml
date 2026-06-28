@@ -9,11 +9,19 @@ label: 均线金叉
 description: MA5 上穿 MA20 形成金叉时买入，MA5 下穿 MA20 死叉时卖出
 category: trend_following
 risk_level: medium
+applicable_market: [bull, recovery]
+applicable_cap: [large, mid, small]
+tags: [趋势, 均线, 金叉, 中线]
 
 backtest:
   parameters:
     fast_period: 5    # 快线周期（日）
     slow_period: 20   # 慢线周期（日）
+
+  # 参数搜索空间（供 ParameterOptimizer / OptimizeStrategyTool 使用）
+  param_space:
+    fast_period: [3, 5, 8, 10]
+    slow_period: [15, 20, 30, 60]
 
   # 入场条件：全部满足才买入（AND）
   entry_conditions:

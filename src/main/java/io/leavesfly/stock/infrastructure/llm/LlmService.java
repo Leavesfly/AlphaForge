@@ -1,6 +1,7 @@
 package io.leavesfly.stock.infrastructure.llm;
 
 import io.leavesfly.stock.config.AppConfig;
+import io.leavesfly.stock.domain.service.port.LlmPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -9,8 +10,6 @@ import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -25,7 +24,7 @@ import java.util.function.Consumer;
  * 通过统一的Chat Completion API调用
  */
 @Service
-public class LlmService {
+public class LlmService implements LlmPort {
 
     private static final Logger log = LoggerFactory.getLogger(LlmService.class);
 

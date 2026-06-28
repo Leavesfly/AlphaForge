@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.infrastructure.persistence.TradeRepository">
+<mapper namespace="io.leavesfly.stock.infrastructure.persistence.portfolio.TradeRepository">
 
-    <resultMap id="tradeMap" type="io.leavesfly.stock.domain.model.entity.PortfolioTrade">
+    <resultMap id="tradeMap" type="io.leavesfly.stock.domain.model.entity.portfolio.PortfolioTrade">
         <id property="id" column="id"/>
         <result property="accountId" column="account_id"/>
         <result property="symbol" column="symbol"/>

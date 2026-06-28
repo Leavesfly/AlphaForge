@@ -1,8 +1,8 @@
 package io.leavesfly.stock.application.pipeline;
 
 import io.leavesfly.stock.application.pipeline.AnalysisContextBuilder.AnalysisContext;
-import io.leavesfly.stock.application.service.MarketAnalysisService;
-import io.leavesfly.stock.application.service.NewsSearchService;
+import io.leavesfly.stock.application.service.market.MarketAnalysisService;
+import io.leavesfly.stock.application.service.market.NewsSearchService;
 import io.leavesfly.stock.application.strategy.StrategyTestData;
 import io.leavesfly.stock.config.AppConfig;
 import io.leavesfly.stock.domain.model.enums.MarketType;

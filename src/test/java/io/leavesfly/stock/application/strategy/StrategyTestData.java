@@ -1,6 +1,6 @@
 package io.leavesfly.stock.application.strategy;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 
 import java.time.LocalDate;
 import java.util.List;

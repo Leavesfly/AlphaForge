@@ -9,6 +9,9 @@ label: 缩量回调
 description: 上升趋势中缩量回调至支撑位附近买入
 category: pullback
 risk_level: medium
+applicable_market: [bull, recovery]
+applicable_cap: [large, mid, small]
+tags: [回调, 缩量, 支撑, 趋势]
 
 backtest:
   parameters:

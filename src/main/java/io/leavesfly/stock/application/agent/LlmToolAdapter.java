@@ -1,6 +1,6 @@
 package io.leavesfly.stock.application.agent;
 
-import io.leavesfly.stock.infrastructure.llm.LlmService;
+import io.leavesfly.stock.domain.service.port.LlmPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.stock.application.agent.tools.ToolException;
@@ -20,11 +20,11 @@ import java.util.*;
 public class LlmToolAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(LlmToolAdapter.class);
-    private final LlmService llmService;
+    private final LlmPort llmService;
     private final ToolRegistry toolRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public LlmToolAdapter(LlmService llmService, ToolRegistry toolRegistry) {
+    public LlmToolAdapter(LlmPort llmService, ToolRegistry toolRegistry) {
         this.llmService = llmService;
         this.toolRegistry = toolRegistry;
     }

@@ -1,6 +1,6 @@
 package io.leavesfly.stock.infrastructure.dataprovider;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import io.leavesfly.stock.domain.model.enums.MarketType;
 import java.time.LocalDate;
 import java.util.List;
@@ -160,6 +160,106 @@ public interface BaseDataFetcher {
      * @return 关键指标列表，每期一行
      */
     default List<Map<String, Object>> getKeyIndicators(String stockCode) {
+        return List.of();
+    }
+
+    // ========== 信号层数据 ==========
+
+    /**
+     * 获取龙虎榜数据（上榜记录 + 买卖席位 TOP5 + 机构动向）
+     *
+     * @param stockCode 股票代码
+     * @param days      返回最近天数
+     * @return 龙虎榜记录列表
+     */
+    default List<Map<String, Object>> getDragonTigerList(String stockCode, int days) {
+        return List.of();
+    }
+
+    /**
+     * 获取北向资金流向数据（沪股通/深股通分钟级或日级流向）
+     *
+     * @param days 返回最近天数
+     * @return 北向资金流向数据
+     */
+    default List<Map<String, Object>> getNorthboundFlow(int days) {
+        return List.of();
+    }
+
+    /**
+     * 获取个股板块归属详情（行业/概念/地域 + BK码 + 涨跌幅 + 龙头股）
+     *
+     * @param stockCode 股票代码
+     * @return 板块归属列表
+     */
+    default List<Map<String, Object>> getStockBoardsDetail(String stockCode) {
+        return List.of();
+    }
+
+    // ========== 杠杆与筹码数据 ==========
+
+    /**
+     * 获取融资融券明细数据（日级融资余额/买入/偿还 + 融券余额）
+     *
+     * @param stockCode 股票代码
+     * @param days      返回最近天数
+     * @return 融资融券数据列表
+     */
+    default List<Map<String, Object>> getMarginTrading(String stockCode, int days) {
+        return List.of();
+    }
+
+    /**
+     * 获取股东户数变化数据（季度股东数 + 环比变化 + 户均持股）
+     *
+     * @param stockCode 股票代码
+     * @return 股东户数变化列表
+     */
+    default List<Map<String, Object>> getShareholderCount(String stockCode) {
+        return List.of();
+    }
+
+    /**
+     * 获取分红送转历史数据（每股派息/送股/转增 + 进度状态）
+     *
+     * @param stockCode 股票代码
+     * @return 分红送转历史列表
+     */
+    default List<Map<String, Object>> getDividendHistory(String stockCode) {
+        return List.of();
+    }
+
+    // ========== 研报与公告数据 ==========
+
+    /**
+     * 获取个股研报列表（评级 + 三年EPS预测）
+     *
+     * @param stockCode 股票代码
+     * @param count     返回条数
+     * @return 研报列表
+     */
+    default List<Map<String, Object>> getResearchReports(String stockCode, int count) {
+        return List.of();
+    }
+
+    /**
+     * 获取机构一致预期EPS（业绩预告）
+     *
+     * @param stockCode 股票代码
+     * @return 一致预期数据列表
+     */
+    default List<Map<String, Object>> getConsensusEPS(String stockCode) {
+        return List.of();
+    }
+
+    /**
+     * 获取个股公告列表
+     *
+     * @param stockCode 股票代码
+     * @param count     返回条数
+     * @return 公告列表
+     */
+    default List<Map<String, Object>> getAnnouncements(String stockCode, int count) {
         return List.of();
     }
 }

@@ -1,9 +1,8 @@
 package io.leavesfly.stock.domain.service;
 
-import io.leavesfly.stock.domain.model.entity.StockDailyData;
+import io.leavesfly.stock.domain.model.entity.market.StockDailyData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 import java.util.*;
 
@@ -12,10 +11,12 @@ import java.util.*;
  *
  * 计算: MA、MACD、KDJ、RSI、BOLL、成交量分析等
  */
-@Service
 public class TechnicalAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(TechnicalAnalysisService.class);
+
+    /** 纯算法委托，消除与 AlertIndicators 等处的重复实现 */
+    private final TechnicalIndicatorCalculator calculator = new TechnicalIndicatorCalculator();
 
     /**
      * 执行完整技术分析
@@ -345,49 +346,21 @@ public class TechnicalAnalysisService {
         return Math.max(0, Math.min(100, score));
     }
 
-    // ========== 数学计算辅助方法 ==========
+    // ========== 数学计算辅助方法（委托 TechnicalIndicatorCalculator，避免重复实现） ==========
 
     private double calculateSMA(double[] data, int period) {
-        int len = data.length;
-        if (len < period) return data[len - 1];
-        double sum = 0;
-        for (int i = len - period; i < len; i++) sum += data[i];
-        return sum / period;
+        return calculator.sma(data, period);
     }
 
     private double[] calculateEMA(double[] data, int period) {
-        int len = data.length;
-        double[] ema = new double[len];
-        double multiplier = 2.0 / (period + 1);
-        ema[0] = data[0];
-        for (int i = 1; i < len; i++) {
-            ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
-        }
-        return ema;
+        return calculator.ema(data, period);
     }
 
     private double calculateRSIValue(double[] closes, int period) {
-        int len = closes.length;
-        if (len <= period) return 50;
-        double gainSum = 0, lossSum = 0;
-        for (int i = len - period; i < len; i++) {
-            double change = closes[i] - closes[i - 1];
-            if (change > 0) gainSum += change;
-            else lossSum += Math.abs(change);
-        }
-        if (lossSum == 0) return 100;
-        double rs = gainSum / lossSum;
-        return 100 - (100 / (1 + rs));
+        return calculator.rsi(closes, period);
     }
 
     private double calculateStd(double[] data, int period) {
-        int len = data.length;
-        if (len < period) return 0;
-        double mean = calculateSMA(data, period);
-        double sumSq = 0;
-        for (int i = len - period; i < len; i++) {
-            sumSq += Math.pow(data[i] - mean, 2);
-        }
-        return Math.sqrt(sumSq / period);
+        return calculator.std(data, period);
     }
 }

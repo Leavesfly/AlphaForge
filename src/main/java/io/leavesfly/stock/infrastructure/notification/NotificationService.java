@@ -1,8 +1,9 @@
 package io.leavesfly.stock.infrastructure.notification;
 
 import io.leavesfly.stock.config.AppConfig;
-import io.leavesfly.stock.domain.model.entity.AnalysisReport;
+import io.leavesfly.stock.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.stock.domain.model.enums.NotificationChannel;
+import io.leavesfly.stock.domain.service.port.NotificationPort;
 
 import io.leavesfly.stock.infrastructure.notification.sender.BaseNotificationSender;
 import org.slf4j.Logger;
@@ -17,15 +18,18 @@ import java.util.*;
  * 支持企业微信、飞书、钉钉、邮件通知渠道，自动路由和故障容错
  */
 @Service
-public class NotificationService {
+public class NotificationService implements NotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final AppConfig config;
+    private final NotificationRouter notificationRouter;
     private final Map<NotificationChannel, BaseNotificationSender> senders = new LinkedHashMap<>();
 
-    public NotificationService(AppConfig config, List<BaseNotificationSender> senderList) {
+    public NotificationService(AppConfig config, NotificationRouter notificationRouter,
+                               List<BaseNotificationSender> senderList) {
         this.config = config;
+        this.notificationRouter = notificationRouter;
         // 注册所有sender
         for (BaseNotificationSender sender : senderList) {
             senders.put(sender.getChannel(), sender);
@@ -90,6 +94,14 @@ public class NotificationService {
                 }
             }
         }
+    }
+
+    /**
+     * 降噪判定：委托 NotificationRouter 判断相同内容在窗口期内是否应发送
+     */
+    @Override
+    public boolean shouldSend(String title, String content) {
+        return notificationRouter.shouldSend(title, content);
     }
 
     /**

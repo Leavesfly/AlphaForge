@@ -9,6 +9,9 @@ label: 龙头战法
 description: 识别板块龙头股首阴或缩量回调买入
 category: hot_theme
 risk_level: high
+applicable_market: [bull, range]
+applicable_cap: [mid, small]
+tags: [龙头, 涨停, 板块, 热点, 短线]
 
 backtest:
   parameters:

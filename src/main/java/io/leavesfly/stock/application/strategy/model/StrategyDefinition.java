@@ -33,6 +33,15 @@ public class StrategyDefinition {
     /** 不可用原因 */
     private String unavailableReason;
 
+    // ========== 策略元数据（供 LLM 语义匹配与策略编排使用） ==========
+
+    /** 适用市场阶段：bull / bear / range / recovery / all */
+    private List<String> applicableMarket = Collections.emptyList();
+    /** 适用市值类型：large / mid / small / all */
+    private List<String> applicableCap = Collections.emptyList();
+    /** 语义标签，供 LLM 按关键词匹配策略，如 "趋势" "突破" "主力" */
+    private List<String> tags = Collections.emptyList();
+
     /** 是否配置了有效的综合评分段 */
     public boolean hasScoring() {
         return scoring != null && scoring.getScoreWeight() > 0;
@@ -93,4 +102,35 @@ public class StrategyDefinition {
 
     public String getUnavailableReason() { return unavailableReason; }
     public void setUnavailableReason(String unavailableReason) { this.unavailableReason = unavailableReason; }
+
+    public List<String> getApplicableMarket() { return applicableMarket; }
+    public void setApplicableMarket(List<String> applicableMarket) {
+        this.applicableMarket = applicableMarket != null ? applicableMarket : Collections.emptyList();
+    }
+
+    public List<String> getApplicableCap() { return applicableCap; }
+    public void setApplicableCap(List<String> applicableCap) {
+        this.applicableCap = applicableCap != null ? applicableCap : Collections.emptyList();
+    }
+
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> tags) {
+        this.tags = tags != null ? tags : Collections.emptyList();
+    }
+
+    /** 判断策略是否适用于指定市场阶段 */
+    public boolean isApplicableToMarket(String marketPhase) {
+        if (applicableMarket.isEmpty() || applicableMarket.contains("all")) {
+            return true;
+        }
+        return applicableMarket.contains(marketPhase);
+    }
+
+    /** 判断策略是否适用于指定市值类型 */
+    public boolean isApplicableToCap(String capType) {
+        if (applicableCap.isEmpty() || applicableCap.contains("all")) {
+            return true;
+        }
+        return applicableCap.contains(capType);
+    }
 }
