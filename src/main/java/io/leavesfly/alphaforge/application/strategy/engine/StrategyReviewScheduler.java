@@ -3,6 +3,7 @@ package io.leavesfly.alphaforge.application.strategy.engine;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.model.ScoringProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
+import io.leavesfly.alphaforge.application.service.feedback.StrategyParameterTuner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,10 +27,13 @@ public class StrategyReviewScheduler {
 
     private final StrategyCatalog catalog;
     private final StrategyPerformanceTracker performanceTracker;
+    private final StrategyParameterTuner parameterTuner;
 
-    public StrategyReviewScheduler(StrategyCatalog catalog, StrategyPerformanceTracker performanceTracker) {
+    public StrategyReviewScheduler(StrategyCatalog catalog, StrategyPerformanceTracker performanceTracker,
+                                    StrategyParameterTuner parameterTuner) {
         this.catalog = catalog;
         this.performanceTracker = performanceTracker;
+        this.parameterTuner = parameterTuner;
     }
 
     /**
@@ -84,5 +88,18 @@ public class StrategyReviewScheduler {
 
         log.info("=== 策略复盘完成: {} 过时, {} 低区分, {} 正常 ===",
                 staleCount, lowDiscriminationCount, normalCount);
+
+        // 自动生成参数调优建议
+        if (parameterTuner != null) {
+            List<String> strategyIds = strategies.stream()
+                    .map(StrategyDefinition::getId).toList();
+            var tuningResult = parameterTuner.batchSuggestTuning(strategyIds);
+            if (!tuningResult.isEmpty()) {
+                log.info("=== 策略参数调优建议: {} 个策略有建议 ===", tuningResult.size());
+                tuningResult.forEach((id, suggestions) -> {
+                    suggestions.forEach(s -> log.info("  策略 {}: {}", id, s.description()));
+                });
+            }
+        }
     }
 }

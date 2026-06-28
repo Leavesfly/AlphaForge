@@ -14,7 +14,8 @@ import java.util.*;
 /**
  * LLM工具调用适配器
  *
- * 实现OpenAI Function Calling格式的工具调用解析和执行
+ * 优先使用 OpenAI 原生 Function Calling（tools/tool_choice 参数），
+ * 当模型不支持时自动回退到文本标记解析模式。
  */
 @Component
 public class LlmToolAdapter {
@@ -29,13 +30,12 @@ public class LlmToolAdapter {
         this.toolRegistry = toolRegistry;
     }
 
+    // ==================== 公共入口 ====================
+
     /**
      * 执行带工具调用的LLM对话
-     * 支持OpenAI Function Calling协议
      *
-     * @param messages     消息历史
-     * @param maxToolCalls 最大工具调用次数
-     * @return 最终回复
+     * 优先使用原生 Function Calling，不支持时回退到文本标记模式。
      */
     public ToolCallResult chatWithTools(List<Map<String, String>> messages, int maxToolCalls) {
         return chatWithTools(messages, maxToolCalls, null);
@@ -43,30 +43,176 @@ public class LlmToolAdapter {
 
     /**
      * 执行带工具调用的LLM对话（支持回调通知）
-     *
-     * @param messages     消息历史
-     * @param maxToolCalls 最大工具调用次数
-     * @param callback     工具调用回调（可为null）
-     * @return 最终回复
      */
-    public ToolCallResult chatWithTools(List<Map<String, String>> messages, int maxToolCalls, ToolCallCallback callback) {
+    public ToolCallResult chatWithTools(List<Map<String, String>> messages, int maxToolCalls,
+                                         ToolCallCallback callback) {
+        List<Map<String, Object>> tools = toolRegistry.getDefinitions();
+
+        // 优先使用原生 Function Calling
+        if (tools != null && !tools.isEmpty()) {
+            try {
+                ToolCallResult nativeResult = chatWithToolsNative(messages, tools, maxToolCalls, callback);
+                if (nativeResult != null) {
+                    return nativeResult;
+                }
+            } catch (Exception e) {
+                log.warn("原生 Function Calling 失败，回退到文本标记模式: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: 文本标记方式
+        return chatWithToolsLegacy(messages, maxToolCalls, callback);
+    }
+
+    /**
+     * 执行工具调用循环（供流式输出场景使用）
+     *
+     * 如果没有工具调用，返回 finalResponse=null，调用方可用流式API获取回复。
+     */
+    public ToolCallSession executeToolLoop(List<Map<String, String>> messages, int maxToolCalls,
+                                            ToolCallCallback callback) {
+        List<Map<String, Object>> tools = toolRegistry.getDefinitions();
+
+        if (tools != null && !tools.isEmpty()) {
+            try {
+                ToolCallSession nativeSession = executeToolLoopNative(messages, tools, maxToolCalls, callback);
+                if (nativeSession != null) {
+                    return nativeSession;
+                }
+            } catch (Exception e) {
+                log.warn("原生 Function Calling 失败，回退到文本标记模式: {}", e.getMessage());
+            }
+        }
+
+        return executeToolLoopLegacy(messages, maxToolCalls, callback);
+    }
+
+    // ==================== 原生 Function Calling 实现 ====================
+
+    private ToolCallResult chatWithToolsNative(List<Map<String, String>> messages,
+                                                List<Map<String, Object>> tools,
+                                                int maxToolCalls, ToolCallCallback callback) {
+        List<Map<String, Object>> objMessages = convertToObjMessages(messages);
+        List<String> toolCallLog = new ArrayList<>();
+        int toolCalls = 0;
+
+        while (toolCalls < maxToolCalls) {
+            LlmPort.LlmResponse response = llmService.chatWithFunctionCalling(objMessages, tools);
+
+            if (!response.hasToolCalls()) {
+                return new ToolCallResult(response.getContent(), toolCallLog, toolCalls);
+            }
+
+            // 将含 tool_calls 的 assistant 消息加入历史
+            objMessages.add(buildAssistantWithToolCalls(response));
+            toolCalls = executeNativeToolCalls(response, objMessages, toolCallLog, toolCalls, callback);
+        }
+
+        // 达到最大工具调用次数，请求最终总结
+        objMessages.add(Map.of("role", "user", "content", (Object) "请根据以上所有工具调用结果，给出最终综合分析结论。"));
+        LlmPort.LlmResponse finalResponse = llmService.chatWithFunctionCalling(objMessages, null);
+        return new ToolCallResult(finalResponse.getContent(), toolCallLog, toolCalls);
+    }
+
+    private ToolCallSession executeToolLoopNative(List<Map<String, String>> messages,
+                                                    List<Map<String, Object>> tools,
+                                                    int maxToolCalls, ToolCallCallback callback) {
+        List<Map<String, Object>> objMessages = convertToObjMessages(messages);
+        List<String> toolCallLog = new ArrayList<>();
+        int toolCalls = 0;
+
+        while (toolCalls < maxToolCalls) {
+            LlmPort.LlmResponse response = llmService.chatWithFunctionCalling(objMessages, tools);
+
+            if (!response.hasToolCalls()) {
+                if (toolCalls > 0) {
+                    return new ToolCallSession(toolCallLog, toolCalls, response.getContent());
+                } else {
+                    return new ToolCallSession(toolCallLog, 0, null);
+                }
+            }
+
+            objMessages.add(buildAssistantWithToolCalls(response));
+            toolCalls = executeNativeToolCalls(response, objMessages, toolCallLog, toolCalls, callback);
+        }
+
+        return new ToolCallSession(toolCallLog, toolCalls, null);
+    }
+
+    /** 构建含 tool_calls 的 assistant 消息 */
+    private Map<String, Object> buildAssistantWithToolCalls(LlmPort.LlmResponse response) {
+        Map<String, Object> assistantMsg = new LinkedHashMap<>();
+        assistantMsg.put("role", "assistant");
+        assistantMsg.put("content", response.getContent() != null ? response.getContent() : "");
+
+        List<Map<String, Object>> toolCallsArray = new ArrayList<>();
+        for (LlmPort.FunctionCall fc : response.getToolCalls()) {
+            Map<String, Object> tc = new LinkedHashMap<>();
+            tc.put("id", fc.getId());
+            tc.put("type", "function");
+            Map<String, Object> fn = new LinkedHashMap<>();
+            fn.put("name", fc.getName());
+            fn.put("arguments", fc.getArguments());
+            tc.put("function", fn);
+            toolCallsArray.add(tc);
+        }
+        assistantMsg.put("tool_calls", toolCallsArray);
+        return assistantMsg;
+    }
+
+    /** 执行原生 FC 返回的工具调用，返回更新后的 toolCalls 计数 */
+    private int executeNativeToolCalls(LlmPort.LlmResponse response,
+                                        List<Map<String, Object>> objMessages,
+                                        List<String> toolCallLog, int toolCalls,
+                                        ToolCallCallback callback) {
+        for (LlmPort.FunctionCall fc : response.getToolCalls()) {
+            toolCalls++;
+            log.debug("执行工具调用(原生FC) #{}: {}({})", toolCalls, fc.getName(), fc.getArguments());
+            long startTime = System.currentTimeMillis();
+
+            Map<String, Object> args = parseArgumentsJson(fc.getArguments());
+            String result;
+            try {
+                result = toolRegistry.execute(fc.getName(), args);
+            } catch (ToolException e) {
+                result = "工具调用失败: " + e.getMessage();
+            } catch (Exception e) {
+                result = "工具调用异常: " + e.getMessage();
+            }
+            long durationMs = System.currentTimeMillis() - startTime;
+            toolCallLog.add(fc.getName() + " → " + truncate(result, 200));
+
+            if (callback != null) {
+                callback.onToolCall(fc.getName(), args, result, durationMs);
+            }
+
+            // 将工具结果加入消息历史（标准 tool role）
+            Map<String, Object> toolMsg = new LinkedHashMap<>();
+            toolMsg.put("role", "tool");
+            toolMsg.put("tool_call_id", fc.getId());
+            toolMsg.put("content", result);
+            objMessages.add(toolMsg);
+        }
+        return toolCalls;
+    }
+
+    // ==================== 文本标记 Fallback 实现（兼容不支持 FC 的模型） ====================
+
+    private ToolCallResult chatWithToolsLegacy(List<Map<String, String>> messages,
+                                                int maxToolCalls, ToolCallCallback callback) {
         List<String> toolCallLog = new ArrayList<>();
         int toolCalls = 0;
 
         while (toolCalls < maxToolCalls) {
             String response = llmService.chatWithMessages(messages);
-
-            // 检测工具调用
             List<ToolCall> calls = parseToolCalls(response);
             if (calls.isEmpty()) {
-                // 没有工具调用，返回最终回复
                 return new ToolCallResult(response, toolCallLog, toolCalls);
             }
 
-            // 执行工具调用
             for (ToolCall call : calls) {
                 toolCalls++;
-                log.debug("执行工具调用 #{}: {}({})", toolCalls, call.name, call.arguments);
+                log.debug("执行工具调用(文本标记) #{}: {}({})", toolCalls, call.name, call.arguments);
                 long startTime = System.currentTimeMillis();
                 String result;
                 try {
@@ -81,31 +227,19 @@ public class LlmToolAdapter {
                     callback.onToolCall(call.name, call.arguments, result, durationMs);
                 }
 
-                // 将工具结果注入消息历史
                 messages.add(Map.of("role", "assistant", "content", response));
                 messages.add(Map.of("role", "tool", "content",
                         String.format("[%s 调用结果]\n%s", call.name, result)));
             }
         }
 
-        // 超出最大工具调用次数，请求最终总结
         messages.add(Map.of("role", "user", "content", "请根据以上所有工具调用结果，给出最终综合分析结论。"));
         String finalResponse = llmService.chatWithMessages(messages);
         return new ToolCallResult(finalResponse, toolCallLog, toolCalls);
     }
 
-    /**
-     * 执行工具调用循环，不获取最终回复（供流式输出场景使用）
-     * <p>
-     * 如果没有工具调用，返回 finalResponse=null，调用方可用流式API获取回复。
-     * 如果有工具调用，循环执行后返回 LLM 的最终非流式回复。
-     *
-     * @param messages     消息历史（会被修改）
-     * @param maxToolCalls 最大工具调用次数
-     * @param callback     工具调用回调
-     * @return 工具调用会话结果
-     */
-    public ToolCallSession executeToolLoop(List<Map<String, String>> messages, int maxToolCalls, ToolCallCallback callback) {
+    private ToolCallSession executeToolLoopLegacy(List<Map<String, String>> messages,
+                                                    int maxToolCalls, ToolCallCallback callback) {
         List<String> toolCallLog = new ArrayList<>();
         int toolCalls = 0;
 
@@ -114,19 +248,16 @@ public class LlmToolAdapter {
             List<ToolCall> calls = parseToolCalls(response);
 
             if (calls.isEmpty()) {
-                // 没有工具调用
                 if (toolCalls > 0) {
-                    // 之前有工具调用，这个回复就是最终回复，分块发送
                     return new ToolCallSession(toolCallLog, toolCalls, response);
                 } else {
-                    // 没有工具调用，返回 null 让调用方走真正的流式 API
                     return new ToolCallSession(toolCallLog, 0, null);
                 }
             }
 
             for (ToolCall call : calls) {
                 toolCalls++;
-                log.debug("执行工具调用 #{}: {}({})", toolCalls, call.name, call.arguments);
+                log.debug("执行工具调用(文本标记) #{}: {}({})", toolCalls, call.name, call.arguments);
                 long startTime = System.currentTimeMillis();
                 String result;
                 try {
@@ -147,14 +278,33 @@ public class LlmToolAdapter {
             }
         }
 
-        // 达到最大工具调用次数，返回 null 让调用方走流式做最终总结
         return new ToolCallSession(toolCallLog, toolCalls, null);
     }
 
-    /**
-     * 解析LLM回复中的工具调用
-     * 支持多种格式: JSON格式、标记格式
-     */
+    // ==================== 辅助方法 ====================
+
+    /** 将 String 类型消息列表转为 Object 类型 */
+    private List<Map<String, Object>> convertToObjMessages(List<Map<String, String>> messages) {
+        List<Map<String, Object>> objMessages = new ArrayList<>();
+        for (Map<String, String> msg : messages) {
+            objMessages.add(new LinkedHashMap<>(msg));
+        }
+        return objMessages;
+    }
+
+    /** 解析工具参数 JSON 字符串 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseArgumentsJson(String json) {
+        if (json == null || json.isEmpty()) return new LinkedHashMap<>();
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            log.warn("解析工具参数失败: {} - {}", json, e.getMessage());
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /** 解析LLM回复中的工具调用（文本标记格式，用于 fallback） */
     private List<ToolCall> parseToolCalls(String response) {
         List<ToolCall> calls = new ArrayList<>();
 
@@ -193,7 +343,7 @@ public class LlmToolAdapter {
             JsonNode node = objectMapper.readTree(json);
             String name = node.path("name").asText(node.path("function").asText(""));
             if (name.isEmpty()) return null;
-            
+
             Map<String, Object> args = new LinkedHashMap<>();
             JsonNode argsNode = node.has("args") ? node.get("args") : node.get("arguments");
             if (argsNode != null && argsNode.isObject()) {
@@ -208,6 +358,8 @@ public class LlmToolAdapter {
     private String truncate(String s, int max) {
         return s != null && s.length() > max ? s.substring(0, max) + "..." : s;
     }
+
+    // ==================== 数据类 ====================
 
     /** 工具调用 */
     public static class ToolCall {
@@ -240,7 +392,7 @@ public class LlmToolAdapter {
     public static class ToolCallSession {
         private final List<String> toolCallLog;
         private final int totalToolCalls;
-        private final String finalResponse; // null 表示需要调用方自行获取回复
+        private final String finalResponse;
 
         public ToolCallSession(List<String> toolCallLog, int totalToolCalls, String finalResponse) {
             this.toolCallLog = toolCallLog;

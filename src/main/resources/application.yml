@@ -8,28 +8,33 @@ server:
 
 spring:
   application:
-    name: daily-stock-analysis
+    name: alpha-forge
 
   # 关闭阶段超时: 缩短 SmartLifecycle 各 phase 等待时间, 大幅加速关闭
   lifecycle:
     timeout-per-shutdown-phase: 3s
 
-  # SQLite数据库配置 (存储在 ~/.j_daily-alphaforge-analysis/data/ 下)
+  # SQLite数据库配置 (存储在 ~/.alphaforge/data/ 下)
   datasource:
     url: jdbc:sqlite:${app.home}/data/stock_analysis.db
     driver-class-name: org.sqlite.JDBC
-    # HikariCP 参数: SQLite 为文件级锁, 无需大连接池, 减小可加速启停
-    hikari:
-      maximum-pool-size: 5
-      minimum-idle: 1
-      # 启动时快速建立连接, 失败快速暴露
-      initialization-fail-timeout: 5000
-      connection-timeout: 10000
-      # 空闲连接快速回收, 加速关闭
-      idle-timeout: 30000
-      max-lifetime: 600000
-      # 关闭时不再等待空闲检测
-      leak-detection-threshold: 0
+    # Druid 参数: SQLite 为文件级锁, 无需大连接池, 减小可加速启停
+    druid:
+      initial-size: 1
+      min-idle: 1
+      max-active: 5
+      # 获取连接最大等待时间 (毫秒)
+      max-wait: 10000
+      # 空闲连接回收 (毫秒)
+      min-evictable-idle-time-millis: 30000
+      max-evictable-idle-time-millis: 60000
+      # 物理连接超时 (毫秒)
+      phy-timeout-millis: 600000
+      # 连接校验
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
 
   # SQL初始化配置
   sql:

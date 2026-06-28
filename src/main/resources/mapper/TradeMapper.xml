@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 交易记录 Mapper：管理投资组合中的买卖交易记录，包含交易方向、数量、价格、手续费等 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.TradeRepository">
 
+    <!-- 结果映射：数据库字段 ↔ PortfolioTrade 实体属性 -->
     <resultMap id="tradeMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioTrade">
         <id property="id" column="id"/>
         <result property="accountId" column="account_id"/>
@@ -19,39 +21,48 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <!-- 插入一条交易记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO portfolio_trades (account_id, symbol, trade_date, side, quantity, price, fee, tax, market, currency, trade_uid, note, created_at)
         VALUES (#{accountId}, #{symbol}, #{tradeDate}, #{side}, #{quantity}, #{price}, #{fee}, #{tax}, #{market}, #{currency}, #{tradeUid}, #{note}, #{createdAt})
     </insert>
 
+    <!-- 根据主键 ID 查询交易记录 -->
     <select id="findById" resultMap="tradeMap">
         SELECT * FROM portfolio_trades WHERE id = #{id}
     </select>
 
+    <!-- 查询全部交易记录，按交易日期和 ID 倒序 -->
     <select id="findAll" resultMap="tradeMap">
         SELECT * FROM portfolio_trades ORDER BY trade_date DESC, id DESC
     </select>
 
+    <!-- 根据账户 ID 查询交易记录 -->
     <select id="findByAccountId" resultMap="tradeMap">
         SELECT * FROM portfolio_trades WHERE account_id = #{accountId} ORDER BY trade_date DESC, id DESC
     </select>
 
+    <!-- 根据股票代码查询交易记录 -->
     <select id="findBySymbol" resultMap="tradeMap">
         SELECT * FROM portfolio_trades WHERE symbol = #{symbol} ORDER BY trade_date DESC, id DESC
     </select>
 
+    <!-- 根据账户 ID 和股票代码查询交易记录 -->
     <select id="findByAccountIdAndSymbol" resultMap="tradeMap">
         SELECT * FROM portfolio_trades WHERE account_id = #{accountId} AND symbol = #{symbol} ORDER BY trade_date DESC, id DESC
     </select>
 
+    <!-- 根据主键 ID 删除交易记录 -->
     <delete id="deleteById">
         DELETE FROM portfolio_trades WHERE id = #{id}
     </delete>
 
+    <!-- 根据账户 ID 删除该账户的所有交易记录 -->
     <delete id="deleteByAccountId">
         DELETE FROM portfolio_trades WHERE account_id = #{accountId}
     </delete>
 
+    <!-- 统计交易记录总数 -->
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM portfolio_trades
     </select>

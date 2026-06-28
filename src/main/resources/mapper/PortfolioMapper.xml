@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 持仓管理 Mapper：管理投资组合中的股票持仓记录，包含持仓数量、成本价、市值、盈亏及止损/目标价等 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioRepository">
 
+    <!-- 结果映射：数据库字段 ↔ PortfolioPosition 实体属性 -->
     <resultMap id="portfolioPositionMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition">
         <id property="id" column="id"/>
         <result property="accountId" column="account_id"/>
@@ -24,64 +26,79 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 插入一条持仓记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO portfolio_positions (account_id, stock_code, stock_name, market, quantity, cost_price, current_price, profit_loss, profit_loss_pct, market_value, position_pct, buy_date, stop_loss_price, target_price, tags, note, created_at, updated_at)
         VALUES (#{accountId}, #{stockCode}, #{stockName}, #{market}, #{quantity}, #{costPrice}, #{currentPrice}, #{profitLoss}, #{profitLossPct}, #{marketValue}, #{positionPct}, #{buyDate}, #{stopLossPrice}, #{targetPrice}, #{tags}, #{note}, #{createdAt}, #{updatedAt})
     </insert>
 
+    <!-- 更新持仓记录 -->
     <update id="update">
         UPDATE portfolio_positions SET account_id=#{accountId}, stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, quantity=#{quantity}, cost_price=#{costPrice}, current_price=#{currentPrice}, profit_loss=#{profitLoss}, profit_loss_pct=#{profitLossPct}, market_value=#{marketValue}, position_pct=#{positionPct}, buy_date=#{buyDate}, stop_loss_price=#{stopLossPrice}, target_price=#{targetPrice}, tags=#{tags}, note=#{note}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 
+    <!-- 根据主键 ID 查询持仓记录 -->
     <select id="findById" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE id = #{id}
     </select>
 
+    <!-- 查询全部持仓记录 -->
     <select id="findAll" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions
     </select>
 
+    <!-- 根据主键 ID 删除持仓记录 -->
     <delete id="deleteById">
         DELETE FROM portfolio_positions WHERE id = #{id}
     </delete>
 
+    <!-- 查询全部持仓记录，按更新时间倒序 -->
     <select id="findAllByOrderByUpdatedAtDesc" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions ORDER BY updated_at DESC
     </select>
 
+    <!-- 根据股票代码查询单条持仓记录 -->
     <select id="findByStockCodeOne" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE stock_code = #{stockCode} LIMIT 1
     </select>
 
+    <!-- 根据账户 ID 查询持仓记录，按更新时间倒序 -->
     <select id="findByAccountId" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE account_id = #{accountId} ORDER BY updated_at DESC
     </select>
 
+    <!-- 根据账户 ID 和股票代码查询单条持仓记录 -->
     <select id="findByAccountIdAndStockCode" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE account_id = #{accountId} AND stock_code = #{stockCode} LIMIT 1
     </select>
 
+    <!-- 根据账户 ID 删除该账户的所有持仓记录 -->
     <delete id="deleteByAccountId">
         DELETE FROM portfolio_positions WHERE account_id = #{accountId}
     </delete>
 
+    <!-- 按市场查询持仓记录，按市值倒序 -->
     <select id="findByMarketOrderByMarketValueDesc" resultMap="portfolioPositionMap">
         SELECT * FROM portfolio_positions WHERE market = #{market} ORDER BY market_value DESC
     </select>
 
+    <!-- 查询所有持仓的总市值 -->
     <select id="getTotalMarketValue" resultType="java.lang.Double">
         SELECT SUM(market_value) FROM portfolio_positions
     </select>
 
+    <!-- 查询所有持仓的总盈亏 -->
     <select id="getTotalProfitLoss" resultType="java.lang.Double">
         SELECT SUM(profit_loss) FROM portfolio_positions
     </select>
 
+    <!-- 统计盈利率超过指定百分比的持仓数量 -->
     <select id="countByProfitLossPctGreaterThan" resultType="long">
         SELECT COUNT(*) FROM portfolio_positions WHERE profit_loss_pct > #{pct}
     </select>
 
+    <!-- 统计亏损率超过指定百分比的持仓数量 -->
     <select id="countByProfitLossPctLessThan" resultType="long">
         SELECT COUNT(*) FROM portfolio_positions WHERE profit_loss_pct &lt; #{pct}
     </select>

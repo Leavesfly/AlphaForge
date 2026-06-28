@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 告警触发记录 Mapper：记录告警规则被触发时的详细信息，包括观测值、阈值、触发时间等 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertTriggerRepository">
 
+    <!-- 结果映射：数据库字段 ↔ AlertTrigger 实体属性 -->
     <resultMap id="triggerMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertTrigger">
         <id property="id" column="id"/>
         <result property="ruleId" column="rule_id"/>
@@ -14,31 +16,38 @@
         <result property="triggeredAt" column="triggered_at"/>
     </resultMap>
 
+    <!-- 插入一条告警触发记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO alert_triggers (rule_id, target, display_target, status, observed_value, threshold_value, message, triggered_at)
         VALUES (#{ruleId}, #{target}, #{displayTarget}, #{status}, #{observedValue}, #{thresholdValue}, #{message}, #{triggeredAt})
     </insert>
 
+    <!-- 根据主键 ID 查询触发记录 -->
     <select id="findById" resultMap="triggerMap">
         SELECT * FROM alert_triggers WHERE id = #{id}
     </select>
 
+    <!-- 根据规则 ID 查询该规则的所有触发记录，按触发时间倒序 -->
     <select id="findByRuleId" resultMap="triggerMap">
         SELECT * FROM alert_triggers WHERE rule_id = #{ruleId} ORDER BY triggered_at DESC
     </select>
 
+    <!-- 分页查询全部触发记录，按触发时间倒序 -->
     <select id="findAll" resultMap="triggerMap">
         SELECT * FROM alert_triggers ORDER BY triggered_at DESC LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 统计触发记录总数 -->
     <select id="count" resultType="int">
         SELECT COUNT(*) FROM alert_triggers
     </select>
 
+    <!-- 按监控目标查询触发记录 -->
     <select id="findByTarget" resultMap="triggerMap">
         SELECT * FROM alert_triggers WHERE target = #{target} ORDER BY triggered_at DESC
     </select>
 
+    <!-- 按触发状态查询触发记录 -->
     <select id="findByStatus" resultMap="triggerMap">
         SELECT * FROM alert_triggers WHERE status = #{status} ORDER BY triggered_at DESC
     </select>

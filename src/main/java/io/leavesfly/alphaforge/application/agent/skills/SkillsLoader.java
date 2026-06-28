@@ -58,7 +58,7 @@ public class SkillsLoader {
 
     public SkillsLoader() {
         String appHome = System.getProperty("app.home",
-                java.nio.file.Paths.get(System.getProperty("user.home"), ".j_daily-alphaforge-analysis").toString());
+                java.nio.file.Paths.get(System.getProperty("user.home"), ".alphaforge").toString());
         this.workspaceSkillsDir = java.nio.file.Paths.get(appHome, "data", "skills").toString();
     }
 

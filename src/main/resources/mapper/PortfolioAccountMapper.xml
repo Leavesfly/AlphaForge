@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 投资组合账户 Mapper：管理交易账户信息，包含券商、市场、币种、现金余额、融资额度等 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioAccountRepository">
 
+    <!-- 结果映射：数据库字段 ↔ PortfolioAccount 实体属性 -->
     <resultMap id="accountMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioAccount">
         <id property="id" column="id"/>
         <result property="name" column="name"/>
@@ -17,32 +19,39 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 插入一条账户记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO portfolio_accounts (name, broker, market, base_currency, cash_balance, loan_balance, loan_limit, owner_id, is_active, created_at, updated_at)
         VALUES (#{name}, #{broker}, #{market}, #{baseCurrency}, #{cashBalance}, #{loanBalance}, #{loanLimit}, #{ownerId}, #{isActive}, #{createdAt}, #{updatedAt})
     </insert>
 
+    <!-- 更新账户信息 -->
     <update id="update">
         UPDATE portfolio_accounts SET name=#{name}, broker=#{broker}, market=#{market}, base_currency=#{baseCurrency}, cash_balance=#{cashBalance}, loan_balance=#{loanBalance}, loan_limit=#{loanLimit}, owner_id=#{ownerId}, is_active=#{isActive}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 
+    <!-- 根据主键 ID 查询账户 -->
     <select id="findById" resultMap="accountMap">
         SELECT * FROM portfolio_accounts WHERE id = #{id}
     </select>
 
+    <!-- 查询全部账户，按创建时间倒序 -->
     <select id="findAll" resultMap="accountMap">
         SELECT * FROM portfolio_accounts ORDER BY created_at DESC
     </select>
 
+    <!-- 按启用状态查询账户 -->
     <select id="findByIsActive" resultMap="accountMap">
         SELECT * FROM portfolio_accounts WHERE is_active = #{isActive} ORDER BY created_at DESC
     </select>
 
+    <!-- 根据主键 ID 删除账户 -->
     <delete id="deleteById">
         DELETE FROM portfolio_accounts WHERE id = #{id}
     </delete>
 
+    <!-- 统计账户总数 -->
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM portfolio_accounts
     </select>

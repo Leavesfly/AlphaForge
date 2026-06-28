@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <!-- 运行时数据根目录: 优先使用系统属性 app.home, 未设置时兜底为 ~/.j_daily-alphaforge-analysis -->
+    <!-- 运行时数据根目录: 优先使用系统属性 app.home, 未设置时兜底为 ~/.alphaforge -->
     <!-- 防止 logback 在 AppInitializer 设置属性前提前加载导致生成 app.home_IS_UNDEFINED 目录 -->
-    <property name="APP_HOME" value="${app.home:-${user.home}/.j_daily-stock-analysis}"/>
+    <property name="APP_HOME" value="${app.home:-${user.home}/.alphaforge}"/>
 
     <!-- 控制台输出 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -11,7 +11,7 @@
         </encoder>
     </appender>
 
-    <!-- 文件输出 (存储在 ~/.j_daily-alphaforge-analysis/logs/ 下) -->
+    <!-- 文件输出 (存储在 ~/.alphaforge/logs/ 下) -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${APP_HOME}/logs/app.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">

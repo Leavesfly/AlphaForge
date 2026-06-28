@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 决策信号结果评估 Mapper：记录决策信号在实际市场中的后续表现，用于信号有效性验证与策略回测闭环 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalOutcomeRepository">
 
+    <!-- 结果映射：数据库字段 ↔ DecisionSignalOutcome 实体属性 -->
     <resultMap id="outcomeMap" type="io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalOutcome">
         <id property="id" column="id"/>
         <result property="signalId" column="signal_id"/>
@@ -19,19 +21,23 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <!-- 插入一条信号结果评估记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO decision_signal_outcomes (signal_id, horizon, engine_version, eval_status, outcome, return_pct, entry_price, exit_price, actual_movement, direction_expected, unable_reason, evaluated_at, created_at)
         VALUES (#{signalId}, #{horizon}, #{engineVersion}, #{evalStatus}, #{outcome}, #{returnPct}, #{entryPrice}, #{exitPrice}, #{actualMovement}, #{directionExpected}, #{unableReason}, #{evaluatedAt}, #{createdAt})
     </insert>
 
+    <!-- 根据主键 ID 查询信号结果评估记录 -->
     <select id="findById" resultMap="outcomeMap">
         SELECT * FROM decision_signal_outcomes WHERE id = #{id}
     </select>
 
+    <!-- 根据信号 ID 查询该信号的所有结果评估记录，按创建时间倒序 -->
     <select id="findBySignalId" resultMap="outcomeMap">
         SELECT * FROM decision_signal_outcomes WHERE signal_id = #{signalId} ORDER BY created_at DESC
     </select>
 
+    <!-- 多条件分页查询信号结果评估记录（支持按信号 ID、时间范围、评估引擎版本等筛选） -->
     <select id="findAll" resultMap="outcomeMap">
         SELECT * FROM decision_signal_outcomes
         <where>
@@ -45,6 +51,7 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 多条件统计信号结果评估记录总数（与 findAll 条件一致，用于分页计数） -->
     <select id="countAll" resultType="int">
         SELECT COUNT(*) FROM decision_signal_outcomes
         <where>
@@ -55,10 +62,12 @@
         </where>
     </select>
 
+    <!-- 根据信号 ID 删除该信号的所有结果评估记录 -->
     <delete id="deleteBySignalId">
         DELETE FROM decision_signal_outcomes WHERE signal_id = #{signalId}
     </delete>
 
+    <!-- 按结果类型统计胜率、平均收益率等汇总指标 -->
     <select id="getOutcomeStats" resultType="map">
         SELECT outcome, COUNT(*) as count,
                AVG(return_pct) as avg_return_pct,
@@ -69,6 +78,7 @@
         GROUP BY outcome
     </select>
 
+    <!-- 按时间范围和评估引擎版本统计各 horizon 的胜率和平均收益率 -->
     <select id="getStatsByHorizon" resultType="map">
         SELECT horizon, outcome, COUNT(*) as count, AVG(return_pct) as avg_return_pct
         FROM decision_signal_outcomes

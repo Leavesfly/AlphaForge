@@ -40,7 +40,7 @@ class AnalysisPostProcessorTest {
         when(appConfig.getSellScoreThreshold()).thenReturn(30);
         when(appConfig.isAdaptiveBlendEnabled()).thenReturn(false);
         processor = new AnalysisPostProcessor(
-                new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker()), appConfig);
+                new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker()), appConfig, null);
         technicalAnalysisService = new TechnicalAnalysisService();
     }
 

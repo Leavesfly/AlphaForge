@@ -11,7 +11,7 @@ import java.util.List;
  * 应用初始化器 - 在Spring容器启动前执行
  *
  * 职责:
- * 1. 确定运行时数据根目录: ~/.j_daily-alphaforge-analysis/
+ * 1. 确定运行时数据根目录: ~/.alphaforge/
  * 2. 自动创建必要的目录结构(data/, logs/)
  * 3. 设置系统属性 app.home 供 application.yml 和 logback.xml 引用
  * 4. 执行环境预检查(JDK版本、目录可写性等)
@@ -19,7 +19,7 @@ import java.util.List;
 public class AppInitializer {
 
     /** 运行时数据根目录名 */
-    private static final String APP_DIR_NAME = ".j_daily-alphaforge-analysis";
+    private static final String APP_DIR_NAME = ".alphaforge";
 
     /** 系统属性 key，供配置文件通过 ${app.home} 引用 */
     public static final String PROP_APP_HOME = "app.home";
@@ -56,7 +56,7 @@ public class AppInitializer {
 
     /**
      * 解析运行时数据根目录
-     * 优先使用环境变量 APP_HOME，否则默认 ~/.j_daily-alphaforge-analysis
+     * 优先使用环境变量 APP_HOME，否则默认 ~/.alphaforge
      */
     private static Path resolveAppHome() {
         String envHome = System.getenv("APP_HOME");

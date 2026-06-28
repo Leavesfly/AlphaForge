@@ -64,7 +64,7 @@ public class StrategyPerformanceTracker {
      */
     public void updateGlobalAccuracy(double accuracyPct) {
         this.globalSignalAccuracyPct = accuracyPct;
-        log.info("[StrategyPerformanceTracker] 全局信号准确率更新: {:.1f}%", accuracyPct);
+        log.info("[StrategyPerformanceTracker] 全局信号准确率更新: {}%", String.format("%.1f", accuracyPct));
     }
 
     /**
@@ -128,8 +128,8 @@ public class StrategyPerformanceTracker {
         if (outcomeAccuracy >= 0 && outcomeAccuracy < 60.0) {
             double outcomePenalty = 1.0 - (60.0 - outcomeAccuracy) / 60.0 * 0.3; // 最多额外衰减30%
             decayFactor = decayFactor * Math.max(0.5, outcomePenalty);
-            log.debug("策略 {} 结果惩罚: 准确率={:.1f}% 惩罚因子={:.2f}",
-                    strategyId, outcomeAccuracy, outcomePenalty);
+            log.debug("策略 {} 结果惩罚: 准确率={}% 惩罚因子={}",
+                    strategyId, String.format("%.1f", outcomeAccuracy), String.format("%.2f", outcomePenalty));
         }
         int effectiveWeight = (int) Math.round(originalWeight * decayFactor);
         effectiveWeight = Math.max(minWeight, effectiveWeight);

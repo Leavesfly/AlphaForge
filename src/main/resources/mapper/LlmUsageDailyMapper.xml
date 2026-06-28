@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- LLM 用量统计 Mapper：按天记录大语言模型的调用量、Token 消耗和费用，用于成本监控与分析 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.usage.LlmUsageDailyRepository">
 
+    <!-- 结果映射：数据库字段 ↔ LlmUsageDaily 实体属性 -->
     <resultMap id="usageMap" type="io.leavesfly.alphaforge.domain.model.entity.usage.LlmUsageDaily">
         <id property="id" column="id"/>
         <result property="usageDate" column="usage_date"/>
@@ -16,40 +18,48 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 插入一条 LLM 用量记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO llm_usage_daily (usage_date, model, provider, request_count, prompt_tokens, completion_tokens, total_tokens, total_cost, created_at, updated_at)
         VALUES (#{usageDate}, #{model}, #{provider}, #{requestCount}, #{promptTokens}, #{completionTokens}, #{totalTokens}, #{totalCost}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     </insert>
 
+    <!-- 更新 LLM 用量记录 -->
     <update id="update">
         UPDATE llm_usage_daily SET request_count=#{requestCount}, prompt_tokens=#{promptTokens}, completion_tokens=#{completionTokens}, total_tokens=#{totalTokens}, total_cost=#{totalCost}, updated_at=CURRENT_TIMESTAMP
         WHERE id=#{id}
     </update>
 
+    <!-- 根据日期和模型查询用量记录 -->
     <select id="findByDateAndModel" resultMap="usageMap">
         SELECT * FROM llm_usage_daily WHERE usage_date=#{usageDate} AND model=#{model}
     </select>
 
+    <!-- 按日期范围查询用量记录，按日期和模型排序 -->
     <select id="findByDateRange" resultMap="usageMap">
         SELECT * FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate} ORDER BY usage_date DESC, model
     </select>
 
+    <!-- 按模型查询用量记录，限制返回条数 -->
     <select id="findByModel" resultMap="usageMap">
         SELECT * FROM llm_usage_daily WHERE model=#{model} ORDER BY usage_date DESC LIMIT #{limit}
     </select>
 
+    <!-- 按日期聚合统计：调用量、各类 Token 数量和费用 -->
     <select id="aggregateByDate" resultType="map">
         SELECT usage_date AS date, SUM(request_count) AS calls, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(total_tokens) AS total_tokens, SUM(total_cost) AS cost
         FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}
         GROUP BY usage_date ORDER BY usage_date DESC
     </select>
 
+    <!-- 按模型聚合统计：调用量、各类 Token 数量和费用 -->
     <select id="aggregateByModel" resultType="map">
         SELECT model, SUM(request_count) AS calls, SUM(prompt_tokens) AS prompt_tokens, SUM(completion_tokens) AS completion_tokens, SUM(total_tokens) AS total_tokens, SUM(total_cost) AS cost
         FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}
         GROUP BY model ORDER BY total_tokens DESC
     </select>
 
+    <!-- 查询指定日期范围内的总量统计（总调用量、总 Token 数、总费用） -->
     <select id="getTotalStats" resultType="map">
         SELECT COALESCE(SUM(request_count),0) AS total_calls, COALESCE(SUM(prompt_tokens),0) AS total_prompt_tokens, COALESCE(SUM(completion_tokens),0) AS total_completion_tokens, COALESCE(SUM(total_tokens),0) AS total_tokens, COALESCE(SUM(total_cost),0) AS total_cost
         FROM llm_usage_daily WHERE usage_date BETWEEN #{fromDate} AND #{toDate}

@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.application.service.signal;
 
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalOutcome;
+import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalOutcomeRepository;
 import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository;
@@ -53,15 +54,18 @@ public class SignalOutcomeEvaluator {
     private final DecisionSignalOutcomeRepository outcomeRepository;
     private final MarketDataPort marketDataPort;
     private final StrategyPerformanceTracker performanceTracker;
+    private final ExperienceMemory experienceMemory;
 
     public SignalOutcomeEvaluator(DecisionSignalRepository signalRepository,
                                   DecisionSignalOutcomeRepository outcomeRepository,
                                   MarketDataPort marketDataPort,
-                                  StrategyPerformanceTracker performanceTracker) {
+                                  StrategyPerformanceTracker performanceTracker,
+                                  @org.springframework.beans.factory.annotation.Autowired(required = false) ExperienceMemory experienceMemory) {
         this.signalRepository = signalRepository;
         this.outcomeRepository = outcomeRepository;
         this.marketDataPort = marketDataPort;
         this.performanceTracker = performanceTracker;
+        this.experienceMemory = experienceMemory;
     }
 
     /**
@@ -117,9 +121,10 @@ public class SignalOutcomeEvaluator {
                 DecisionSignalOutcome outcome = doEvaluate(signal, horizon, evalDate);
                 outcomeRepository.save(outcome);
                 summary.evaluated++;
-                log.info("信号[{}] {} {} 评估完成: {} 收益:{:.2f}%",
+                log.info("信号[{}] {} {} 评估完成: {} 收益:{}%",
                         signal.getId(), signal.getStockCode(), horizon,
-                        outcome.getOutcome(), outcome.getReturnPct() != null ? outcome.getReturnPct() : 0.0);
+                        outcome.getOutcome(),
+                        outcome.getReturnPct() != null ? String.format("%.2f", outcome.getReturnPct()) : "0.00");
             } catch (Exception e) {
                 summary.errors++;
                 log.warn("信号[{}] {} 评估失败: {}", signal.getId(), signal.getStockCode(), e.getMessage());
@@ -179,6 +184,19 @@ public class SignalOutcomeEvaluator {
         boolean wasCorrect = "correct".equals(outcomeStr) || "partial".equals(outcomeStr);
         String agentId = signal.getSourceAgent() != null ? signal.getSourceAgent() : "pipeline";
         performanceTracker.recordOutcome(agentId, wasCorrect);
+
+        // 更新跨轮次经验记忆（闭环：信号效果→经验更新→下次分析参考）
+        if (experienceMemory != null) {
+            try {
+                experienceMemory.updateOutcome(
+                        signal.getStockCode(),
+                        signal.getCreatedAt().toLocalDate().toString(),
+                        outcomeStr,
+                        returnPct);
+            } catch (Exception e) {
+                log.debug("更新经验记忆失败: {}", e.getMessage());
+            }
+        }
 
         return outcome;
     }

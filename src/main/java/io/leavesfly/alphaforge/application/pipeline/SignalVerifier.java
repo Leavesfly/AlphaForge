@@ -1,8 +1,10 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.service.port.SignalQualityPredictor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -26,12 +28,47 @@ public class SignalVerifier {
 
     private static final Logger log = LoggerFactory.getLogger(SignalVerifier.class);
 
-    // 技术评分与 LLM 信号一致性阈值
-    private static final int SCORE_AGREE_BUY_THRESHOLD = 60;
-    private static final int SCORE_AGREE_SELL_THRESHOLD = 40;
-    // 矛盾检测阈值
-    private static final double RSI_OVERBOUGHT = 80.0;
-    private static final double RSI_OVERSOLD = 20.0;
+    // 技术评分与 LLM 信号一致性阈值（可自适应调整）
+    private int scoreAgreeBuyThreshold = 60;
+    private int scoreAgreeSellThreshold = 40;
+    // 矛盾检测阈值（默认值，可根据市场环境自适应）
+    private double rsiOverbought = 80.0;
+    private double rsiOversold = 20.0;
+
+    // 可选：ML 信号质量预测器
+    private final SignalQualityPredictor qualityPredictor;
+
+    @Autowired
+    public SignalVerifier(@Autowired(required = false) SignalQualityPredictor qualityPredictor) {
+        this.qualityPredictor = qualityPredictor;
+        if (qualityPredictor != null && qualityPredictor.isReady()) {
+            log.info("SignalVerifier 已集成 ML 信号质量预测器: {}", qualityPredictor.getClass().getSimpleName());
+        }
+    }
+
+    /** 根据大盘环境自适应调整 RSI 阈值 */
+    private void adaptThresholds(Map<String, Object> marketContext) {
+        // 重置为默认值
+        rsiOverbought = 80.0;
+        rsiOversold = 20.0;
+        scoreAgreeBuyThreshold = 60;
+        scoreAgreeSellThreshold = 40;
+
+        if (marketContext == null || marketContext.isEmpty()) return;
+
+        String sentiment = String.valueOf(marketContext.getOrDefault("market_sentiment", ""));
+        // 牛市环境下提高超买阈值（允许更激进的买入）
+        if (sentiment.contains("乐观") || sentiment.contains("回暖")) {
+            rsiOverbought = 85.0;
+            scoreAgreeBuyThreshold = 55;
+        }
+        // 熊市环境下降低超卖阈值（更保守的买入）
+        else if (sentiment.contains("悲观") || sentiment.contains("谨慎")) {
+            rsiOversold = 15.0;
+            scoreAgreeBuyThreshold = 65;
+            scoreAgreeSellThreshold = 45;
+        }
+    }
 
     /**
      * 验证分析结果，返回含调整建议的验证报告
@@ -65,10 +102,10 @@ public class SignalVerifier {
             boolean buySignal = result.signal.contains("buy");
             boolean sellSignal = result.signal.contains("sell");
 
-            if (buySignal && result.score >= SCORE_AGREE_BUY_THRESHOLD) {
+            if (buySignal && result.score >= scoreAgreeBuyThreshold) {
                 agreementCount++;
                 agreements.add("技术评分(" + result.score + ")与买入信号一致");
-            } else if (sellSignal && result.score <= SCORE_AGREE_SELL_THRESHOLD) {
+            } else if (sellSignal && result.score <= scoreAgreeSellThreshold) {
                 agreementCount++;
                 agreements.add("技术评分(" + result.score + ")与卖出信号一致");
             } else if (!buySignal && !sellSignal) {
@@ -78,6 +115,9 @@ public class SignalVerifier {
                 contradictions.add("技术评分(" + result.score + ")与信号(" + result.signal + ")方向不符");
             }
         }
+
+        // 自适应阈值：根据大盘环境调整 RSI 阈值
+        adaptThresholds(marketContext);
 
         // ===== 2. RSI 矛盾检测 =====
         if (technicalResult != null) {
@@ -91,10 +131,10 @@ public class SignalVerifier {
                 boolean buySignal = result.signal != null && result.signal.contains("buy");
                 boolean sellSignal = result.signal != null && result.signal.contains("sell");
 
-                if (buySignal && rsi6 >= RSI_OVERBOUGHT) {
-                    contradictions.add("RSI(" + String.format("%.1f", rsi6) + ")超买区间，但信号为买入");
-                } else if (sellSignal && rsi6 <= RSI_OVERSOLD) {
-                    contradictions.add("RSI(" + String.format("%.1f", rsi6) + ")超卖区间，但信号为卖出");
+                if (buySignal && rsi6 >= rsiOverbought) {
+                    contradictions.add("RSI(" + String.format("%.1f", rsi6) + ")超买区间(阈" + String.format("%.0f", rsiOverbought) + ")，但信号为买入");
+                } else if (sellSignal && rsi6 <= rsiOversold) {
+                    contradictions.add("RSI(" + String.format("%.1f", rsi6) + ")超卖区间(阈" + String.format("%.0f", rsiOversold) + ")，但信号为卖出");
                 } else if (buySignal && "超卖区间".equals(rsiStatus)) {
                     agreements.add("RSI超卖支持买入信号");
                     agreementCount++;
@@ -180,6 +220,28 @@ public class SignalVerifier {
         vr.agreementCount = agreementCount;
         vr.totalChecks = totalChecks;
         vr.consensusRatio = totalChecks > 0 ? (double) agreementCount / totalChecks : 1.0;
+
+        // ML 信号质量预测（可选）
+        if (qualityPredictor != null && qualityPredictor.isReady()
+                && result.signal != null && result.score != null) {
+            try {
+                SignalQualityPredictor.QualityPrediction mlPrediction =
+                        qualityPredictor.predict(result.signal, result.score,
+                                result.confidence, technicalResult, marketContext);
+                if (mlPrediction.suggestDowngrade && !vr.wasAdjusted()) {
+                    vr.adjustedSignal = "neutral";
+                    vr.adjustedScore = 50;
+                    vr.adjustmentReason = "ML预测器建议降级: " + mlPrediction.reason;
+                    log.warn("[{}] ML信号质量预测器建议降级信号: {} (准确率:{})",
+                            result.stockCode, result.signal, String.format("%.1f%%", mlPrediction.predictedAccuracy * 100));
+                }
+                if (mlPrediction.adjustedConfidence != null) {
+                    vr.mlAdjustedConfidence = mlPrediction.adjustedConfidence;
+                }
+            } catch (Exception e) {
+                log.debug("ML信号质量预测失败: {}", e.getMessage());
+            }
+        }
 
         // 置信度判定
         if (!contradictions.isEmpty() && vr.consensusRatio < 0.5) {
@@ -311,6 +373,8 @@ public class SignalVerifier {
         public List<String> agreements = new ArrayList<>();
         /** 稳定性备注 */
         public String stabilityNote;
+        /** ML 预测器建议的置信度调整 */
+        public String mlAdjustedConfidence;
 
         /** 是否发生了信号调整 */
         public boolean wasAdjusted() {

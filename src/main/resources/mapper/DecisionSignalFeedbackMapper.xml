@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 决策信号反馈 Mapper：管理对决策信号的人工/系统反馈记录，用于信号质量评估与策略优化闭环 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalFeedbackRepository">
 
+    <!-- 结果映射：数据库字段 ↔ DecisionSignalFeedback 实体属性 -->
     <resultMap id="feedbackMap" type="io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalFeedback">
         <id property="id" column="id"/>
         <result property="signalId" column="signal_id"/>
@@ -13,20 +15,24 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 插入一条信号反馈记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO decision_signal_feedback (signal_id, feedback_value, reason_code, note, source, created_at, updated_at)
         VALUES (#{signalId}, #{feedbackValue}, #{reasonCode}, #{note}, #{source}, #{createdAt}, #{updatedAt})
     </insert>
 
+    <!-- 更新信号反馈记录 -->
     <update id="update">
         UPDATE decision_signal_feedback SET feedback_value=#{feedbackValue}, reason_code=#{reasonCode}, note=#{note}, source=#{source}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 
+    <!-- 根据信号 ID 查询该信号的所有反馈记录 -->
     <select id="findBySignalId" resultMap="feedbackMap">
         SELECT * FROM decision_signal_feedback WHERE signal_id = #{signalId}
     </select>
 
+    <!-- 根据信号 ID 删除该信号的所有反馈记录 -->
     <delete id="deleteBySignalId">
         DELETE FROM decision_signal_feedback WHERE signal_id = #{signalId}
     </delete>

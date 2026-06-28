@@ -2,6 +2,9 @@ package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.application.agent.skills.SkillsLoader;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
+import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
+import io.leavesfly.alphaforge.application.service.feedback.SignalFeedbackLoop;
+import io.leavesfly.alphaforge.application.prompt.PromptManager;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,13 +39,21 @@ public class ReActAgent {
     private final LlmToolAdapter toolAdapter;
     private final ToolRegistry toolRegistry;
     private final SkillsLoader skillsLoader;
+    private final SignalFeedbackLoop signalFeedbackLoop;
+    private final ExperienceMemory experienceMemory;
+    private final PromptManager promptManager;
 
     public ReActAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
-                      ToolRegistry toolRegistry, SkillsLoader skillsLoader) {
+                      ToolRegistry toolRegistry, SkillsLoader skillsLoader,
+                      SignalFeedbackLoop signalFeedbackLoop, ExperienceMemory experienceMemory,
+                      PromptManager promptManager) {
         this.llmService = llmService;
         this.toolAdapter = toolAdapter;
         this.toolRegistry = toolRegistry;
         this.skillsLoader = skillsLoader;
+        this.signalFeedbackLoop = signalFeedbackLoop;
+        this.experienceMemory = experienceMemory;
+        this.promptManager = promptManager;
     }
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
@@ -54,13 +65,13 @@ public class ReActAgent {
             • 回答投资相关问题
             请用中文回复，回答要专业、简洁、有数据支撑。
 
-            当需要获取实时数据时，你可以使用工具调用。格式为：
-            [TOOL_CALL]{"name":"工具名","args":{参数}}[/TOOL_CALL]
+            当需要获取实时数据时，你可以通过 Function Calling 调用工具。
+            系统已将工具定义注册为原生 Function Calling，你只需根据需要选择调用即可。
 
             可用工具：
             %s
 
-            每次只调用一个工具，收到工具结果后再给出最终分析。
+            每次只调用必要的工具，收到工具结果后再给出最终分析。
 
             ## 技能（Skills）
             以下技能扩展了你的分析能力。当用户任务与某个技能描述匹配时，
@@ -80,6 +91,15 @@ public class ReActAgent {
      * 构建System Prompt（工具列表+技能摘要动态注入）
      */
     public String buildSystemPrompt() {
+        // 优先使用外部 Prompt 模板（PromptManager）
+        if (promptManager != null && promptManager.hasTemplate("react_agent_system")) {
+            String template = promptManager.render("react_agent_system", Map.of(
+                    "tools", toolRegistry.getToolSummaryText(),
+                    "skills", skillsLoader.buildSkillsSummary()
+            ));
+            if (template != null && !template.isEmpty()) return template;
+        }
+        // Fallback: 使用内嵌模板
         return String.format(SYSTEM_PROMPT_TEMPLATE,
                 toolRegistry.getToolSummaryText(),
                 skillsLoader.buildSkillsSummary());
@@ -162,17 +182,31 @@ public class ReActAgent {
             }
         }
 
+        // 注入信号反馈（Few-shot 示例：历史信号效果）
+        String feedback = signalFeedbackLoop.buildFeedbackPrompt(stockCode);
+        if (feedback != null && !feedback.isEmpty()) {
+            sb.append(feedback);
+        }
+
+        // 注入经验记忆（相似条件下的历史经验）
+        Object techObj = context != null ? context.get("technical_analysis") : null;
+        if (techObj instanceof Map<?, ?> techMap) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> techContext = (Map<String, Object>) techMap;
+            String expHint = experienceMemory.getExperienceHint(stockCode, techContext);
+            if (expHint != null && !expHint.isEmpty()) {
+                sb.append(expHint);
+            }
+        }
+
         sb.append("""
 
                 请使用可用工具获取所需数据，然后给出综合分析报告。
-                报告必须包含以下结构化字段（每行一个，便于解析）：
+                最终分析结论必须以 JSON 格式返回，结构如下：
 
-                信号：strong_buy/buy/neutral/sell/strong_sell
-                评分：0-100
-                操作建议：具体建议内容
-                风险提示：具体风险内容
-                置信度：高/中等/低
+                {"signal":"strong_buy/buy/neutral/sell/strong_sell","score":0-100,"confidence":"高/中等/低","summary":"一句话总结","operation_advice":"操作建议","risk_note":"风险提示","target_price":null,"stop_loss_price":null}
 
+                注意：score 必须是根据分析数据得出的真实评分（0-100），不要固定使用 70 或 30。
                 请先调用工具获取数据，再给出分析结论。""");
 
         return sb.toString();

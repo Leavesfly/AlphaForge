@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
 import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.domain.service.port.FactorLibrary;
 import io.leavesfly.alphaforge.application.strategy.engine.AdaptiveScoreBlender;
 import io.leavesfly.alphaforge.application.strategy.engine.CompositeScoringEngine;
 import io.leavesfly.alphaforge.application.strategy.engine.CompositeScoringResult;
@@ -31,10 +32,14 @@ public class AnalysisPostProcessor {
     private final CompositeScoringEngine compositeScoringEngine;
     private final AppConfig appConfig;
     private final AdaptiveScoreBlender adaptiveBlender;
+    private final FactorLibrary factorLibrary;
 
-    public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, AppConfig appConfig) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, AppConfig appConfig,
+                                  @org.springframework.beans.factory.annotation.Autowired(required = false) FactorLibrary factorLibrary) {
         this.compositeScoringEngine = compositeScoringEngine;
         this.appConfig = appConfig;
+        this.factorLibrary = factorLibrary;
         this.adaptiveBlender = new AdaptiveScoreBlender(
                 appConfig.getAdaptiveBlendBaseRatio(),
                 appConfig.getAdaptiveStrategyConfidenceImpact(),
@@ -100,6 +105,18 @@ public class AnalysisPostProcessor {
         if (result.signal == null || "neutral".equals(result.signal)) {
             if (result.score >= buyThreshold) result.signal = "buy";
             else if (result.score <= sellThreshold) result.signal = "sell";
+        }
+
+        // 如果因子库可用，计算关键因子并注入到结果中
+        if (factorLibrary != null && historyData != null && !historyData.isEmpty()) {
+            try {
+                List<String> factorNames = List.of("momentum_5d", "momentum_20d", "rsi_14", "volatility_20d");
+                Map<String, Double> factors = factorLibrary.calculateBatch(factorNames, historyData);
+                result.compositeScoring.put("factors", factors);
+                log.debug("[{}] 因子计算完成: {}", result.stockCode, factors);
+            } catch (Exception e) {
+                log.debug("[{}] 因子计算失败: {}", result.stockCode, e.getMessage());
+            }
         }
 
         log.debug("[{}] 综合策略评分: {} (命中权重 {}/{})",

@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
 import io.leavesfly.alphaforge.config.AppConfig;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.application.pipeline.AnalysisPostProcessor.AnalysisResult;
 import io.leavesfly.alphaforge.application.pipeline.AnalysisPostProcessor.TrendAnalysisResult;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
@@ -12,6 +14,9 @@ import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
 
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
+import io.leavesfly.alphaforge.application.agent.MultiAgentOrchestrator;
+import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
+import io.leavesfly.alphaforge.application.service.memory.AnalysisMemoryService;
 import io.leavesfly.alphaforge.application.service.market.NewsSearchService;
 import io.leavesfly.alphaforge.application.service.market.DailyMarketContextService;
 import io.leavesfly.alphaforge.application.service.report.AnalysisHistoryService;
@@ -30,6 +35,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 股票分析流水线 - 核心编排器(完整版)
@@ -67,6 +74,18 @@ public class StockAnalysisPipeline {
     private final PipelineMetrics pipelineMetrics;
     private final SignalVerifier signalVerifier;
     private final LoopStateManager loopStateManager;
+    private final ExperienceMemory experienceMemory;
+
+    /** 可选依赖：分析记忆服务（字段注入，避免构造函数过度膨胀） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AnalysisMemoryService analysisMemoryService;
+
+    /** 可选依赖：多 Agent 编排器 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private MultiAgentOrchestrator multiAgentOrchestrator;
+
+    /** JSON 解析器（用于从 LLM 响应提取结构化字段） */
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 并发线程池 */
     private final ExecutorService executorService;
@@ -86,7 +105,7 @@ public class StockAnalysisPipeline {
             TradingCalendar tradingCalendar, NameToCodeResolver nameResolver,
             AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer,
             PipelineMetrics pipelineMetrics, SignalVerifier signalVerifier,
-            LoopStateManager loopStateManager) {
+            LoopStateManager loopStateManager, ExperienceMemory experienceMemory) {
         this.config = config;
         this.dataFetcherManager = dataFetcherManager;
         this.technicalAnalysisService = technicalAnalysisService;
@@ -107,6 +126,7 @@ public class StockAnalysisPipeline {
         this.pipelineMetrics = pipelineMetrics;
         this.signalVerifier = signalVerifier;
         this.loopStateManager = loopStateManager;
+        this.experienceMemory = experienceMemory;
         this.executorService = Executors.newFixedThreadPool(
                 Math.min(Runtime.getRuntime().availableProcessors(), 4));
     }
@@ -234,12 +254,12 @@ public class StockAnalysisPipeline {
                 List<AnalysisReport> prevReports = historyService.getRecentReports(stockCode, 2);
                 if (!prevReports.isEmpty()) {
                     AnalysisReport prev = prevReports.get(0);
+                    String prevSummaryText = prev.getSummary() != null ? prev.getSummary() : "";
                     String prevSummary = String.format("[历史参考|%s] 信号:%s 评分:%d %s",
                             prev.getAnalysisDate(),
                             prev.getSignal() != null ? prev.getSignal() : "-",
                             prev.getTotalScore() != null ? prev.getTotalScore() : 0,
-                            prev.getSummary() != null ? prev.getSummary().substring(
-                                    0, Math.min(150, prev.getSummary().length())) : "");
+                            prevSummaryText.substring(0, Math.min(150, prevSummaryText.length())));
                     enhancedContext.put("last_analysis_summary", prevSummary);
                     log.debug("[{}] 历史参考已注入: {}",
                             stockCode, prevSummary.substring(0, Math.min(80, prevSummary.length())));
@@ -299,8 +319,29 @@ public class StockAnalysisPipeline {
             // ===== Step 18: 刷新诊断快照 =====
             diag.complete(elapsed);
             pipelineMetrics.recordPhase(stockCode, "analyze_stock", System.currentTimeMillis() - startTime);
-            log.info("[{}] 分析完成 | 信号:{} 评分:{} 耗时:{:.1f}秒",
-                    stockCode, report.getSignal(), report.getTotalScore(), elapsed);
+            log.info("[{}] 分析完成 | 信号:{} 评分:{} 耗时:{}秒",
+                    stockCode, report.getSignal(), report.getTotalScore(), String.format("%.1f", elapsed));
+
+            // ===== Step 19: 记录跨轮次经验（供系统自我进化） =====
+            try {
+                String sentiment = marketContext != null
+                        ? String.valueOf(marketContext.getOrDefault("market_sentiment", "")) : null;
+                experienceMemory.recordExperience(
+                        stockCode, report.getSignal(),
+                        report.getTotalScore() != null ? report.getTotalScore() : 50,
+                        analysisResult.confidence, technicalResult, sentiment);
+            } catch (Exception e) {
+                log.debug("[{}] 记录经验失败: {}", stockCode, e.getMessage());
+            }
+
+            // ===== Step 20: 索引分析报告到向量记忆（如果启用） =====
+            if (analysisMemoryService != null && analysisMemoryService.isEnabled()) {
+                try {
+                    analysisMemoryService.indexAnalysis(report);
+                } catch (Exception e) {
+                    log.debug("[{}] 索引分析报告失败: {}", stockCode, e.getMessage());
+                }
+            }
 
             return report;
 
@@ -322,6 +363,27 @@ public class StockAnalysisPipeline {
      */
     private AnalysisResult analyzeWithAgent(String stockCode, String stockName,
                                             Map<String, Object> context, DiagnosticContext diag) {
+        // 如果配置了多 Agent 模式且编排器可用，优先使用多 Agent 并行分析
+        String agentMode = config.getAgentMode();
+        if (multiAgentOrchestrator != null && ("multi".equals(agentMode) || "full".equals(agentMode))) {
+            try {
+                MultiAgentOrchestrator.OrchestrationResult orcResult =
+                        multiAgentOrchestrator.orchestrate(stockCode, stockName, context, 120);
+                diag.record("agent_mode", "multi_agent");
+                diag.record("agent_count", orcResult.agentResults().size());
+                diag.record("agent_duration_ms", orcResult.durationMs());
+                AnalysisResult result = new AnalysisResult();
+                result.stockCode = stockCode;
+                result.stockName = stockName;
+                result.fullReport = orcResult.synthesis();
+                result.source = "multi_agent";
+                extractFieldsFromLlmResponse(result, orcResult.synthesis());
+                return result;
+            } catch (Exception e) {
+                log.warn("[{}] 多Agent分析失败，降级到ReactAgent: {}", stockCode, e.getMessage());
+            }
+        }
+
         try {
             ReActAgent.ReactResult reactResult = reactAgent.analyze(stockCode, stockName, context);
             diag.record("agent_mode", "react");
@@ -353,18 +415,43 @@ public class StockAnalysisPipeline {
      * 传统LLM直接分析
      */
     private AnalysisResult analyzeWithLlm(String stockCode, String stockName, Map<String, Object> context) {
-        String prompt = contextBuilder.formatForLlm(buildContextObj(context));
-        String response = llmService.analyzeStock(context);
-        
+        // 优先使用结构化输出（JSON Mode），fallback 到传统 analyzeStock
+        String response;
+        try {
+            List<Map<String, Object>> messages = new ArrayList<>();
+            messages.add(Map.of("role", "system", "content", (Object) "你是一位专业的股票分析师。请以JSON格式返回分析结论。"));
+            messages.add(Map.of("role", "user", "content", (Object) buildLlmUserPrompt(stockCode, stockName, context)));
+            response = llmService.chatForStructuredOutput(messages, null);
+            if (response == null || response.isEmpty() || "{}".equals(response)) {
+                response = llmService.analyzeStock(context);
+            }
+        } catch (Exception e) {
+            log.debug("[{}] 结构化输出失败，回退到传统模式: {}", stockCode, e.getMessage());
+            response = llmService.analyzeStock(context);
+        }
+
         AnalysisResult result = new AnalysisResult();
         result.stockCode = stockCode;
         result.stockName = stockName;
         result.fullReport = response;
-        result.source = "llm_direct";
-        
-        // 从LLM响应中提取结构化字段
+        result.source = "llm_structured";
+
         extractFieldsFromLlmResponse(result, response);
         return result;
+    }
+
+    /** 为结构化输出构建用户提示 */
+    private String buildLlmUserPrompt(String stockCode, String stockName, Map<String, Object> context) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("请分析股票 %s(%s)。\n", stockName, stockCode));
+        if (context != null) {
+            Object tech = context.get("technical_analysis");
+            if (tech != null) sb.append("技术分析:").append(tech).append("\n");
+            Object quote = context.get("realtime_quote");
+            if (quote != null) sb.append("实时行情:").append(quote).append("\n");
+        }
+        sb.append("请以JSON返回: {\"signal\":\"...\",\"score\":0-100,\"confidence\":\"...\",\"summary\":\"...\",\"operation_advice\":\"...\",\"risk_note\":\"...\"}");
+        return sb.toString();
     }
 
     // ==================== 决策信号提取 ====================
@@ -473,14 +560,138 @@ public class StockAnalysisPipeline {
     }
 
     private void extractFieldsFromLlmResponse(AnalysisResult result, String response) {
-        if (response == null) return;
+        if (response == null || response.isEmpty()) {
+            result.signal = "neutral";
+            result.score = 50;
+            return;
+        }
+
+        // 优先尝试从 JSON 中提取（结构化输出模式）
+        if (tryExtractFromJson(result, response)) {
+            return;
+        }
+
+        // Fallback: 从文本中提取
+        extractFromText(result, response);
+    }
+
+    /** 尝试从 LLM 响应中解析 JSON 并提取结构化字段 */
+    private boolean tryExtractFromJson(AnalysisResult result, String response) {
+        try {
+            String json = extractJsonObject(response);
+            if (json == null) return false;
+
+            JsonNode node = objectMapper.readTree(json);
+
+            // 提取信号
+            String signal = node.path("signal").asText("");
+            if (!signal.isEmpty()) {
+                result.signal = normalizeSignal(signal);
+            }
+
+            // 提取评分（不再硬编码！从 LLM 输出中获取真实评分）
+            int score = node.path("score").asInt(-1);
+            if (score >= 0 && score <= 100) {
+                result.score = score;
+            }
+
+            // 提取其他结构化字段
+            String confidence = node.path("confidence").asText(null);
+            if (confidence != null && !confidence.isEmpty()) result.confidence = confidence;
+
+            String summary = node.path("summary").asText(null);
+            if (summary != null && !summary.isEmpty()) result.summary = summary;
+
+            String advice = node.path("operation_advice").asText(null);
+            if (advice != null && !advice.isEmpty()) result.operationAdvice = advice;
+
+            String riskNote = node.path("risk_note").asText(null);
+            if (riskNote != null && !riskNote.isEmpty()) result.riskNote = riskNote;
+
+            JsonNode targetPrice = node.path("target_price");
+            if (targetPrice.isNumber()) result.targetPrice = targetPrice.asDouble();
+
+            JsonNode stopLoss = node.path("stop_loss_price");
+            if (stopLoss.isNumber()) result.stopLossPrice = stopLoss.asDouble();
+
+            return result.signal != null && result.score != null;
+        } catch (Exception e) {
+            log.debug("JSON 提取失败，回退到文本匹配: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /** 从文本中提取 JSON 对象 */
+    private String extractJsonObject(String text) {
+        if (text == null) return null;
+        String trimmed = text.trim();
+        // 去除 markdown 代码块
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline > 0) trimmed = trimmed.substring(firstNewline + 1);
+            int lastFence = trimmed.lastIndexOf("```");
+            if (lastFence > 0) trimmed = trimmed.substring(0, lastFence);
+            trimmed = trimmed.trim();
+        }
+        int start = trimmed.indexOf('{');
+        int end = trimmed.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return trimmed.substring(start, end + 1);
+        }
+        return null;
+    }
+
+    /** 信号标准化 */
+    private String normalizeSignal(String signal) {
+        String s = signal.toLowerCase().trim();
+        if (s.contains("strong") && s.contains("buy")) return "strong_buy";
+        if (s.contains("strong") && s.contains("sell")) return "strong_sell";
+        if (s.contains("buy") || s.contains("买入")) return "buy";
+        if (s.contains("sell") || s.contains("卖出")) return "sell";
+        if (s.contains("hold") || s.contains("neutral") || s.contains("中性")) return "neutral";
+        return s;
+    }
+
+    /** 文本模式提取（Fallback） */
+    private void extractFromText(AnalysisResult result, String response) {
         String lower = response.toLowerCase();
-        if (lower.contains("强烈买入") || lower.contains("strong buy")) result.signal = "strong_buy";
-        else if (lower.contains("买入") || lower.contains("buy")) result.signal = "buy";
-        else if (lower.contains("卖出") || lower.contains("sell")) result.signal = "sell";
-        else result.signal = "neutral";
-        // 简单评分提取
-        result.score = result.signal.contains("buy") ? 70 : result.signal.contains("sell") ? 30 : 50;
+        if (lower.contains("强烈买入") || lower.contains("strong buy")) {
+            result.signal = "strong_buy";
+        } else if (lower.contains("买入") || lower.contains("buy")) {
+            result.signal = "buy";
+        } else if (lower.contains("卖出") || lower.contains("sell")) {
+            result.signal = "sell";
+        } else {
+            result.signal = "neutral";
+        }
+
+        // 评分提取改进：尝试从文本中提取 "评分：85" 或 "score: 85"
+        Integer extractedScore = extractScoreFromText(response);
+        if (extractedScore != null) {
+            result.score = extractedScore;
+        } else if (result.score == null) {
+            // 无 JSON 也无法提取评分时，使用更合理的默认值（不再硬编码 70/30）
+            result.score = switch (result.signal) {
+                case "strong_buy" -> 80;
+                case "buy" -> 65;
+                case "sell" -> 35;
+                case "strong_sell" -> 20;
+                default -> 50;
+            };
+        }
+    }
+
+    /** 从文本中提取评分数字 */
+    private Integer extractScoreFromText(String response) {
+        Pattern pattern = Pattern.compile("(?:评分|score|total_score)\\s*[:：]\\s*(\\d{1,3})");
+        Matcher matcher = pattern.matcher(response);
+        if (matcher.find()) {
+            try {
+                int score = Integer.parseInt(matcher.group(1));
+                if (score >= 0 && score <= 100) return score;
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 
     private String formatNotificationContent(AnalysisReport report) {

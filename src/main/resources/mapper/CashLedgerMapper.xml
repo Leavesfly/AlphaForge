@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 现金流水账 Mapper：管理账户资金的出入账记录，记录每笔资金的流向、金额及币种 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CashLedgerRepository">
 
+    <!-- 结果映射：数据库字段 ↔ CashLedgerEntry 实体属性 -->
     <resultMap id="cashMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.CashLedgerEntry">
         <id property="id" column="id"/>
         <result property="accountId" column="account_id"/>
@@ -13,35 +15,43 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <!-- 插入一条现金流水记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO cash_ledger (account_id, event_date, direction, amount, currency, note, created_at)
         VALUES (#{accountId}, #{eventDate}, #{direction}, #{amount}, #{currency}, #{note}, #{createdAt})
     </insert>
 
+    <!-- 根据主键 ID 查询现金流水记录 -->
     <select id="findById" resultMap="cashMap">
         SELECT * FROM cash_ledger WHERE id = #{id}
     </select>
 
+    <!-- 查询全部现金流水记录，按事件日期和 ID 倒序 -->
     <select id="findAll" resultMap="cashMap">
         SELECT * FROM cash_ledger ORDER BY event_date DESC, id DESC
     </select>
 
+    <!-- 根据账户 ID 查询现金流水记录 -->
     <select id="findByAccountId" resultMap="cashMap">
         SELECT * FROM cash_ledger WHERE account_id = #{accountId} ORDER BY event_date DESC, id DESC
     </select>
 
+    <!-- 按资金方向（入账/出账）查询现金流水记录 -->
     <select id="findByDirection" resultMap="cashMap">
         SELECT * FROM cash_ledger WHERE direction = #{direction} ORDER BY event_date DESC, id DESC
     </select>
 
+    <!-- 根据主键 ID 删除现金流水记录 -->
     <delete id="deleteById">
         DELETE FROM cash_ledger WHERE id = #{id}
     </delete>
 
+    <!-- 根据账户 ID 删除该账户的所有现金流水记录 -->
     <delete id="deleteByAccountId">
         DELETE FROM cash_ledger WHERE account_id = #{accountId}
     </delete>
 
+    <!-- 统计现金流水记录总数 -->
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM cash_ledger
     </select>

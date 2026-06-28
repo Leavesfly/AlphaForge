@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 决策信号 Mapper：管理投资决策信号的增删改查，包含操作方向、置信度、入场/止损/目标价等交易计划字段 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository">
 
+    <!-- 结果映射：数据库字段 ↔ DecisionSignal 实体属性 -->
     <resultMap id="decisionSignalMap" type="io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal">
         <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
@@ -38,49 +40,59 @@
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
+    <!-- 插入一条决策信号 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO decision_signals (stock_code, stock_name, market, source_type, source_agent, source_report_id, trace_id, market_phase, trigger_source, action, action_label, confidence, score, horizon, entry_low, entry_high, stop_loss, target_price, invalidation, watch_conditions, reason, risk_summary, catalyst_summary, evidence, data_quality_summary, plan_quality, status, expires_at, metadata, report_language, created_at, updated_at)
         VALUES (#{stockCode}, #{stockName}, #{market}, #{sourceType}, #{sourceAgent}, #{sourceReportId}, #{traceId}, #{marketPhase}, #{triggerSource}, #{action}, #{actionLabel}, #{confidence}, #{score}, #{horizon}, #{entryLow}, #{entryHigh}, #{stopLoss}, #{targetPrice}, #{invalidation}, #{watchConditions}, #{reason}, #{riskSummary}, #{catalystSummary}, #{evidence}, #{dataQualitySummary}, #{planQuality}, #{status}, #{expiresAt}, #{metadata}, #{reportLanguage}, #{createdAt}, #{updatedAt})
     </insert>
 
+    <!-- 更新决策信号 -->
     <update id="update">
         UPDATE decision_signals SET stock_code=#{stockCode}, stock_name=#{stockName}, market=#{market}, source_type=#{sourceType}, source_agent=#{sourceAgent}, source_report_id=#{sourceReportId}, trace_id=#{traceId}, market_phase=#{marketPhase}, trigger_source=#{triggerSource}, action=#{action}, action_label=#{actionLabel}, confidence=#{confidence}, score=#{score}, horizon=#{horizon}, entry_low=#{entryLow}, entry_high=#{entryHigh}, stop_loss=#{stopLoss}, target_price=#{targetPrice}, invalidation=#{invalidation}, watch_conditions=#{watchConditions}, reason=#{reason}, risk_summary=#{riskSummary}, catalyst_summary=#{catalystSummary}, evidence=#{evidence}, data_quality_summary=#{dataQualitySummary}, plan_quality=#{planQuality}, status=#{status}, expires_at=#{expiresAt}, metadata=#{metadata}, report_language=#{reportLanguage}, updated_at=#{updatedAt}
         WHERE id=#{id}
     </update>
 
+    <!-- 根据主键 ID 查询决策信号 -->
     <select id="findById" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE id = #{id}
     </select>
 
+    <!-- 查询全部决策信号，按创建时间倒序 -->
     <select id="findAll" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals ORDER BY created_at DESC
     </select>
 
+    <!-- 根据主键 ID 删除决策信号 -->
     <delete id="deleteById">
         DELETE FROM decision_signals WHERE id = #{id}
     </delete>
 
+    <!-- 根据股票代码查询决策信号，按创建时间倒序 -->
     <select id="findByStockCodeOrderByCreatedAtDesc" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE stock_code = #{stockCode} ORDER BY created_at DESC
     </select>
 
+    <!-- 按信号状态查询决策信号，按创建时间倒序 -->
     <select id="findByStatusOrderByCreatedAtDesc" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE status = #{status} ORDER BY created_at DESC
     </select>
 
+    <!-- 查询最近 20 条决策信号 -->
     <select id="findTop20ByOrderByCreatedAtDesc" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals ORDER BY created_at DESC LIMIT 20
     </select>
 
+    <!-- 根据股票代码查询指定时间之后的决策信号 -->
     <select id="findByStockCodeAndCreatedAtAfter" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE stock_code = #{stockCode} AND created_at > #{after} ORDER BY created_at DESC
     </select>
 
+    <!-- 查询指定时间之后的所有决策信号 -->
     <select id="findByCreatedAtAfter" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE created_at > #{after} ORDER BY created_at DESC
     </select>
 
-    <!-- 多条件筛选查询 -->
+    <!-- 多条件筛选查询（支持市场、股票代码、操作方向、市场阶段、来源类型、状态、时间范围等条件） -->
     <select id="findFiltered" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals
         <where>
@@ -97,6 +109,7 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 多条件筛选统计总数（与 findFiltered 条件一致，用于分页计数） -->
     <select id="countFiltered" resultType="int">
         SELECT COUNT(*) FROM decision_signals
         <where>
@@ -111,10 +124,12 @@
         </where>
     </select>
 
+    <!-- 查询某只股票最近的若干条决策信号 -->
     <select id="findByLatestStockCode" resultMap="decisionSignalMap">
         SELECT * FROM decision_signals WHERE stock_code = #{stockCode} ORDER BY created_at DESC LIMIT #{limit}
     </select>
 
+    <!-- 更新信号状态（如过期、已处理等） -->
     <update id="updateStatus">
         UPDATE decision_signals SET status = #{status}, updated_at = #{updatedAt} WHERE id = #{id}
     </update>

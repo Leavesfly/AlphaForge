@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 公司行为 Mapper：管理公司行为记录（如分红、送股、拆股等），用于持仓成本和数量调整 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CorporateActionRepository">
 
+    <!-- 结果映射：数据库字段 ↔ CorporateAction 实体属性 -->
     <resultMap id="corpMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.CorporateAction">
         <id property="id" column="id"/>
         <result property="accountId" column="account_id"/>
@@ -16,31 +18,38 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <!-- 插入一条公司行为记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO corporate_actions (account_id, symbol, effective_date, action_type, market, currency, cash_dividend_per_share, split_ratio, note, created_at)
         VALUES (#{accountId}, #{symbol}, #{effectiveDate}, #{actionType}, #{market}, #{currency}, #{cashDividendPerShare}, #{splitRatio}, #{note}, #{createdAt})
     </insert>
 
+    <!-- 根据主键 ID 查询公司行为记录 -->
     <select id="findById" resultMap="corpMap">
         SELECT * FROM corporate_actions WHERE id = #{id}
     </select>
 
+    <!-- 查询全部公司行为记录，按生效日期和 ID 倒序 -->
     <select id="findAll" resultMap="corpMap">
         SELECT * FROM corporate_actions ORDER BY effective_date DESC, id DESC
     </select>
 
+    <!-- 根据账户 ID 查询公司行为记录 -->
     <select id="findByAccountId" resultMap="corpMap">
         SELECT * FROM corporate_actions WHERE account_id = #{accountId} ORDER BY effective_date DESC, id DESC
     </select>
 
+    <!-- 根据股票代码查询公司行为记录 -->
     <select id="findBySymbol" resultMap="corpMap">
         SELECT * FROM corporate_actions WHERE symbol = #{symbol} ORDER BY effective_date DESC, id DESC
     </select>
 
+    <!-- 根据主键 ID 删除公司行为记录 -->
     <delete id="deleteById">
         DELETE FROM corporate_actions WHERE id = #{id}
     </delete>
 
+    <!-- 统计公司行为记录总数 -->
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM corporate_actions
     </select>

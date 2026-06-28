@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 自选股列表 Mapper：管理用户关注的股票列表，支持添加、删除和查询自选股 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.watchlist.WatchlistRepository">
 
+    <!-- 结果映射：数据库字段 ↔ WatchlistItem 实体属性 -->
     <resultMap id="watchlistMap" type="io.leavesfly.alphaforge.domain.model.entity.watchlist.WatchlistItem">
         <id property="id" column="id"/>
         <result property="stockCode" column="stock_code"/>
@@ -10,27 +12,33 @@
         <result property="addedAt" column="added_at"/>
     </resultMap>
 
+    <!-- 添加股票到自选股列表 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO watchlist (stock_code, stock_name, market, added_at)
         VALUES (#{stockCode}, #{stockName}, #{market}, CURRENT_TIMESTAMP)
     </insert>
 
+    <!-- 根据股票代码从自选股列表中删除 -->
     <delete id="deleteByStockCode">
         DELETE FROM watchlist WHERE stock_code = #{stockCode}
     </delete>
 
+    <!-- 根据股票代码查询自选股记录 -->
     <select id="findByStockCode" resultMap="watchlistMap">
         SELECT * FROM watchlist WHERE stock_code = #{stockCode}
     </select>
 
+    <!-- 查询全部自选股，按添加时间倒序 -->
     <select id="findAll" resultMap="watchlistMap">
         SELECT * FROM watchlist ORDER BY added_at DESC
     </select>
 
+    <!-- 统计自选股总数 -->
     <select id="count" resultType="int">
         SELECT COUNT(*) FROM watchlist
     </select>
 
+    <!-- 判断某只股票是否已在自选股列表中 -->
     <select id="existsByStockCode" resultType="boolean">
         SELECT COUNT(*) > 0 FROM watchlist WHERE stock_code = #{stockCode}
     </select>

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 分析任务 Mapper：管理股票分析任务的生命周期，包括任务创建、状态更新、进度追踪和结果回写 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisTaskRepository">
 
+    <!-- 结果映射：数据库字段 ↔ AnalysisTask 实体属性 -->
     <resultMap id="taskMap" type="io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisTask">
         <id property="id" column="id"/>
         <result property="taskId" column="task_id"/>
@@ -21,40 +23,49 @@
         <result property="completedAt" column="completed_at"/>
     </resultMap>
 
+    <!-- 插入一条分析任务 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO analysis_tasks (task_id, stock_code, stock_codes, task_type, status, progress, message, result, error_message, skills, analysis_phase, report_language, created_at, started_at, completed_at)
         VALUES (#{taskId}, #{stockCode}, #{stockCodes}, #{taskType}, #{status}, #{progress}, #{message}, #{result}, #{errorMessage}, #{skills}, #{analysisPhase}, #{reportLanguage}, #{createdAt}, #{startedAt}, #{completedAt})
     </insert>
 
+    <!-- 更新分析任务（全字段更新） -->
     <update id="update">
         UPDATE analysis_tasks SET stock_code=#{stockCode}, stock_codes=#{stockCodes}, task_type=#{taskType}, status=#{status}, progress=#{progress}, message=#{message}, result=#{result}, error_message=#{errorMessage}, skills=#{skills}, analysis_phase=#{analysisPhase}, report_language=#{reportLanguage}, started_at=#{startedAt}, completed_at=#{completedAt}
         WHERE task_id=#{taskId}
     </update>
 
+    <!-- 根据任务 ID 查询分析任务 -->
     <select id="findByTaskId" resultMap="taskMap">
         SELECT * FROM analysis_tasks WHERE task_id = #{taskId}
     </select>
 
+    <!-- 按任务状态查询分析任务 -->
     <select id="findByStatus" resultMap="taskMap">
         SELECT * FROM analysis_tasks WHERE status = #{status} ORDER BY created_at DESC
     </select>
 
+    <!-- 查询最近创建的分析任务列表 -->
     <select id="findRecent" resultMap="taskMap">
         SELECT * FROM analysis_tasks ORDER BY created_at DESC LIMIT #{limit}
     </select>
 
+    <!-- 根据任务 ID 删除分析任务 -->
     <delete id="deleteByTaskId">
         DELETE FROM analysis_tasks WHERE task_id = #{taskId}
     </delete>
 
+    <!-- 统计分析任务总数 -->
     <select id="count" resultType="int">
         SELECT COUNT(*) FROM analysis_tasks
     </select>
 
+    <!-- 更新任务运行状态和进度 -->
     <update id="updateStatus">
         UPDATE analysis_tasks SET status=#{status}, progress=#{progress}, message=#{message} WHERE task_id=#{taskId}
     </update>
 
+    <!-- 更新任务完成状态、结果及错误信息 -->
     <update id="updateCompleted">
         UPDATE analysis_tasks SET status=#{status}, progress=#{progress}, result=#{result}, error_message=#{errorMessage}, completed_at=#{completedAt} WHERE task_id=#{taskId}
     </update>

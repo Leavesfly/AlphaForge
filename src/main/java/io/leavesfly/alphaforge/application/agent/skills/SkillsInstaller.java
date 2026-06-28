@@ -42,7 +42,7 @@ public class SkillsInstaller {
 
     public SkillsInstaller() {
         String appHome = System.getProperty("app.home",
-                Paths.get(System.getProperty("user.home"), ".j_daily-alphaforge-analysis").toString());
+                Paths.get(System.getProperty("user.home"), ".alphaforge").toString());
         this.skillsDir = Paths.get(appHome, "data", "skills").toString();
     }
 

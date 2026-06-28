@@ -197,6 +197,319 @@ public class LlmService implements LlmPort {
         }
     }
 
+    // ==================== 新增：原生 Function Calling ====================
+
+    /**
+     * 带原生 Function Calling 的对话
+     *
+     * 使用 OpenAI 标准 tools/tool_choice 参数，LLM 原生返回 tool_calls 结构，
+     * 无需脆弱的文本标记解析。
+     */
+    @Override
+    public LlmPort.LlmResponse chatWithFunctionCalling(List<Map<String, Object>> messages,
+                                                        List<Map<String, Object>> tools) {
+        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        if (channels.isEmpty()) {
+            log.error("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
+            return LlmPort.LlmResponse.textOnly("[错误] 未配置LLM服务");
+        }
+
+        for (int attempt = 0; attempt < channels.size(); attempt++) {
+            int idx = (currentChannelIndex + attempt) % channels.size();
+            AppConfig.LlmChannelConfig channel = channels.get(idx);
+            try {
+                LlmPort.LlmResponse result = callLlmApiWithTools(channel, messages, tools);
+                if (result != null && (result.hasToolCalls()
+                        || (result.getContent() != null && !result.getContent().isEmpty()))) {
+                    currentChannelIndex = idx;
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("LLM渠道 {} ({}) Function Calling失败: {}", idx, channel.getModel(), e.getMessage());
+            }
+        }
+
+        log.error("所有LLM渠道均失败(Function Calling)");
+        return LlmPort.LlmResponse.textOnly("[错误] LLM服务不可用");
+    }
+
+    /**
+     * 调用 LLM API（带工具定义）
+     */
+    private LlmPort.LlmResponse callLlmApiWithTools(AppConfig.LlmChannelConfig channel,
+                                                     List<Map<String, Object>> messages,
+                                                     List<Map<String, Object>> tools) throws Exception {
+        String apiUrl = resolveApiUrl(channel);
+
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", channel.getModel());
+        requestBody.put("temperature", channel.getTemperature());
+        requestBody.put("max_tokens", channel.getMaxTokens());
+
+        // 消息（Object 类型以支持 tool role 和 assistant.tool_calls）
+        ArrayNode messagesArray = requestBody.putArray("messages");
+        for (Map<String, Object> msg : messages) {
+            ObjectNode msgNode = messagesArray.addObject();
+            for (Map.Entry<String, Object> entry : msg.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value == null) {
+                    msgNode.putNull(key);
+                } else if (value instanceof String s) {
+                    msgNode.put(key, s);
+                } else if (value instanceof Number) {
+                    msgNode.set(key, objectMapper.valueToTree(value));
+                } else if (value instanceof Boolean b) {
+                    msgNode.put(key, b.booleanValue());
+                } else {
+                    msgNode.set(key, objectMapper.valueToTree(value));
+                }
+            }
+        }
+
+        // 工具定义（OpenAI Function Calling 格式）
+        if (tools != null && !tools.isEmpty()) {
+            requestBody.set("tools", objectMapper.valueToTree(tools));
+            requestBody.put("tool_choice", "auto");
+        }
+
+        RequestBody body = RequestBody.create(
+                objectMapper.writeValueAsString(requestBody),
+                MediaType.get("application/json"));
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + channel.getApiKey())
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        log.debug("调用LLM(FC): model={}, url={}, tools={}", channel.getModel(), apiUrl,
+                tools != null ? tools.size() : 0);
+        long startTime = System.currentTimeMillis();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String errorBody = response.body() != null ? response.body().string() : "unknown";
+                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+            }
+
+            String responseBody = response.body().string();
+            JsonNode root = objectMapper.readTree(responseBody);
+            long durationMs = System.currentTimeMillis() - startTime;
+
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && !choices.isEmpty()) {
+                JsonNode message = choices.get(0).path("message");
+                String content = message.path("content").asText("");
+
+                // 解析原生 tool_calls
+                List<LlmPort.FunctionCall> functionCalls = new ArrayList<>();
+                JsonNode toolCallsNode = message.path("tool_calls");
+                if (toolCallsNode.isArray()) {
+                    for (JsonNode tc : toolCallsNode) {
+                        String id = tc.path("id").asText("");
+                        JsonNode fn = tc.path("function");
+                        String name = fn.path("name").asText("");
+                        String args = fn.path("arguments").asText("{}");
+                        if (!name.isEmpty()) {
+                            functionCalls.add(new LlmPort.FunctionCall(id, name, args));
+                        }
+                    }
+                }
+
+                // 记录 Token 使用量
+                JsonNode usage = root.path("usage");
+                int promptTokens, completionTokens;
+                if (!usage.isMissingNode()) {
+                    promptTokens = usage.path("prompt_tokens").asInt();
+                    completionTokens = usage.path("completion_tokens").asInt();
+                    log.info("Token使用(FC): prompt={}, completion={}", promptTokens, completionTokens);
+                } else {
+                    promptTokens = estimateMessagesTokens(messages);
+                    completionTokens = estimateTokens(content);
+                }
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        promptTokens, completionTokens, durationMs);
+
+                log.debug("LLM(FC)响应: content_len={}, tool_calls={}",
+                        content.length(), functionCalls.size());
+                return new LlmPort.LlmResponse(content,
+                        functionCalls.isEmpty() ? null : functionCalls);
+            }
+
+            throw new RuntimeException("无法解析LLM响应: " +
+                    responseBody.substring(0, Math.min(200, responseBody.length())));
+        }
+    }
+
+    // ==================== 新增：结构化输出 ====================
+
+    /**
+     * 结构化输出对话 — 强制 LLM 返回 JSON
+     *
+     * 使用 response_format: json_object 模式（OpenAI 兼容），
+     * 同时在 system prompt 中注入 JSON Schema 约束输出格式。
+     */
+    @Override
+    public String chatForStructuredOutput(List<Map<String, Object>> messages,
+                                           Map<String, Object> jsonSchema) {
+        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        if (channels.isEmpty()) {
+            log.error("未配置LLM渠道");
+            return "{}";
+        }
+
+        for (int attempt = 0; attempt < channels.size(); attempt++) {
+            int idx = (currentChannelIndex + attempt) % channels.size();
+            AppConfig.LlmChannelConfig channel = channels.get(idx);
+            try {
+                String result = callLlmApiForJson(channel, messages, jsonSchema);
+                if (result != null && !result.isEmpty() && !"{}".equals(result)) {
+                    currentChannelIndex = idx;
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("LLM渠道 {} 结构化输出失败: {}", idx, e.getMessage());
+            }
+        }
+
+        log.error("所有LLM渠道均失败(结构化输出)");
+        return "{}";
+    }
+
+    /**
+     * 调用 LLM API（结构化输出模式）
+     */
+    private String callLlmApiForJson(AppConfig.LlmChannelConfig channel,
+                                     List<Map<String, Object>> messages,
+                                     Map<String, Object> jsonSchema) throws Exception {
+        String apiUrl = resolveApiUrl(channel);
+
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", channel.getModel());
+        requestBody.put("temperature", 0.3); // 结构化输出用低温度
+        requestBody.put("max_tokens", channel.getMaxTokens());
+
+        // 消息
+        ArrayNode messagesArray = requestBody.putArray("messages");
+        for (Map<String, Object> msg : messages) {
+            ObjectNode msgNode = messagesArray.addObject();
+            for (Map.Entry<String, Object> entry : msg.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value == null) {
+                    msgNode.putNull(key);
+                } else if (value instanceof String s) {
+                    msgNode.put(key, s);
+                } else {
+                    msgNode.set(key, objectMapper.valueToTree(value));
+                }
+            }
+        }
+
+        // response_format: 强制 JSON 输出（兼容大多数 OpenAI 兼容 API）
+        ObjectNode responseFormat = requestBody.putObject("response_format");
+        responseFormat.put("type", "json_object");
+
+        RequestBody body = RequestBody.create(
+                objectMapper.writeValueAsString(requestBody),
+                MediaType.get("application/json"));
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + channel.getApiKey())
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        log.debug("调用LLM(JSON): model={}", channel.getModel());
+        long startTime = System.currentTimeMillis();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String errorBody = response.body() != null ? response.body().string() : "unknown";
+                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+            }
+
+            String responseBody = response.body().string();
+            JsonNode root = objectMapper.readTree(responseBody);
+            long durationMs = System.currentTimeMillis() - startTime;
+
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && !choices.isEmpty()) {
+                String content = choices.get(0).path("message").path("content").asText("");
+
+                // 记录 Token 使用量
+                JsonNode usage = root.path("usage");
+                int promptTokens, completionTokens;
+                if (!usage.isMissingNode()) {
+                    promptTokens = usage.path("prompt_tokens").asInt();
+                    completionTokens = usage.path("completion_tokens").asInt();
+                } else {
+                    promptTokens = estimateMessagesTokens(messages);
+                    completionTokens = estimateTokens(content);
+                }
+                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                        promptTokens, completionTokens, durationMs);
+
+                // 验证返回的是有效 JSON
+                try {
+                    objectMapper.readTree(content);
+                    return content;
+                } catch (Exception e) {
+                    // 尝试从文本中提取 JSON（LLM 可能包裹 markdown 代码块）
+                    String extracted = extractJsonFromText(content);
+                    if (!"{}".equals(extracted)) {
+                        return extracted;
+                    }
+                    throw new RuntimeException("LLM 未返回有效 JSON: " +
+                            content.substring(0, Math.min(200, content.length())));
+                }
+            }
+            return "{}";
+        }
+    }
+
+    /** 从文本中提取 JSON（处理 LLM 可能包裹 markdown 代码块的情况） */
+    private String extractJsonFromText(String text) {
+        if (text == null || text.isEmpty()) return "{}";
+        String trimmed = text.trim();
+        // 去除 markdown 代码块
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline > 0) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+            int lastFence = trimmed.lastIndexOf("```");
+            if (lastFence > 0) {
+                trimmed = trimmed.substring(0, lastFence);
+            }
+            trimmed = trimmed.trim();
+        }
+        // 尝试找到 JSON 起始和结束
+        int start = trimmed.indexOf('{');
+        int end = trimmed.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return trimmed.substring(start, end + 1);
+        }
+        return "{}";
+    }
+
+    /** 估算消息列表的 Token 数（支持 Object 类型消息） */
+    private int estimateMessagesTokens(List<Map<String, Object>> messages) {
+        int total = 0;
+        for (Map<String, Object> msg : messages) {
+            Object content = msg.get("content");
+            if (content instanceof String s) {
+                total += s.length();
+            } else if (content != null) {
+                total += content.toString().length();
+            }
+        }
+        return Math.max(1, total / 4);
+    }
+
     /** 粗略估算文本的 token 数（约4字符≈1 token） */
     private int estimateTokens(List<Map<String, String>> messages) {
         int total = 0;

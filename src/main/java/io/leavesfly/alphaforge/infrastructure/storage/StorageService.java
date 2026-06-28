@@ -39,7 +39,7 @@ public class StorageService implements StoragePort {
     private final Map<String, CacheEntry> memoryCache = new ConcurrentHashMap<>();
 
     public StorageService(AppConfig config) {
-        // 优先使用 STORAGE_DIR 环境变量覆盖；未设置时回退到 app.home/data (即 ~/.j_daily-alphaforge-analysis/data)
+        // 优先使用 STORAGE_DIR 环境变量覆盖；未设置时回退到 app.home/data (即 ~/.alphaforge/data)
         String appHome = System.getProperty(AppInitializer.PROP_APP_HOME, "");
         String defaultStorageDir = appHome.isEmpty() ? "./data" : appHome + "/data";
         this.baseDir = config.getEnv("STORAGE_DIR", defaultStorageDir);

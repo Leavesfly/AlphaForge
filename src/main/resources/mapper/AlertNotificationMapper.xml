@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 告警通知 Mapper：管理告警触发后的通知发送记录（渠道、成功/失败状态等） -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertNotificationRepository">
 
+    <!-- 结果映射：数据库字段 ↔ AlertNotification 实体属性 -->
     <resultMap id="notifMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertNotification">
         <id property="id" column="id"/>
         <result property="triggerId" column="trigger_id"/>
@@ -12,27 +14,33 @@
         <result property="sentAt" column="sent_at"/>
     </resultMap>
 
+    <!-- 插入一条告警通知发送记录 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO alert_notifications (trigger_id, channel, success, error_code, error_message, sent_at)
         VALUES (#{triggerId}, #{channel}, #{success}, #{errorCode}, #{errorMessage}, #{sentAt})
     </insert>
 
+    <!-- 根据主键 ID 查询通知记录 -->
     <select id="findById" resultMap="notifMap">
         SELECT * FROM alert_notifications WHERE id = #{id}
     </select>
 
+    <!-- 根据触发记录 ID 查询该触发的所有通知，按发送时间倒序 -->
     <select id="findByTriggerId" resultMap="notifMap">
         SELECT * FROM alert_notifications WHERE trigger_id = #{triggerId} ORDER BY sent_at DESC
     </select>
 
+    <!-- 分页查询全部通知记录，按发送时间倒序 -->
     <select id="findAll" resultMap="notifMap">
         SELECT * FROM alert_notifications ORDER BY sent_at DESC LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!-- 统计通知记录总数 -->
     <select id="count" resultType="int">
         SELECT COUNT(*) FROM alert_notifications
     </select>
 
+    <!-- 按通知渠道（如邮件、微信等）查询通知记录 -->
     <select id="findByChannel" resultMap="notifMap">
         SELECT * FROM alert_notifications WHERE channel = #{channel} ORDER BY sent_at DESC
     </select>

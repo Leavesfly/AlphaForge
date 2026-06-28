@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- AlphaSift 选股任务 Mapper：管理智能选股任务的创建、进度更新和结果查询 -->
 <mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.screening.AlphaSiftTaskRepository">
 
+    <!-- 结果映射：数据库字段 ↔ AlphaSiftTask 实体属性 -->
     <resultMap id="taskMap" type="io.leavesfly.alphaforge.domain.model.entity.screening.AlphaSiftTask">
         <id property="id" column="id"/>
         <result property="taskId" column="task_id"/>
@@ -17,36 +19,44 @@
         <result property="completedAt" column="completed_at"/>
     </resultMap>
 
+    <!-- 插入一条选股任务 -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO alphasift_tasks (task_id, strategy, market, status, progress, parameters, result_stocks, result_count, error_message, created_at, completed_at)
         VALUES (#{taskId}, #{strategy}, #{market}, #{status}, #{progress}, #{parameters}, #{resultStocks}, #{resultCount}, #{errorMessage}, #{createdAt}, #{completedAt})
     </insert>
 
+    <!-- 更新选股任务（全字段更新） -->
     <update id="update">
         UPDATE alphasift_tasks SET strategy=#{strategy}, market=#{market}, status=#{status}, progress=#{progress}, parameters=#{parameters}, result_stocks=#{resultStocks}, result_count=#{resultCount}, error_message=#{errorMessage}, completed_at=#{completedAt}
         WHERE task_id=#{taskId}
     </update>
 
+    <!-- 根据任务 ID 查询选股任务 -->
     <select id="findByTaskId" resultMap="taskMap">
         SELECT * FROM alphasift_tasks WHERE task_id = #{taskId}
     </select>
 
+    <!-- 查询最近创建的选股任务列表 -->
     <select id="findRecent" resultMap="taskMap">
         SELECT * FROM alphasift_tasks ORDER BY created_at DESC LIMIT #{limit}
     </select>
 
+    <!-- 按任务状态查询选股任务 -->
     <select id="findByStatus" resultMap="taskMap">
         SELECT * FROM alphasift_tasks WHERE status = #{status} ORDER BY created_at DESC
     </select>
 
+    <!-- 更新任务状态和进度（运行中） -->
     <update id="updateStatus">
         UPDATE alphasift_tasks SET status=#{status}, progress=#{progress} WHERE task_id=#{taskId}
     </update>
 
+    <!-- 更新任务完成状态及结果 -->
     <update id="updateCompleted">
         UPDATE alphasift_tasks SET status=#{status}, result_stocks=#{resultStocks}, result_count=#{resultCount}, error_message=#{errorMessage}, completed_at=#{completedAt} WHERE task_id=#{taskId}
     </update>
 
+    <!-- 统选举股任务总数 -->
     <select id="count" resultType="int">
         SELECT COUNT(*) FROM alphasift_tasks
     </select>

@@ -100,8 +100,8 @@ public class LoopStateManager {
             lastEvalTime = LocalDateTime.now();
             // P4: 将全局准确率同步到策略权重追踪器，驱动自动调优闭环
             performanceTracker.updateGlobalAccuracy(stats.accuracyPct);
-            log.info("Loop信号准确率刷新: {:.1f}% (correct:{} incorrect:{} partial:{})",
-                    stats.accuracyPct, stats.correct, stats.incorrect, stats.partial);
+            log.info("Loop信号准确率刷新: {}% (correct:{} incorrect:{} partial:{})",
+                    String.format("%.1f", stats.accuracyPct), stats.correct, stats.incorrect, stats.partial);
         } catch (Exception e) {
             log.debug("刷新准确率失败: {}", e.getMessage());
         }

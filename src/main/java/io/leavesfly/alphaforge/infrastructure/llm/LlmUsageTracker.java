@@ -34,6 +34,21 @@ public class LlmUsageTracker implements LlmUsagePort {
     /** 总Token数 */
     private final AtomicLong totalTokens = new AtomicLong(0);
 
+    /** 模型定价表：model -> [输入$/百万token, 输出$/百万token] */
+    private static final Map<String, double[]> MODEL_PRICING = Map.of(
+            "gpt-4o", new double[]{2.5, 10.0},
+            "gpt-4o-mini", new double[]{0.15, 0.6},
+            "gpt-4-turbo", new double[]{10.0, 30.0},
+            "gpt-3.5-turbo", new double[]{0.5, 1.5},
+            "qwen-plus", new double[]{0.4, 1.2},
+            "qwen-max", new double[]{2.0, 6.0},
+            "qwen-turbo", new double[]{0.05, 0.2},
+            "deepseek-chat", new double[]{0.14, 0.28},
+            "deepseek-coder", new double[]{0.14, 0.28}
+    );
+    /** 默认定价（未知模型回退） */
+    private static final double[] DEFAULT_PRICING = new double[]{2.5, 10.0};
+
     public LlmUsageTracker(LlmUsageDailyRepository usageRepository) {
         this.usageRepository = usageRepository;
     }
@@ -67,7 +82,7 @@ public class LlmUsageTracker implements LlmUsagePort {
 
         // 持久化到DB
         try {
-            double cost = estimateCostValue(promptTokens, completionTokens) * 7.2; // 转为人民币
+            double cost = estimateCostValue(model, promptTokens, completionTokens) * 7.2; // 转为人民币
             usageRepository.recordUsage(LocalDate.now(), model, provider != null ? provider : "unknown", promptTokens, completionTokens, cost);
         } catch (Exception e) {
             log.warn("LLM用量持久化失败(不影响功能): {}", e.getMessage());
@@ -247,14 +262,17 @@ public class LlmUsageTracker implements LlmUsagePort {
         }
     }
 
-    /** 估算费用(基于OpenAI GPT-4o定价，转换为人民币) */
+    /** 估算费用(根据模型定价，转换为人民币) */
     private String estimateCost(long promptTokens, long completionTokens) {
-        return String.format("¥%.2f", estimateCostValue(promptTokens, completionTokens) * 7.2);
+        return String.format("¥%.2f", estimateCostValue(null, promptTokens, completionTokens) * 7.2);
     }
 
-    private double estimateCostValue(long promptTokens, long completionTokens) {
-        // GPT-4o: $2.5/1M input, $10/1M output
-        return (promptTokens * 2.5 + completionTokens * 10.0) / 1000000.0;
+    /** 根据模型定价估算费用（美元） */
+    private double estimateCostValue(String model, long promptTokens, long completionTokens) {
+        double[] pricing = model != null
+                ? MODEL_PRICING.getOrDefault(model.toLowerCase(), DEFAULT_PRICING)
+                : DEFAULT_PRICING;
+        return (promptTokens * pricing[0] + completionTokens * pricing[1]) / 1000000.0;
     }
 
     private static class DailyUsage {

@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.config;
 
-import com.zaxxer.hikari.HikariDataSource;
+import com.alibaba.druid.pool.DruidDataSource;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -11,21 +11,22 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Collections;
 
 /**
- * SQLite 数据源配置：启用外键约束。
+ * SQLite 数据源配置：使用 Druid 连接池，启用外键约束。
  */
 @Configuration
 public class SqliteDataSourceConfig {
 
     @Bean
     @Primary
-    @ConfigurationProperties("spring.datasource.hikari")
+    @ConfigurationProperties("spring.datasource.druid")
     public DataSource dataSource(DataSourceProperties properties) {
-        HikariDataSource dataSource = properties.initializeDataSourceBuilder()
-                .type(HikariDataSource.class)
+        DruidDataSource dataSource = properties.initializeDataSourceBuilder()
+                .type(DruidDataSource.class)
                 .build();
-        dataSource.setConnectionInitSql("PRAGMA foreign_keys=ON");
+        dataSource.setConnectionInitSqls(Collections.singletonList("PRAGMA foreign_keys=ON"));
         return dataSource;
     }
 
