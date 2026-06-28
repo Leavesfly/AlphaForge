@@ -18,10 +18,10 @@ cp .env.example .env
 mvn clean package -DskipTests
 
 # 3. 启动 Web 服务（默认端口 8000）
-java -jar target/daily-stock-analysis-1.0.0.jar --serve
+java -jar target/daily-alphaforge-analysis-1.0.0.jar --serve
 
 # 或单次分析
-java -jar target/daily-stock-analysis-1.0.0.jar --stocks 600519
+java -jar target/daily-alphaforge-analysis-1.0.0.jar --stocks 600519
 ```
 
 ## 运行模式
@@ -54,8 +54,8 @@ java -jar target/daily-stock-analysis-1.0.0.jar --stocks 600519
 
 ```bash
 mvn clean package -DskipTests
-docker build -t daily-stock-analysis .
-docker run -p 8000:8000 --env-file .env daily-stock-analysis
+docker build -t daily-alphaforge-analysis .
+docker run -p 8000:8000 --env-file .env daily-alphaforge-analysis
 ```
 
 ## 配置说明

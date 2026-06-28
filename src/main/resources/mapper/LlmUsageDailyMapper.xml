@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.infrastructure.persistence.usage.LlmUsageDailyRepository">
+<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.usage.LlmUsageDailyRepository">
 
-    <resultMap id="usageMap" type="io.leavesfly.stock.domain.model.entity.usage.LlmUsageDaily">
+    <resultMap id="usageMap" type="io.leavesfly.alphaforge.domain.model.entity.usage.LlmUsageDaily">
         <id property="id" column="id"/>
         <result property="usageDate" column="usage_date"/>
         <result property="model" column="model"/>

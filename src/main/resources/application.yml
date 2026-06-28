@@ -14,7 +14,7 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 3s
 
-  # SQLite数据库配置 (存储在 ~/.j_daily-stock-analysis/data/ 下)
+  # SQLite数据库配置 (存储在 ~/.j_daily-alphaforge-analysis/data/ 下)
   datasource:
     url: jdbc:sqlite:${app.home}/data/stock_analysis.db
     driver-class-name: org.sqlite.JDBC

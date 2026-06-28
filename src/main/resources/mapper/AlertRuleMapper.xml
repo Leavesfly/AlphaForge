@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.infrastructure.persistence.alert.AlertRuleRepository">
+<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertRuleRepository">
 
-    <resultMap id="alertRuleMap" type="io.leavesfly.stock.domain.model.entity.alert.AlertRule">
+    <resultMap id="alertRuleMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertRule">
         <id property="id" column="id"/>
         <result property="name" column="name"/>
         <result property="stockCode" column="stock_code"/>

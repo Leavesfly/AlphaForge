@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.leavesfly.stock.infrastructure.persistence.chat.ChatRepository">
+<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.chat.ChatRepository">
 
     <!-- 插入会话 -->
     <insert id="insertSession">
