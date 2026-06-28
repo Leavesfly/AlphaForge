@@ -8,7 +8,7 @@ schema_version: 1
 id: wave_theory
 label: 波浪理论
 description: 基于艾略特波浪理论判断浪型位置
-category: pattern
+category: technical
 risk_level: medium
 
 backtest:

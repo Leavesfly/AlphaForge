@@ -7,7 +7,7 @@ schema_version: 1
 id: ma_golden_cross
 label: 均线金叉
 description: MA5 上穿 MA20 形成金叉时买入，MA5 下穿 MA20 死叉时卖出
-category: trend_following
+category: technical
 risk_level: medium
 applicable_market: [bull, recovery]
 applicable_cap: [large, mid, small]

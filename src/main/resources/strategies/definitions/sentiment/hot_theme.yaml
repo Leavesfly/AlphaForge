@@ -1,17 +1,17 @@
 # ──────────────────────────────────────────────────────────────
-# 一阳穿三阴策略（综合分析评分）
+# 热点题材策略（综合分析评分）
 # 引擎：scoring → CompositeScoringEngine
-# 逻辑：一根阳线收复前三根阴线，伴随放量，视为强势反转
+# 逻辑：跟踪市场主线题材，资金净流入的热门板块标的
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
-id: one_yang_three_yin
-label: 一阳穿三阴
-description: 一根阳线收复前三根阴线的失地，强势反转
-category: pattern
-risk_level: medium
+id: hot_theme
+label: 热点题材
+description: 跟踪市场热点题材轮动，参与主线题材
+category: sentiment
+risk_level: high
 
 scoring:
-  score_weight: 14
+  score_weight: 12
   conditions:
-    yang_covers_yin_count: 3        # 阳线覆盖前 3 根阴线
-    volume_amplify: 1.5             # 成交量放大 1.5 倍
+    theme_heat_rank: 3              # 题材热度排名前 3
+    inflow_positive: true           # 资金净流入

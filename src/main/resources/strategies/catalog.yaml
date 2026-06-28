@@ -1,7 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 # 策略总目录（catalog）
 #
-# 加载顺序：本文件 → definitions/{id}.yaml
+# 加载顺序：本文件 → definitions/{category}/{id}.yaml
 # 引擎对应关系：
 #   backtest  → BacktestSignalEngine（历史 K 线回测）
 #   screening → ScreeningScoreEngine（实时行情选股）
@@ -17,17 +17,10 @@ capabilities:
 
 # 策略分类（中文标签）
 categories:
-  trend_following: 趋势跟踪
-  momentum: 动量
-  pullback: 回调
-  mean_reversion: 均值回归
-  pattern: 形态
-  contrarian: 逆向
-  event: 事件驱动
-  hot_theme: 热点题材
+  technical: 技术面
   fundamental: 基本面
-  value: 价值
-  dividend: 股息
+  sentiment: 情绪面
+  event: 事件驱动
 
 # runtime 状态说明：
 #   implemented — 引擎已完整支持 YAML 中定义的条件
@@ -36,98 +29,98 @@ categories:
 strategies:
   # ── 回测策略 ──────────────────────────────────────────────
   ma_golden_cross:
-    file: definitions/ma_golden_cross.yaml
+    file: definitions/technical/ma_golden_cross.yaml
     capabilities: [backtest]
     runtime: implemented
 
   volume_breakout:
-    file: definitions/volume_breakout.yaml
+    file: definitions/technical/volume_breakout.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   bull_trend:
-    file: definitions/bull_trend.yaml
+    file: definitions/technical/bull_trend.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   shrink_pullback:
-    file: definitions/shrink_pullback.yaml
+    file: definitions/technical/shrink_pullback.yaml
     capabilities: [backtest, scoring]
     runtime: implemented
 
   box_oscillation:
-    file: definitions/box_oscillation.yaml
+    file: definitions/technical/box_oscillation.yaml
     capabilities: [backtest, scoring]
     runtime: implemented
 
   dragon_head:
-    file: definitions/dragon_head.yaml
+    file: definitions/sentiment/dragon_head.yaml
     capabilities: [backtest, scoring]
     runtime: implemented
 
   wave_theory:
-    file: definitions/wave_theory.yaml
+    file: definitions/technical/wave_theory.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   emotion_cycle:
-    file: definitions/emotion_cycle.yaml
+    file: definitions/sentiment/emotion_cycle.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   event_driven:
-    file: definitions/event_driven.yaml
+    file: definitions/event/event_driven.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   growth_quality:
-    file: definitions/growth_quality.yaml
+    file: definitions/fundamental/growth_quality.yaml
     capabilities: [backtest, scoring]
     runtime: partial
 
   # ── 综合评分策略（scoring 段，CompositeScoringEngine）──
   bottom_volume:
-    file: definitions/bottom_volume.yaml
+    file: definitions/technical/bottom_volume.yaml
     capabilities: [scoring]
     runtime: implemented
 
   chan_theory:
-    file: definitions/chan_theory.yaml
+    file: definitions/technical/chan_theory.yaml
     capabilities: [scoring]
     runtime: partial
 
   expectation_repricing:
-    file: definitions/expectation_repricing.yaml
+    file: definitions/fundamental/expectation_repricing.yaml
     capabilities: [scoring]
     runtime: partial
 
   hot_theme:
-    file: definitions/hot_theme.yaml
+    file: definitions/sentiment/hot_theme.yaml
     capabilities: [scoring]
     runtime: partial
 
   one_yang_three_yin:
-    file: definitions/one_yang_three_yin.yaml
+    file: definitions/technical/one_yang_three_yin.yaml
     capabilities: [scoring]
     runtime: implemented
 
   # ── 智能选股策略（screening 段）──────────────────────────
   dual_low:
-    file: definitions/dual_low.yaml
+    file: definitions/fundamental/dual_low.yaml
     capabilities: [screening]
     runtime: implemented
 
   value_growth:
-    file: definitions/value_growth.yaml
+    file: definitions/fundamental/value_growth.yaml
     capabilities: [screening]
     runtime: implemented
 
   momentum:
-    file: definitions/momentum.yaml
+    file: definitions/technical/momentum.yaml
     capabilities: [screening]
     runtime: implemented
 
   dividend:
-    file: definitions/dividend.yaml
+    file: definitions/fundamental/dividend.yaml
     capabilities: [screening]
     runtime: implemented

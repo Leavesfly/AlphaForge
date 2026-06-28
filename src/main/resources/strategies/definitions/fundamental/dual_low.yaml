@@ -6,7 +6,7 @@ schema_version: 1
 id: dual_low
 label: 双低策略
 description: 低 PE + 低 PB 的价值标的筛选
-category: value
+category: fundamental
 risk_level: low
 applicable_market: [all]
 applicable_cap: [large, mid]

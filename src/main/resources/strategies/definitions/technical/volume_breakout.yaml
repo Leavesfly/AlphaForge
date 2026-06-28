@@ -7,7 +7,7 @@ schema_version: 1
 id: volume_breakout
 label: 放量突破
 description: 成交量超过 20 日均量 2 倍且涨幅 > 3% 时买入
-category: momentum
+category: technical
 risk_level: high
 applicable_market: [bull, range]
 applicable_cap: [mid, small]

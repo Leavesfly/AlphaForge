@@ -64,6 +64,7 @@ class StrategyCatalogLoaderTest {
     void shouldLoadCategoryAndCapabilityLabels() {
         assertFalse(catalog.getCategories().isEmpty());
         assertFalse(catalog.getCapabilities().isEmpty());
-        assertEquals("趋势跟踪", catalog.getCategories().get("trend_following"));
+        assertEquals("技术面", catalog.getCategories().get("technical"));
+        assertEquals("情绪面", catalog.getCategories().get("sentiment"));
     }
 }

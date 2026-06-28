@@ -7,7 +7,7 @@ schema_version: 1
 id: dragon_head
 label: 龙头战法
 description: 识别板块龙头股首阴或缩量回调买入
-category: hot_theme
+category: sentiment
 risk_level: high
 applicable_market: [bull, range]
 applicable_cap: [mid, small]

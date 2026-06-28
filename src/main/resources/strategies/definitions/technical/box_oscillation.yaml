@@ -7,7 +7,7 @@ schema_version: 1
 id: box_oscillation
 label: 箱体震荡
 description: 识别箱体整理形态，在箱体下沿买入、上沿卖出
-category: mean_reversion
+category: technical
 risk_level: low
 
 backtest:

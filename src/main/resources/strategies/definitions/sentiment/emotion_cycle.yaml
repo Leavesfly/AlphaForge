@@ -8,7 +8,7 @@ schema_version: 1
 id: emotion_cycle
 label: 情绪周期
 description: 跟踪市场情绪周期高低点做反向操作
-category: contrarian
+category: sentiment
 risk_level: medium
 
 backtest:

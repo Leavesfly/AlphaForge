@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 策略完整定义，与 definitions/{id}.yaml 一一对应。
+ * 策略完整定义，与 definitions/{category}/{id}.yaml 一一对应。
  *
  * 一条策略可同时具备多种能力（如 bull_trend 同时有 backtest 和 scoring 段），
  * 具体支持哪些能力由 catalog.yaml 中的 capabilities 字段声明。

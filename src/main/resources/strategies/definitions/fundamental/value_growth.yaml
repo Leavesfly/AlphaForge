@@ -6,7 +6,7 @@ schema_version: 1
 id: value_growth
 label: 价值成长
 description: PEG < 1.5 的成长价值兼具标的
-category: value
+category: fundamental
 risk_level: medium
 
 screening:

@@ -1,17 +1,17 @@
 # ──────────────────────────────────────────────────────────────
-# 热点题材策略（综合分析评分）
+# 缠论策略（综合分析评分）
 # 引擎：scoring → CompositeScoringEngine
-# 逻辑：跟踪市场主线题材，资金净流入的热门板块标的
+# 逻辑：基于缠中说禅理论的背驰与中枢突破判断买卖点
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
-id: hot_theme
-label: 热点题材
-description: 跟踪市场热点题材轮动，参与主线题材
-category: hot_theme
-risk_level: high
+id: chan_theory
+label: 缠论
+description: 基于缠中说禅理论的买卖点判断
+category: technical
+risk_level: medium
 
 scoring:
   score_weight: 12
   conditions:
-    theme_heat_rank: 3              # 题材热度排名前 3
-    inflow_positive: true           # 资金净流入
+    divergence: true                # 出现背驰信号
+    center_break: true              # 突破中枢

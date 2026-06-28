@@ -7,7 +7,7 @@ schema_version: 1
 id: shrink_pullback
 label: 缩量回调
 description: 上升趋势中缩量回调至支撑位附近买入
-category: pullback
+category: technical
 risk_level: medium
 applicable_market: [bull, recovery]
 applicable_cap: [large, mid, small]

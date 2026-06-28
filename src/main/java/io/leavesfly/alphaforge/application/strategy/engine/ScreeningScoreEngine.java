@@ -18,7 +18,7 @@ import java.util.Map;
  * - 本引擎：实时行情 → 数值评分（screening 段）
  * - CompositeScoringEngine：多策略加权（scoring 段）
  *
- * 支持的规则写法（见 definitions/*.yaml）：
+ * 支持的规则写法（见 definitions/{category}/*.yaml）：
  * - 指标规则：metric + operator + threshold + weight，如 PE 越低分越高
  * - 条件公式：when: change_pct_gt + formula，如涨幅越大分越高
  * - 计算指标：peg 由 PE 与涨跌幅估算

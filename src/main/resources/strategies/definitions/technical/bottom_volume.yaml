@@ -7,7 +7,7 @@ schema_version: 1
 id: bottom_volume
 label: 底部放量
 description: 股价在低位区间出现显著放量，可能是主力建仓信号
-category: momentum
+category: technical
 risk_level: medium
 applicable_market: [bear, range]
 applicable_cap: [mid, small]

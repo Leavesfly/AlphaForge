@@ -6,7 +6,7 @@ schema_version: 1
 id: dividend
 label: 高股息
 description: 股息率 > 3% 的稳健分红标的
-category: dividend
+category: fundamental
 risk_level: low
 
 screening:
