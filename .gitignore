@@ -6,6 +6,7 @@ target/
 *.iml
 .idea/
 .vscode/
+.github/
 .settings/
 .project
 .classpath
