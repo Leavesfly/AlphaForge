@@ -3,6 +3,7 @@ package io.leavesfly.stock.presentation.api;
 import io.leavesfly.stock.application.strategy.StrategyCatalog;
 import io.leavesfly.stock.application.strategy.StrategyCatalogLoader;
 import io.leavesfly.stock.application.strategy.StrategyTestData;
+import io.leavesfly.stock.application.strategy.engine.StrategyPerformanceTracker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +24,7 @@ class StrategyControllerTest {
     void setUp() {
         var loader = StrategyCatalogLoader.createAndLoad();
         catalog = loader.getCatalog();
-        controller = new StrategyController(catalog, loader);
+        controller = new StrategyController(catalog, loader, new StrategyPerformanceTracker());
     }
 
     @Test

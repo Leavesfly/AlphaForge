@@ -98,6 +98,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       策略回测
     </div>
+    <div class="nav-item" data-page="strategy-center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      策略中心
+    </div>
     <div class="nav-item" data-page="watchlist">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       自选股
@@ -190,13 +194,14 @@
     <div class="card-title">历史分析报告</div>
     <div class="table-container"><table>
       <thead><tr><th>股票</th><th>综合评分</th><th>信号</th><th>置信度</th><th>模型</th><th>Token</th><th>耗时</th><th>时间</th><th>操作</th></tr></thead>
-      <tbody>
-        <tr><td><strong>贵州茅台</strong> 600519</td><td><span class="badge badge-success">82</span></td><td>强买入</td><td>87%</td><td>qwen-max</td><td>4,521</td><td>12.3s</td><td>03-15 09:32</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>
-        <tr><td><strong>腾讯控股</strong> 00700.HK</td><td><span class="badge badge-info">71</span></td><td>买入</td><td>74%</td><td>gpt-4</td><td>5,102</td><td>18.7s</td><td>03-15 09:28</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>
-        <tr><td><strong>英伟达</strong> NVDA</td><td><span class="badge badge-warning">58</span></td><td>持有</td><td>65%</td><td>qwen-max</td><td>3,890</td><td>14.1s</td><td>03-14 22:15</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>
-        <tr><td><strong>中芯国际</strong> 688981</td><td><span class="badge badge-danger">35</span></td><td>卖出</td><td>71%</td><td>qwen-max</td><td>4,015</td><td>13.5s</td><td>03-14 15:40</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>
+      <tbody id="analysis-history-body">
+        <tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr>
       </tbody>
     </table></div>
+  </div>
+  <div class="card" style="margin-top:16px;display:none" id="analysis-report-detail">
+    <div class="card-title" id="report-detail-title">报告详情</div>
+    <div id="report-detail-content" style="white-space:pre-wrap;font-size:14px;line-height:1.8;max-height:500px;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -380,6 +385,42 @@
     <thead><tr><th>时间</th><th>股票</th><th>策略</th><th>收益</th><th>回撤</th><th>胜率</th><th>夏普</th><th>操作</th></tr></thead>
     <tbody id="backtest-history-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录</td></tr></tbody>
   </table></div></div>
+  <!-- 高级分析 -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">高级分析</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-outline btn-sm" onclick="runOptimize()">参数优化</button>
+      <button class="btn btn-outline btn-sm" onclick="runWalkForward()">Walk-Forward 验证</button>
+      <button class="btn btn-outline btn-sm" onclick="runMonteCarlo()">蒙特卡洛模拟</button>
+      <button class="btn btn-outline btn-sm" onclick="runPortfolioBacktest()">组合回测</button>
+    </div>
+    <div id="backtest-advanced-result" style="min-height:60px"></div>
+  </div>
+</div>
+
+<!-- ===== Strategy Center ===== -->
+<div class="page" id="page-strategy-center">
+  <div class="page-header"><div class="page-header-left"><h2>策略中心</h2><p>策略目录 · 复盘报告 · 命中率与衰减监控</p></div><div><button class="btn btn-outline btn-sm" onclick="loadStrategyReview();showToast('已刷新', 'success')">刷新数据</button></div></div>
+  <div class="grid grid-4" style="margin-bottom:20px">
+    <div class="card stat-card accent-primary"><div class="stat-value" id="sc-total" style="font-size:20px">-</div><div class="stat-label">Scoring 策略总数</div></div>
+    <div class="card stat-card accent-success"><div class="stat-value" id="sc-healthy" style="font-size:20px">-</div><div class="stat-label">健康策略</div></div>
+    <div class="card stat-card accent-danger"><div class="stat-value" id="sc-stale" style="font-size:20px">-</div><div class="stat-label">过时策略</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-value" id="sc-lowdisc" style="font-size:20px">-</div><div class="stat-label">低区分度</div></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">策略复盘报告</div>
+    <div class="table-container"><table>
+      <thead><tr><th>策略</th><th>原始权重</th><th>有效权重</th><th>命中率</th><th>自动衰减</th><th>状态</th></tr></thead>
+      <tbody id="strategy-review-body"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-title">策略目录</div>
+    <div class="table-container"><table>
+      <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>能力</th><th>风险</th><th>适用市场</th><th>标签</th><th>状态</th></tr></thead>
+      <tbody id="strategy-catalog-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+    </table></div>
+  </div>
 </div>
 
 <!-- ===== Watchlist ===== -->

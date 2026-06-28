@@ -598,14 +598,34 @@ function loadDashboard() {
 /** 分析历史加载 */
 function loadHistory() {
   fetch('/api/v1/history?limit=20').then(r => r.json()).then(reports => {
-    const tbody = document.querySelector('#page-analysis table tbody');
+    const tbody = document.getElementById('analysis-history-body');
     if (!tbody) return;
     if (!reports.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无分析记录，请在上方输入股票代码开始分析</td></tr>'; return; }
     tbody.innerHTML = reports.map(r => {
       const scoreCls = (r.totalScore||0) >= 70 ? 'success' : (r.totalScore||0) >= 50 ? 'info' : (r.totalScore||0) >= 30 ? 'warning' : 'danger';
-      return `<tr><td><strong>${r.stockName||''}</strong> ${r.stockCode||''}</td><td><span class="badge badge-${scoreCls}">${r.totalScore||'-'}</span></td><td>${r.signal||'-'}</td><td>${r.confidence?Math.round(r.confidence*100)+'%':'-'}</td><td>${r.llmModel||'-'}</td><td>${r.tokenUsage||'-'}</td><td>${r.durationSeconds?r.durationSeconds.toFixed(1)+'s':'-'}</td><td>${r.analysisDate?r.analysisDate.substring(5,16):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('报告已打开','info')">查看</button></td></tr>`;
+      return `<tr><td><strong>${r.stockName||''}</strong> ${r.stockCode||''}</td><td><span class="badge badge-${scoreCls}">${r.totalScore||'-'}</span></td><td>${r.signal||'-'}</td><td>${r.confidence?Math.round(r.confidence*100)+'%':'-'}</td><td>${r.llmModel||'-'}</td><td>${r.tokenUsage||'-'}</td><td>${r.durationSeconds?r.durationSeconds.toFixed(1)+'s':'-'}</td><td>${r.analysisDate?r.analysisDate.substring(5,16):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="viewReport(${r.id})">查看</button></td></tr>`;
     }).join('');
   }).catch(() => {});
+}
+
+function viewReport(id) {
+  if (!id) return;
+  fetch(`/api/v1/history/${id}`).then(r => r.json()).then(report => {
+    const detail = document.getElementById('analysis-report-detail');
+    const title = document.getElementById('report-detail-title');
+    const content = document.getElementById('report-detail-content');
+    if (!detail || !content) return;
+    title.textContent = `${report.stockName || ''} ${report.stockCode || ''} · 评分 ${report.totalScore || '-'} · 信号 ${report.signal || '-'}`;
+    const reportText = report.fullReport || report.full_report || '无报告内容';
+    // 提取策略命中信息（如果报告文本中包含）
+    let scoringHtml = '';
+    if (reportText.includes('composite_scoring') || reportText.includes('策略命中') || reportText.includes('综合策略评分')) {
+      scoringHtml = '<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-2);border-radius:6px;font-size:13px;color:var(--success)">✓ 本报告使用了策略引擎综合评分</div>';
+    }
+    content.innerHTML = scoringHtml + '<div style="font-size:13px;color:var(--text-muted);line-height:1.8">' + reportText.replace(/\n/g, '<br>') + '</div>';
+    detail.style.display = 'block';
+    detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }).catch(() => showToast('加载报告失败', 'error'));
 }
 
 /** 决策信号加载 */
@@ -1114,6 +1134,175 @@ function runBacktest() {
 // ===== Paper Trading =====
 let currentPaperAccountId = null;
 
+// ===== 高级分析（参数优化/Walk-Forward/蒙特卡洛/组合回测）=====
+function runOptimize() {
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  if (!code) { showToast('请先输入股票代码', 'warning'); return; }
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const resultDiv = document.getElementById('backtest-advanced-result');
+  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">参数优化运行中...</div>';
+  showToast('参数优化运行中...', 'info');
+  fetch('/api/v1/backtest/optimize', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_code: code, strategy, days: 365 })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); resultDiv.innerHTML = `<div style="color:var(--text-dim)">${data.error}</div>`; return; }
+    showToast('参数优化完成', 'success');
+    resultDiv.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="stat-card accent-success"><div class="stat-value" style="font-size:18px">${data.best_return_pct}%</div><div class="stat-label">最优收益</div></div>
+        <div class="stat-card accent-danger"><div class="stat-value" style="font-size:18px">${data.best_max_drawdown_pct}%</div><div class="stat-label">最大回撤</div></div>
+        <div class="stat-card accent-primary"><div class="stat-value" style="font-size:18px">${data.best_win_rate_pct}%</div><div class="stat-label">胜率</div></div>
+        <div class="stat-card accent-warning"><div class="stat-value" style="font-size:18px">${data.best_sharpe_ratio}</div><div class="stat-label">夏普</div></div>
+      </div>
+      <div style="margin-top:12px"><strong>最优参数:</strong> ${JSON.stringify(data.best_params)}</div>
+      <div style="margin-top:4px;color:var(--text-dim)">共搜索 ${data.total_candidates} 个参数组合</div>`;
+  }).catch(() => showToast('请求失败', 'error'));
+}
+
+function runWalkForward() {
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  if (!code) { showToast('请先输入股票代码', 'warning'); return; }
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const resultDiv = document.getElementById('backtest-advanced-result');
+  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">Walk-Forward 验证运行中...</div>';
+  showToast('Walk-Forward 验证运行中...', 'info');
+  fetch('/api/v1/backtest/walk-forward', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_code: code, strategy, days: 365 })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); resultDiv.innerHTML = `<div style="color:var(--text-dim)">${data.error}</div>`; return; }
+    showToast('Walk-Forward 验证完成', 'success');
+    const ovr = parseFloat(data.overfit_ratio);
+    const ovrColor = ovr > 0.7 ? 'var(--success)' : ovr > 0.3 ? 'var(--warning)' : 'var(--danger)';
+    resultDiv.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="stat-card accent-success"><div class="stat-value" style="font-size:18px">${data.avg_out_of_sample_return_pct}%</div><div class="stat-label">样本外均值收益</div></div>
+        <div class="stat-card accent-primary"><div class="stat-value" style="font-size:18px">${data.avg_in_sample_return_pct}%</div><div class="stat-label">样本内均值收益</div></div>
+        <div class="stat-card accent-warning"><div class="stat-value" style="font-size:18px;color:${ovrColor}">${data.overfit_ratio}</div><div class="stat-label">过拟合比率</div></div>
+        <div class="stat-card accent-danger"><div class="stat-value" style="font-size:18px">${data.avg_out_of_sample_drawdown_pct}%</div><div class="stat-label">样本外回撤</div></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text-dim)">共 ${data.window_count} 个滚动窗口 · 过拟合比率越接近 1 越稳健</div>`;
+  }).catch(() => showToast('请求失败', 'error'));
+}
+
+function runMonteCarlo() {
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  if (!code) { showToast('请先输入股票代码', 'warning'); return; }
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const resultDiv = document.getElementById('backtest-advanced-result');
+  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">蒙特卡洛模拟运行中...</div>';
+  showToast('蒙特卡洛模拟运行中...', 'info');
+  fetch('/api/v1/backtest/monte-carlo', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_code: code, strategy, days: 180, iterations: 1000 })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); resultDiv.innerHTML = `<div style="color:var(--text-dim)">${data.error}</div>`; return; }
+    showToast('蒙特卡洛模拟完成', 'success');
+    const lossProb = parseFloat(data.loss_probability);
+    resultDiv.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div class="stat-card accent-primary"><div class="stat-value" style="font-size:18px">${data.original_return_pct}%</div><div class="stat-label">原始收益</div></div>
+        <div class="stat-card accent-success"><div class="stat-value" style="font-size:18px">${data.median_return_pct}%</div><div class="stat-label">中位数收益</div></div>
+        <div class="stat-card accent-warning"><div class="stat-value" style="font-size:18px">${data.p5_return_pct}%</div><div class="stat-label">5% 分位</div></div>
+        <div class="stat-card accent-success"><div class="stat-value" style="font-size:18px">${data.p95_return_pct}%</div><div class="stat-label">95% 分位</div></div>
+        <div class="stat-card accent-danger"><div class="stat-value" style="font-size:18px;color:${lossProb > 50 ? 'var(--danger)' : 'var(--success)'}">${data.loss_probability}</div><div class="stat-label">亏损概率</div></div>
+      </div>
+      <div style="margin-top:8px;color:var(--text-dim)">共 ${data.iterations} 次模拟 · 中位数最大回撤 ${data.median_max_drawdown_pct}%</div>`;
+  }).catch(() => showToast('请求失败', 'error'));
+}
+
+function runPortfolioBacktest() {
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  if (!code) { showToast('请先输入股票代码', 'warning'); return; }
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const resultDiv = document.getElementById('backtest-advanced-result');
+  if (resultDiv) resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim)">组合回测运行中...</div>';
+  showToast('组合回测运行中...', 'info');
+  fetch('/api/v1/backtest/portfolio', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_code: code, strategies: strategy + ',volume_breakout,shrink_pullback', days: 180, capital: 100000 })
+  }).then(r => r.json()).then(data => {
+    if (data.error) { showToast(data.error, 'error'); resultDiv.innerHTML = `<div style="color:var(--text-dim)">${data.error}</div>`; return; }
+    showToast('组合回测完成', 'success');
+    let rows = (data.strategy_results || []).map(s => {
+      if (s.status) return `<tr><td>${s.strategy}</td><td colspan="6" style="color:var(--text-dim)">${s.status}: ${s.reason || ''}</td></tr>`;
+      const ret = Number(s.return_pct || 0).toFixed(2);
+      const retClass = Number(ret) >= 0 ? 'text-up' : 'text-down';
+      return `<tr>
+        <td><strong>${s.strategy}</strong></td>
+        <td>${s.capital_allocated?.toFixed(0) || '-'}</td>
+        <td class="${retClass}">${ret}%</td>
+        <td>${Number(s.max_drawdown_pct || 0).toFixed(2)}%</td>
+        <td>${Number(s.win_rate_pct || 0).toFixed(1)}%</td>
+        <td>${Number(s.sharpe_ratio || 0).toFixed(2)}</td>
+        <td>${s.total_trades || 0}</td>
+      </tr>`;
+    }).join('');
+    resultDiv.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="stat-card accent-primary"><div class="stat-value" style="font-size:18px">${Number(data.portfolio_return_pct || 0).toFixed(2)}%</div><div class="stat-label">组合收益</div></div>
+        <div class="stat-card accent-success"><div class="stat-value" style="font-size:18px">${data.successful_strategies || 0}/${data.strategy_count || 0}</div><div class="stat-label">成功策略数</div></div>
+        <div class="stat-card accent-warning"><div class="stat-value" style="font-size:18px">${Number(data.portfolio_max_drawdown_pct || 0).toFixed(2)}%</div><div class="stat-label">组合最大回撤</div></div>
+      </div>
+      <div class="table-container"><table>
+        <thead><tr><th>策略</th><th>分配资金</th><th>收益</th><th>回撤</th><th>胜率</th><th>夏普</th><th>交易次数</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">无数据</td></tr>'}</tbody>
+      </table></div>`;
+  }).catch(() => showToast('请求失败', 'error'));
+}
+
+// ===== 策略中心 =====
+function loadStrategyReview() {
+  fetch('/api/v1/strategies/review').then(r => r.json()).then(data => {
+    document.getElementById('sc-total').textContent = data.total ?? '-';
+    document.getElementById('sc-healthy').textContent = data.healthy ?? '-';
+    document.getElementById('sc-stale').textContent = data.stale ?? '-';
+    document.getElementById('sc-lowdisc').textContent = data.low_discrimination ?? '-';
+    const tbody = document.getElementById('strategy-review-body');
+    if (!tbody) return;
+    const items = data.strategies || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">暂无数据</td></tr>'; return; }
+    tbody.innerHTML = items.map(s => {
+      const statusMap = { healthy: '<span class="badge badge-success">健康</span>', stale: '<span class="badge badge-danger">过时</span>', low_discrimination: '<span class="badge badge-warning">低区分</span>', watching: '<span class="badge badge-info">观察中</span>', no_data: '<span class="badge">无数据</span>' };
+      return `<tr>
+        <td><strong>${s.label || s.id}</strong><div style="font-size:12px;color:var(--text-dim)">${s.id}</div></td>
+        <td>${s.original_weight}</td>
+        <td>${s.effective_weight}${s.effective_weight < s.original_weight ? ' ⚠' : ''}</td>
+        <td>${s.match_rate != null ? s.match_rate + '%' : '-'}</td>
+        <td>${s.auto_decay ? '<span class="badge badge-info">启用</span>' : '-'}</td>
+        <td>${statusMap[s.status] || s.status}</td>
+      </tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
+function loadStrategyCatalog() {
+  fetch('/api/v1/strategies').then(r => r.json()).then(resp => {
+    const tbody = document.getElementById('strategy-catalog-body');
+    if (!tbody) return;
+    const items = resp.strategies || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无数据</td></tr>'; return; }
+    const catLabels = resp.categories || {};
+    tbody.innerHTML = items.map(s => {
+      const capBadges = (s.capabilities || []).map(c => `<span class="badge badge-info" style="margin-right:4px">${c}</span>`).join('');
+      const tags = (s.tags || []).map(t => `<span class="badge" style="margin-right:2px;background:var(--bg-3)">${t}</span>`).join('') || '-';
+      const markets = (s.applicable_market || []).join(', ') || 'all';
+      const riskColors = { low: 'badge-success', medium: 'badge-warning', high: 'badge-danger' };
+      return `<tr>
+        <td><strong>${s.id}</strong></td>
+        <td>${s.label || s.id}</td>
+        <td>${catLabels[s.category] || s.category || '-'}</td>
+        <td>${capBadges}</td>
+        <td><span class="badge ${riskColors[s.risk_level] || ''}">${s.risk_level || '-'}</span></td>
+        <td>${markets}</td>
+        <td style="font-size:12px">${tags}</td>
+        <td>${s.available ? '<span class="badge badge-success">可用</span>' : '<span class="badge badge-danger">不可用</span>'}</td>
+      </tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
 function loadPaperTrading() {
   fetch('/api/v1/paper-trading/accounts').then(r => r.json()).then(accounts => {
     const select = document.getElementById('paper-account-select');
@@ -1339,6 +1528,7 @@ navigateTo = function(page) {
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
     case 'backtest': initBacktestPage(); break;
+    case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); break;
     case 'loop-monitor': loadLoopStatus(); break;
   }
 };
