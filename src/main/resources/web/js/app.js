@@ -313,6 +313,7 @@ function sendChatMessage() {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   const bubble = msgEl.querySelector('.chat-bubble');
+  bubble.classList.add('md-content');
   const contentWrapper = bubble.parentElement;
 
   // 调用流式API
@@ -419,14 +420,138 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** 内联 Markdown 处理（bold/italic/code/link） */
+function inlineMd(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+}
+
+/** 内置简易 Markdown 解析器（marked 不可用时的兜底） */
+function simpleMarkdown(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  let html = '';
+  let i = 0;
+  let inUL = false, inOL = false, tableLines = [];
+
+  const flushList = () => {
+    if (inUL) { html += '</ul>'; inUL = false; }
+    if (inOL) { html += '</ol>'; inOL = false; }
+  };
+  const flushTable = () => {
+    if (!tableLines.length) return;
+    let th = '', tbody = '';
+    for (let j = 0; j < tableLines.length; j++) {
+      const cells = tableLines[j].replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+      if (j === 0) {
+        th = '<thead><tr>' + cells.map(c => `<th>${inlineMd(c)}</th>`).join('') + '</tr></thead>';
+      } else if (j === 1 && /^[\s|:-]+$/.test(tableLines[j])) {
+        // 分隔行跳过
+      } else {
+        tbody += '<tr>' + cells.map(c => `<td>${inlineMd(c)}</td>`).join('') + '</tr>';
+      }
+    }
+    html += `<table>${th}<tbody>${tbody}</tbody></table>`;
+    tableLines = [];
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // 表格行
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      flushList();
+      tableLines.push(trimmed);
+      i++; continue;
+    } else if (tableLines.length) {
+      flushTable();
+    }
+
+    // 代码块
+    if (trimmed.startsWith('```')) {
+      flushList();
+      let code = '';
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        code += escapeHtml(lines[i]) + '\n';
+        i++;
+      }
+      html += `<pre><code>${code}</code></pre>`;
+      i++; continue;
+    }
+
+    // 标题
+    const h = trimmed.match(/^(#{1,6})\s+(.*)/);
+    if (h) {
+      flushList();
+      const lvl = Math.min(h[1].length, 6);
+      html += `<h${lvl}>${inlineMd(h[2])}</h${lvl}>`;
+      i++; continue;
+    }
+
+    // 水平线
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flushList();
+      html += '<hr>'; i++; continue;
+    }
+
+    // 无序列表
+    const ulMatch = line.match(/^(\s*)[\-\*\+]\s+(.*)/);
+    if (ulMatch) {
+      if (inOL) { html += '</ol>'; inOL = false; }
+      if (!inUL) { html += '<ul>'; inUL = true; }
+      html += `<li>${inlineMd(ulMatch[2])}</li>`;
+      i++; continue;
+    }
+
+    // 有序列表
+    const olMatch = line.match(/^\s*\d+\.\s+(.*)/);
+    if (olMatch) {
+      if (inUL) { html += '</ul>'; inUL = false; }
+      if (!inOL) { html += '<ol>'; inOL = true; }
+      html += `<li>${inlineMd(olMatch[1])}</li>`;
+      i++; continue;
+    }
+
+    // 引用块
+    const bqMatch = trimmed.match(/^>\s*(.*)/);
+    if (bqMatch) {
+      flushList();
+      html += `<blockquote>${inlineMd(bqMatch[1])}</blockquote>`;
+      i++; continue;
+    }
+
+    // 空行
+    if (trimmed === '') {
+      flushList();
+      html += '<br>'; i++; continue;
+    }
+
+    // 普通段落
+    flushList();
+    html += `<p>${inlineMd(trimmed)}</p>`;
+    i++;
+  }
+  flushList();
+  if (tableLines.length) flushTable();
+  return html;
+}
+
 /** Markdown渲染 */
 function renderMarkdown(text) {
   if (!text) return '';
   if (typeof marked !== 'undefined' && marked.parse) {
     try { return marked.parse(text); }
-    catch(e) { return escapeHtml(text).replace(/\n/g, '<br>'); }
+    catch(e) { /* fallthrough */ }
   }
-  return escapeHtml(text).replace(/\n/g, '<br>');
+  return simpleMarkdown(text);
 }
 
 /** 删除会话 */
