@@ -130,6 +130,17 @@
       AI 对话
     </div>
   </div>
+  <div class="nav-section">
+    <div class="nav-section-title">AI 能力</div>
+    <div class="nav-item" data-page="factor-evolution">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+      因子进化
+    </div>
+    <div class="nav-item" data-page="benchmark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      策略评估
+    </div>
+  </div>
 
   <div class="sidebar-footer">
     <div class="sys-status">
@@ -582,6 +593,74 @@
 
 </main>
 </div><!-- end app-layout -->
+
+<!-- ===== Factor Evolution Page ===== -->
+<div class="page" id="page-factor-evolution">
+  <div class="page-header"><div class="page-header-left"><h2>因子自进化</h2><p>LLM 驱动的因子自动发现 · 变异 · 交叉 · 反向变异</p></div></div>
+  <div class="grid grid-4" style="margin-bottom:20px">
+    <div class="card stat-card accent-primary"><div class="stat-icon">🧬</div><div class="stat-value" id="evo-gen">-</div><div class="stat-label">进化代数</div></div>
+    <div class="card stat-card accent-success"><div class="stat-icon">✅</div><div class="stat-value" id="evo-promoted">-</div><div class="stat-label">已提升因子</div></div>
+    <div class="card stat-card accent-warning"><div class="stat-icon">⚠️</div><div class="stat-value" id="evo-failures">-</div><div class="stat-label">失败模式</div></div>
+    <div class="card stat-card accent-danger"><div class="stat-icon">🎯</div><div class="stat-value" id="evo-best-ic">-</div><div class="stat-label">最优 IC</div></div>
+  </div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">触发因子进化</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="margin-bottom:0;width:160px"><label>进化模式</label><select class="form-select" id="evo-preset"><option value="default">默认</option><option value="aggressive">激进</option><option value="conservative">保守</option></select></div>
+      <div class="form-group" style="margin-bottom:0;width:140px"><label>最大代数</label><input class="form-input" type="number" id="evo-max-gen" value="5" /></div>
+      <button class="btn btn-primary" style="height:38px" onclick="runFactorEvolution()">运行单轮进化</button>
+      <button class="btn btn-outline" style="height:38px" onclick="runMultiEvolution()">多轮进化</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadEvolutionStatus()">刷新状态</button>
+    </div>
+    <div id="evo-result" style="margin-top:16px;min-height:40px"></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">进化状态摘要</div>
+    <div id="evo-status-text" style="white-space:pre-wrap;font-size:14px;color:var(--text-dim);padding:12px">点击"刷新状态"查看</div>
+  </div>
+  <div class="card">
+    <div class="card-title">已进化因子列表</div>
+    <div class="table-container"><table>
+      <thead><tr><th>因子名称</th><th>分类</th><th>IC</th><th>IR</th><th>夏普</th><th>评分</th><th>代数</th><th>表达式</th></tr></thead>
+      <tbody id="evo-factors-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行进化后显示因子列表</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ===== Benchmark Page ===== -->
+<div class="page" id="page-benchmark">
+  <div class="page-header"><div class="page-header-left"><h2>策略评估</h2><p>多维度质量评分 · ABCD 等级 · 策略横向对比</p></div></div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">策略质量评估</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px"><label>股票代码</label><input class="form-input" id="bench-code" placeholder="600519" /></div>
+      <div class="form-group" style="margin-bottom:0;width:180px"><label>策略</label><select class="form-select" id="bench-strategy"><option value="ma_golden_cross">均线金叉策略</option></select></div>
+      <div class="form-group" style="margin-bottom:0;width:120px"><label>回测天数</label><input class="form-input" type="number" id="bench-days" value="180" /></div>
+      <button class="btn btn-primary" style="height:38px" onclick="runBenchmark()">评估质量</button>
+      <button class="btn btn-outline" style="height:38px" onclick="runBenchmarkScan()">全策略扫描</button>
+    </div>
+  </div>
+  <div id="bench-result-area" style="display:none">
+    <div class="grid grid-4" style="margin-bottom:20px">
+      <div class="card stat-card accent-primary" style="text-align:center"><div class="stat-value" id="bench-score" style="font-size:32px">-</div><div class="stat-label">综合评分</div></div>
+      <div class="card stat-card" style="text-align:center"><div id="bench-grade-badge" style="font-size:28px;font-weight:700;padding:4px 0">-</div><div class="stat-label">质量等级</div></div>
+      <div class="card stat-card accent-success"><div class="stat-value" id="bench-return" style="font-size:20px">-</div><div class="stat-label">年化收益</div></div>
+      <div class="card stat-card accent-warning"><div class="stat-value" id="bench-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
+    </div>
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card"><div class="card-title">六维度评分</div><div class="chart-box" id="chart-benchmark-radar" style="height:320px"></div></div>
+      <div class="card"><div class="card-title">维度详情</div><div id="bench-dimensions" style="padding:8px 0"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-title">改进建议</div><div id="bench-suggestions" style="padding:8px 0"></div></div>
+  </div>
+  <div class="card" id="bench-compare-area" style="display:none">
+    <div class="card-title">策略对比排名</div>
+    <div class="table-container"><table>
+      <thead><tr><th>排名</th><th>策略</th><th>评分</th><th>等级</th><th>年化收益</th><th>夏普</th><th>回撤</th><th>胜率</th></tr></thead>
+      <tbody id="bench-compare-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行对比后显示排名</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
 
 <!-- ===== Modals ===== -->
 <div class="modal-overlay" id="modal-alert" onclick="if(event.target===this)closeModal('modal-alert')">

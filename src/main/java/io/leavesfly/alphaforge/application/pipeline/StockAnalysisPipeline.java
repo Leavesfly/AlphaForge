@@ -17,6 +17,9 @@ import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.application.agent.MultiAgentOrchestrator;
 import io.leavesfly.alphaforge.application.agent.debate.AgentDebateOrchestrator;
 import io.leavesfly.alphaforge.application.agent.debate.DebateResult;
+import io.leavesfly.alphaforge.application.factor.evolution.FactorExperienceBridge;
+import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQuality;
+import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQualityAssessor;
 import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
 import io.leavesfly.alphaforge.application.service.memory.AnalysisMemoryService;
 import io.leavesfly.alphaforge.application.service.market.NewsSearchService;
@@ -91,6 +94,14 @@ public class StockAnalysisPipeline {
     /** 可选依赖：Agent 辩论编排器（当 agentMode=debate 时启用） */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AgentDebateOrchestrator debateOrchestrator;
+
+    /** 可选依赖：因子经验桥接器（注入因子级经验提示到分析上下文） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private FactorExperienceBridge factorExperienceBridge;
+
+    /** 可选依赖：LLM 分析质量评估器（分析后自动评估质量） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LlmAnalysisQualityAssessor analysisQualityAssessor;
 
     /** JSON 解析器（用于从 LLM 响应提取结构化字段） */
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -290,6 +301,22 @@ public class StockAnalysisPipeline {
                 }
             } catch (Exception e) {
                 log.debug("[{}] 历史参考加载失败，跳过: {}", stockCode, e.getMessage());
+            }
+
+            // ===== Step 7.6: 因子经验注入（因子自进化经验 + 信号级经验统一注入） =====
+            if (factorExperienceBridge != null) {
+                try {
+                    String marketPhase = marketContext != null
+                            ? String.valueOf(marketContext.getOrDefault("market_phase", "未知")) : "未知";
+                    String factorHint = factorExperienceBridge.buildUnifiedExperienceHint(
+                            stockCode, technicalResult, marketPhase);
+                    if (factorHint != null && !factorHint.isBlank()) {
+                        enhancedContext.put("factor_experience_hint", factorHint);
+                        log.debug("[{}] 因子经验提示已注入", stockCode);
+                    }
+                } catch (Exception e) {
+                    log.debug("[{}] 因子经验注入失败: {}", stockCode, e.getMessage());
+                }
             }
 
             // ===== Step 8: LLM分析(统一使用ReactAgent) =====
@@ -493,6 +520,22 @@ public class StockAnalysisPipeline {
         result.source = "llm_structured";
 
         extractFieldsFromLlmResponse(result, response);
+
+        // LLM 分析质量自动评估
+        if (analysisQualityAssessor != null) {
+            try {
+                LlmAnalysisQuality quality = analysisQualityAssessor.assess(response, context);
+                if (quality.hasHallucinations()) {
+                    log.warn("[{}] LLM 分析存在 {} 处数据幻觉", stockCode, quality.getHallucinations().size());
+                }
+                if (quality.hasLogicalContradictions()) {
+                    log.warn("[{}] LLM 分析存在 {} 处逻辑矛盾", stockCode, quality.getLogicalContradictions().size());
+                }
+                result.qualityScore = quality.getOverallScore();
+            } catch (Exception e) {
+                log.debug("[{}] LLM 质量评估失败: {}", stockCode, e.getMessage());
+            }
+        }
         return result;
     }
 

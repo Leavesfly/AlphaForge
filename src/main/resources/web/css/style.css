@@ -510,3 +510,43 @@ tbody tr:last-child td { border-bottom: none; }
 .card, .sidebar, .top-header, .modal, .tabs, .form-input, .form-select, .chat-bubble, .chat-input-area {
   transition: background 0.3s, border-color 0.3s, color 0.3s;
 }
+
+/* ===== Quality Grade Badges ===== */
+.grade-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.grade-A { background: var(--success-light); color: var(--success); }
+.grade-B { background: var(--info-light); color: var(--info); }
+.grade-C { background: var(--warning-light); color: var(--warning); }
+.grade-D { background: var(--danger-light); color: var(--danger); }
+
+/* ===== Dimension Score ===== */
+.dim-score {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 48px;
+  text-align: center;
+}
+.score-good { background: var(--success-light); color: var(--success); }
+.score-mid { background: var(--warning-light); color: var(--warning); }
+.score-bad { background: var(--danger-light); color: var(--danger); }
+
+/* ===== Alert Boxes ===== */
+.alert {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.alert-success { background: var(--success-light); color: var(--success); border: 1px solid var(--success); }
+.alert-danger { background: var(--danger-light); color: var(--danger); border: 1px solid var(--danger); }
+.alert-warning { background: var(--warning-light); color: var(--warning); border: 1px solid var(--warning); }
+.alert-info { background: var(--info-light); color: var(--info); border: 1px solid var(--info); }

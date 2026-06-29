@@ -258,6 +258,7 @@ public class AnalysisPostProcessor {
         public Double stopLossPrice;
         public Double pricePosition;
         public Map<String, Object> compositeScoring;
+        public Double qualityScore; // LLM 分析质量评分（0-100，由 LlmAnalysisQualityAssessor 评估）
 
         public static AnalysisResult dryRun(String code, String name) {
             AnalysisResult r = new AnalysisResult();

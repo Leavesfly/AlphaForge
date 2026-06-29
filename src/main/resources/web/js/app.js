@@ -1655,6 +1655,8 @@ navigateTo = function(page) {
     case 'backtest': initBacktestPage(); break;
     case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); break;
     case 'loop-monitor': loadLoopStatus(); break;
+    case 'factor-evolution': loadEvolutionStatus(); break;
+    case 'benchmark': initBenchmarkPage(); break;
   }
 };
 
@@ -1663,3 +1665,227 @@ setTimeout(() => {
   loadDashboard();
   loadMarketOverview();
 }, 500);
+
+// ===== Factor Evolution =====
+function loadEvolutionStatus() {
+  fetch('/api/v1/ai-capability/factor-evolution/status')
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        document.getElementById('evo-status-text').textContent = resp.data || '暂无进化数据';
+        parseEvolutionStatus(resp.data || '');
+      }
+    })
+    .catch(e => {
+      document.getElementById('evo-status-text').textContent = '加载失败: ' + e.message;
+    });
+}
+
+function parseEvolutionStatus(text) {
+  const genMatch = text.match(/进化代数:\s*(\d+)/);
+  const promotedMatch = text.match(/已提升因子:\s*(\d+)/);
+  const failureMatch = text.match(/失败模式:\s*(\d+)/);
+  const icMatch = text.match(/IC=([\-0-9.]+)/);
+  if (genMatch) document.getElementById('evo-gen').textContent = genMatch[1];
+  if (promotedMatch) document.getElementById('evo-promoted').textContent = promotedMatch[1];
+  if (failureMatch) document.getElementById('evo-failures').textContent = failureMatch[1];
+  if (icMatch) document.getElementById('evo-best-ic').textContent = icMatch[1];
+}
+
+function runFactorEvolution() {
+  const preset = document.getElementById('evo-preset').value;
+  const body = { preset: preset };
+  document.getElementById('evo-result').innerHTML = '<span style="color:var(--text-dim)">进化进行中...</span>';
+  fetch('/api/v1/ai-capability/factor-evolution/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        const d = resp.data;
+        document.getElementById('evo-result').innerHTML = `
+          <div class="alert alert-success">第 ${d.generation} 代进化完成 | 生成 ${d.candidates_generated} 个候选 | 通过 ${d.candidates_passed} 个 | 提升 ${d.candidates_promoted} 个 | 耗时 ${d.duration_ms}ms${d.converged ? ' | 已收敛' : ''}</div>`;
+        loadEvolutionStatus();
+      } else {
+        document.getElementById('evo-result').innerHTML = `<div class="alert alert-danger">${resp.error || '进化失败'}</div>`;
+      }
+    })
+    .catch(e => {
+      document.getElementById('evo-result').innerHTML = `<div class="alert alert-danger">请求失败: ${e.message}</div>`;
+    });
+}
+
+function runMultiEvolution() {
+  const preset = document.getElementById('evo-preset').value;
+  const maxGen = parseInt(document.getElementById('evo-max-gen').value) || 5;
+  const body = { preset: preset, max_generations: maxGen };
+  document.getElementById('evo-result').innerHTML = '<span style="color:var(--text-dim)">多轮进化进行中（可能耗时较长）...</span>';
+  fetch('/api/v1/ai-capability/factor-evolution/run-multi', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        const d = resp.data;
+        document.getElementById('evo-result').innerHTML = `
+          <div class="alert alert-success">多轮进化完成 | 最终第 ${d.final_generation} 代 | 总生成 ${d.total_generated} | 总提升 ${d.total_promoted} | 耗时 ${d.duration_ms}ms${d.converged ? ' | 已收敛' : ''}</div>`;
+        loadEvolutionStatus();
+      } else {
+        document.getElementById('evo-result').innerHTML = `<div class="alert alert-danger">${resp.error || '进化失败'}</div>`;
+      }
+    })
+    .catch(e => {
+      document.getElementById('evo-result').innerHTML = `<div class="alert alert-danger">请求失败: ${e.message}</div>`;
+    });
+}
+
+// ===== Benchmark =====
+function initBenchmarkPage() {
+  loadStrategyOptions('bench-strategy');
+}
+
+function runBenchmark() {
+  const code = document.getElementById('bench-code').value.trim();
+  const strategy = document.getElementById('bench-strategy').value;
+  const days = parseInt(document.getElementById('bench-days').value) || 180;
+  if (!code) { showToast('请输入股票代码', 'warning'); return; }
+
+  showToast('正在评估策略质量...', 'info');
+  fetch('/api/v1/ai-capability/benchmark/strategy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strategy_id: strategy, stock_code: code, days: days })
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success && resp.data.success !== false) {
+        renderBenchmarkResult(resp.data);
+        showToast('策略质量评估完成', 'success');
+      } else {
+        showToast(resp.data?.error || resp.error || '评估失败', 'error');
+      }
+    })
+    .catch(e => showToast('请求失败: ' + e.message, 'error'));
+}
+
+function renderBenchmarkResult(data) {
+  document.getElementById('bench-result-area').style.display = '';
+  const quality = data.quality;
+  if (!quality) return;
+
+  const overall = parseFloat(quality.overall_score) || 0;
+  document.getElementById('bench-score').textContent = overall.toFixed(1);
+  document.getElementById('bench-grade-badge').textContent = quality.grade || '-';
+  document.getElementById('bench-grade-badge').className = 'grade-badge grade-' + (quality.grade || 'D')[0];
+
+  const bt = data;
+  document.getElementById('bench-return').textContent = bt.annual_return_pct || '-';
+  document.getElementById('bench-sharpe').textContent = bt.sharpe_ratio || '-';
+
+  // 渲染维度详情
+  const dims = quality.dimensions || {};
+  let dimHtml = '';
+  const radarData = [];
+  for (const [key, val] of Object.entries(dims)) {
+    const score = parseFloat(val.score) || 0;
+    dimHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div><span style="font-weight:500">${getDimLabel(key)}</span> <span style="font-size:12px;color:var(--text-dim);margin-left:8px">${val.detail || ''}</span></div>
+      <span class="dim-score ${score >= 70 ? 'score-good' : score >= 50 ? 'score-mid' : 'score-bad'}">${score.toFixed(1)}</span>
+    </div>`;
+    radarData.push(score);
+  }
+  document.getElementById('bench-dimensions').innerHTML = dimHtml || '<p style="color:var(--text-dim)">无维度数据</p>';
+
+  // 渲染雷达图
+  renderBenchmarkRadar(radarData);
+
+  // 改进建议
+  const suggestions = quality.suggestions || [];
+  let sugHtml = suggestions.length ? suggestions.map(s => `<div style="padding:4px 0"><span style="color:var(--color-warning)">⚠</span> ${s}</div>`).join('') : '<p style="color:var(--text-dim)">暂无改进建议</p>';
+  document.getElementById('bench-suggestions').innerHTML = sugHtml;
+}
+
+function renderBenchmarkRadar(scores) {
+  const chart = echarts.init(document.getElementById('chart-benchmark-radar'));
+  chart.setOption({
+    radar: {
+      indicator: [
+        { name: '收益能力', max: 100 },
+        { name: '风险控制', max: 100 },
+        { name: '胜率质量', max: 100 },
+        { name: '稳健性', max: 100 },
+        { name: '成本效率', max: 100 },
+        { name: '一致性', max: 100 }
+      ],
+      radius: '65%'
+    },
+    series: [{
+      type: 'radar',
+      data: [{ value: scores, name: '策略质量' }],
+      areaStyle: { color: 'rgba(99,102,241,0.2)' },
+      lineStyle: { color: '#6366f1' },
+      itemStyle: { color: '#6366f1' }
+    }]
+  });
+}
+
+function runBenchmarkScan() {
+  const code = document.getElementById('bench-code').value.trim();
+  const days = parseInt(document.getElementById('bench-days').value) || 180;
+  if (!code) { showToast('请输入股票代码', 'warning'); return; }
+
+  showToast('正在扫描全部策略...', 'info');
+  fetch('/api/v1/ai-capability/benchmark/scan-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stock_code: code, days: days })
+  })
+    .then(r => r.json())
+    .then(resp => {
+      if (resp.success) {
+        renderBenchmarkComparison(resp.data);
+        showToast('全策略扫描完成', 'success');
+      } else {
+        showToast(resp.error || '扫描失败', 'error');
+      }
+    })
+    .catch(e => showToast('请求失败: ' + e.message, 'error'));
+}
+
+function renderBenchmarkComparison(data) {
+  document.getElementById('bench-compare-area').style.display = '';
+  const reports = data.reports || [];
+  let html = '';
+  let rank = 1;
+  for (const r of reports) {
+    const q = r.quality || {};
+    const grade = (q.grade || 'D')[0];
+    html += `<tr>
+      <td>${rank++}</td>
+      <td>${r.strategy_id || '-'}</td>
+      <td><span class="dim-score ${parseFloat(q.overall_score) >= 70 ? 'score-good' : parseFloat(q.overall_score) >= 50 ? 'score-mid' : 'score-bad'}">${q.overall_score || '-'}</span></td>
+      <td><span class="grade-badge grade-${grade}">${q.grade || '-'}</span></td>
+      <td>${r.annual_return_pct || '-'}</td>
+      <td>${r.sharpe_ratio || '-'}</td>
+      <td>${r.max_drawdown_pct || '-'}</td>
+      <td>${r.win_rate_pct || '-'}</td>
+    </tr>`;
+  }
+  document.getElementById('bench-compare-body').innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">无对比数据</td></tr>';
+}
+
+function getDimLabel(key) {
+  const labels = {
+    'return': '收益能力',
+    'risk_control': '风险控制',
+    'win_quality': '胜率质量',
+    'robustness': '稳健性',
+    'cost_efficiency': '成本效率',
+    'consistency': '一致性'
+  };
+  return labels[key] || key;
+}
