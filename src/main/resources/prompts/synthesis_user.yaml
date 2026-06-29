@@ -1,0 +1,19 @@
+name: synthesis_user
+version: "1.0"
+active: true
+description: 多Agent综合分析用户提示模板
+template: |
+  请综合以下各专业 Agent 的分析结论，给出 {stock_name}({stock_code}) 的最终分析报告。
+
+  {agent_results}
+
+  请综合以上各维度分析，给出：
+  1. 综合评分（0-100）
+  2. 最终交易信号（strong_buy/buy/neutral/sell/strong_sell）
+  3. 综合置信度（高/中等/低）
+  4. 操作建议
+  5. 风险提示
+  6. 关键结论（1-3句话）
+
+  最终结论以 JSON 格式返回：
+  {"signal":"...","score":0-100,"confidence":"...","summary":"...","operation_advice":"...","risk_note":"..."}
