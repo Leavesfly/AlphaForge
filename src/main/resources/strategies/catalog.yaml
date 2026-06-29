@@ -36,12 +36,12 @@ strategies:
   volume_breakout:
     file: definitions/technical/volume_breakout.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   bull_trend:
     file: definitions/technical/bull_trend.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   shrink_pullback:
     file: definitions/technical/shrink_pullback.yaml
@@ -61,22 +61,22 @@ strategies:
   wave_theory:
     file: definitions/technical/wave_theory.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   emotion_cycle:
     file: definitions/sentiment/emotion_cycle.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   event_driven:
     file: definitions/event/event_driven.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   growth_quality:
     file: definitions/fundamental/growth_quality.yaml
     capabilities: [backtest, scoring]
-    runtime: partial
+    runtime: implemented
 
   # ── 综合评分策略（scoring 段，CompositeScoringEngine）──
   bottom_volume:
@@ -87,17 +87,17 @@ strategies:
   chan_theory:
     file: definitions/technical/chan_theory.yaml
     capabilities: [scoring]
-    runtime: partial
+    runtime: implemented
 
   expectation_repricing:
     file: definitions/fundamental/expectation_repricing.yaml
     capabilities: [scoring]
-    runtime: partial
+    runtime: implemented
 
   hot_theme:
     file: definitions/sentiment/hot_theme.yaml
     capabilities: [scoring]
-    runtime: partial
+    runtime: implemented
 
   one_yang_three_yin:
     file: definitions/technical/one_yang_three_yin.yaml

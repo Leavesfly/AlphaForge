@@ -1,8 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 # 情绪周期策略
-# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
 # 逻辑：情绪极度低迷时买入，极度亢奋时卖出（逆向操作）
-# 注意：sentiment_extreme 条件类型尚未完全实现
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: emotion_cycle
@@ -19,7 +18,7 @@ backtest:
 
   entry_conditions:
     - type: sentiment_extreme
-      level: oversold               # 情绪极度低迷时买入（引擎待实现）
+      level: oversold               # 情绪极度低迷时买入
 
   exit_conditions:
     - type: sentiment_extreme

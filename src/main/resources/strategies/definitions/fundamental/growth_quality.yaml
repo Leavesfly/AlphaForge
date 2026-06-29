@@ -1,8 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 # 成长质量策略
-# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
 # 逻辑：高成长 + 高质量基本面标的，中长线持有
-# 注意：fundamental_filter / fundamental_deterioration 尚未实现
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: growth_quality
@@ -19,12 +18,12 @@ backtest:
 
   entry_conditions:
     - type: fundamental_filter
-      revenue_growth_min: 20        # 基本面过滤（引擎待实现）
+      revenue_growth_min: 20        # 基本面过滤
       roe_min: 15
-    - type: price_near_support      # 价格接近支撑位（引擎待实现）
+    - type: price_near_support      # 价格接近支撑位
 
   exit_conditions:
-    - type: fundamental_deterioration   # 基本面恶化（引擎待实现）
+    - type: fundamental_deterioration   # 基本面恶化
     - type: stop_loss
       pct: -15
 

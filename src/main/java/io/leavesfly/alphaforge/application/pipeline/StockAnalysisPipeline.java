@@ -15,6 +15,8 @@ import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
 
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.application.agent.MultiAgentOrchestrator;
+import io.leavesfly.alphaforge.application.agent.debate.AgentDebateOrchestrator;
+import io.leavesfly.alphaforge.application.agent.debate.DebateResult;
 import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
 import io.leavesfly.alphaforge.application.service.memory.AnalysisMemoryService;
 import io.leavesfly.alphaforge.application.service.market.NewsSearchService;
@@ -28,6 +30,8 @@ import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import jakarta.annotation.PreDestroy;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -84,6 +88,10 @@ public class StockAnalysisPipeline {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private MultiAgentOrchestrator multiAgentOrchestrator;
 
+    /** 可选依赖：Agent 辩论编排器（当 agentMode=debate 时启用） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AgentDebateOrchestrator debateOrchestrator;
+
     /** JSON 解析器（用于从 LLM 响应提取结构化字段） */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -129,6 +137,22 @@ public class StockAnalysisPipeline {
         this.experienceMemory = experienceMemory;
         this.executorService = Executors.newFixedThreadPool(
                 Math.min(Runtime.getRuntime().availableProcessors(), 4));
+    }
+
+    /** 优雅关闭线程池，避免应用停止时线程泄漏 */
+    @PreDestroy
+    public void shutdown() {
+        log.info("StockAnalysisPipeline 正在关闭线程池...");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+                log.warn("StockAnalysisPipeline 线程池强制关闭（仍有任务未完成）");
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ==================== 主入口方法 ====================
@@ -365,7 +389,39 @@ public class StockAnalysisPipeline {
                                             Map<String, Object> context, DiagnosticContext diag) {
         // 如果配置了多 Agent 模式且编排器可用，优先使用多 Agent 并行分析
         String agentMode = config.getAgentMode();
-        if (multiAgentOrchestrator != null && ("multi".equals(agentMode) || "full".equals(agentMode))) {
+
+        // 辩论模式：多 Agent 独立分析 → 交叉质询 → 裁判裁决
+        if (debateOrchestrator != null && "debate".equals(agentMode)) {
+            try {
+                DebateResult debateResult = debateOrchestrator.orchestrateWithDebate(
+                        stockCode, stockName, context, 120);
+                diag.record("agent_mode", "debate");
+                diag.record("agent_count", debateResult.getInitialResults().size());
+                diag.record("debate_enabled", debateResult.isDebateEnabled());
+                diag.record("debate_duration_ms", debateResult.getTotalDurationMs());
+                if (debateResult.getVerdict() != null) {
+                    diag.record("debate_consensus", debateResult.getVerdict().getConsensusLevel());
+                    diag.record("debate_signal_adjusted", debateResult.getVerdict().isSignalDowngraded());
+                }
+                AnalysisResult result = new AnalysisResult();
+                result.stockCode = stockCode;
+                result.stockName = stockName;
+                result.fullReport = debateResult.getFinalAnalysis();
+                result.source = "debate_agent";
+                extractFieldsFromLlmResponse(result, debateResult.getFinalAnalysis());
+                // 辩论裁决覆盖信号和评分
+                if (debateResult.getVerdict() != null) {
+                    result.signal = debateResult.getVerdict().getFinalSignal();
+                    result.score = debateResult.getVerdict().getFinalScore();
+                    result.confidence = debateResult.getVerdict().getConfidence();
+                }
+                return result;
+            } catch (Exception e) {
+                log.warn("[{}] 辩论模式分析失败，降级到多Agent: {}", stockCode, e.getMessage());
+            }
+        }
+
+        if (multiAgentOrchestrator != null && ("multi".equals(agentMode) || "full".equals(agentMode) || "debate".equals(agentMode))) {
             try {
                 MultiAgentOrchestrator.OrchestrationResult orcResult =
                         multiAgentOrchestrator.orchestrate(stockCode, stockName, context, 120);

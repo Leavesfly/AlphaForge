@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
+import io.leavesfly.alphaforge.application.agent.reasoning.StructuredReasoningPromptBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,10 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
     protected final LlmToolAdapter toolAdapter;
     protected final ToolRegistry toolRegistry;
 
+    /** 结构化推理链 Prompt 构建器（可选依赖，字段注入） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    protected StructuredReasoningPromptBuilder reasoningPromptBuilder;
+
     protected AbstractSpecializedAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
                                        ToolRegistry toolRegistry) {
         this.llmService = llmService;
@@ -33,8 +38,15 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
         try {
             String userPrompt = buildUserPrompt(stockCode, stockName, context);
 
+            // 结构化推理链增强：在 system prompt 中注入推理框架
+            String systemPrompt = getSystemPrompt();
+            if (reasoningPromptBuilder != null) {
+                systemPrompt = reasoningPromptBuilder.enhanceSingleDimensionSystemPrompt(
+                        systemPrompt, getRoleDescription());
+            }
+
             List<Map<String, String>> messages = new ArrayList<>();
-            messages.add(Map.of("role", "system", "content", getSystemPrompt()));
+            messages.add(Map.of("role", "system", "content", systemPrompt));
             messages.add(Map.of("role", "user", "content", userPrompt));
 
             // 使用工具调用循环获取数据并分析

@@ -39,7 +39,7 @@ backtest:
 
   position_size: 0.80
 
-# 综合分析评分权重（待 ScoringEngine 接入）
+# 综合分析评分权重
 scoring:
   score_weight: 18         # 在组合评分中的权重
   conditions:

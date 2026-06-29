@@ -1,8 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 # 事件驱动策略
-# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
 # 逻辑：重大利好事件触发买入，持仓期满或止损卖出
-# 注意：event_trigger 条件类型尚未完全实现
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: event_driven
@@ -18,7 +17,7 @@ backtest:
 
   entry_conditions:
     - type: event_trigger
-      category: positive                        # 正面事件触发（引擎待实现）
+      category: positive                        # 正面事件触发
 
   exit_conditions:
     - type: holding_days

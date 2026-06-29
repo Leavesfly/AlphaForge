@@ -54,7 +54,8 @@ public class PromptManager {
                     "technical_agent_system",
                     "fundamental_agent_system",
                     "risk_agent_system",
-                    "synthesis_system"
+                    "synthesis_system",
+                    "synthesis_user"
             };
 
             for (String name : knownPrompts) {

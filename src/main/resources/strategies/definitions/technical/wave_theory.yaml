@@ -1,8 +1,7 @@
 # ──────────────────────────────────────────────────────────────
 # 波浪理论策略
-# 引擎：backtest → BacktestSignalEngine（partial）| scoring → CompositeScoringEngine
+# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
 # 逻辑：第三浪起点买入、第五浪终点卖出
-# 注意：wave_position 条件类型尚未完全实现
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: wave_theory
@@ -17,11 +16,11 @@ backtest:
 
   entry_conditions:
     - type: wave_position
-      target: wave_3_start           # 第三浪起点（引擎待实现）
+      target: wave_3_start           # 第三浪起点
 
   exit_conditions:
     - type: wave_position
-      target: wave_5_end             # 第五浪终点（引擎待实现）
+      target: wave_5_end             # 第五浪终点
     - type: stop_loss
       pct: -10
 

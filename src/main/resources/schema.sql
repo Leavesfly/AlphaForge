@@ -414,3 +414,115 @@ CREATE TABLE IF NOT EXISTS analysis_tasks (
     started_at TIMESTAMP,                       -- 任务开始执行时间
     completed_at TIMESTAMP                      -- 任务完成时间
 );
+
+-- ========== 因子自进化系统 ==========
+-- LLM 驱动的因子自动发现、评估、进化与记忆存储
+-- 对应论文 FactorMiner + AlphaAgentEvo 的因子自进化架构
+
+-- 因子候选表：LLM 生成的每个因子候选（含遗传信息）
+CREATE TABLE IF NOT EXISTS factor_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factor_id VARCHAR(50) NOT NULL UNIQUE,         -- 因子 UUID
+    factor_name VARCHAR(100) NOT NULL,              -- 因子名称（如 vol_weighted_momentum_20d）
+    factor_expression TEXT NOT NULL,                -- 因子计算表达式（DSL 代码）
+    factor_type VARCHAR(30) DEFAULT 'SIMPLE',      -- 因子类型: SIMPLE/COMPOSITE/CROSS_SECTIONAL/TIME_SERIES/EVENT_DRIVEN
+    category VARCHAR(50) DEFAULT 'custom',          -- 因子分类: momentum/mean_reversion/volatility/volume/trend/custom
+    description TEXT,                                -- LLM 生成的因子说明
+    generation_round INTEGER DEFAULT 0,             -- 进化代数（第几轮生成）
+    parent_factor_id VARCHAR(50),                  -- 父代因子 ID（变异来源）
+    second_parent_factor_id VARCHAR(50),           -- 第二父代 ID（仅 CROSSBREED）
+    mutation_type VARCHAR(30) DEFAULT 'INITIAL',   -- 变异类型: INITIAL/PARAM_MUTATE/EXPR_MUTATE/CROSSBREED/INVERSE_MUTATE/CONDITION_SPECIALIZE/COMBINE
+    parameters TEXT,                                -- 因子参数（JSON）
+    market_condition VARCHAR(50) DEFAULT 'any',    -- 适用市场条件
+    status VARCHAR(20) DEFAULT 'CANDIDATE',         -- 生命周期: CANDIDATE/EVALUATING/VALIDATED/PROMOTED/DEPRECATED/MUTATED
+    generation_reasoning TEXT,                      -- LLM 生成推理过程
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- 因子评估结果表：每个因子候选的量化评估指标
+CREATE TABLE IF NOT EXISTS factor_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factor_id VARCHAR(50) NOT NULL,                 -- 关联的因子 ID
+    ic REAL,                                        -- 信息系数（IC）
+    ic_mean REAL,                                   -- IC 均值
+    ic_std REAL,                                    -- IC 标准差
+    ir REAL,                                        -- 信息比率（IR）
+    sharpe_ratio REAL,                              -- 夏普比率
+    max_drawdown_pct REAL,                          -- 最大回撤(%)
+    win_rate_pct REAL,                              -- 胜率(%)
+    total_return_pct REAL,                          -- 总收益率(%)
+    coverage_rate REAL,                             -- 覆盖率(0-1)
+    turnover_rate REAL,                             -- 换手率(0-1)
+    ic_decay_days INTEGER,                          -- IC 衰减天数
+    overall_score REAL,                             -- 综合评分(0-100)
+    is_passing INTEGER DEFAULT 0,                   -- 是否通过门槛: 1=通过, 0=未通过
+    backtest_result TEXT,                           -- 完整回测结果（JSON）
+    diagnostics TEXT,                               -- 诊断信息（JSON）
+    evaluation_date DATE,                           -- 评估日期
+    created_at TIMESTAMP,
+    FOREIGN KEY (factor_id) REFERENCES factor_candidates(factor_id)
+);
+
+-- 因子进化记忆表：跨代进化经验的持久化记录
+CREATE TABLE IF NOT EXISTS factor_evolution_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id VARCHAR(50) NOT NULL UNIQUE,          -- 记录 UUID
+    factor_id VARCHAR(50) NOT NULL,                 -- 关联的因子 ID
+    factor_name VARCHAR(100),                       -- 因子名称快照
+    factor_expression TEXT,                         -- 因子表达式快照
+    generation_round INTEGER,                       -- 进化代数
+    mutation_type VARCHAR(30),                      -- 变异类型
+    parent_factor_id VARCHAR(50),                  -- 父代因子 ID
+    second_parent_factor_id VARCHAR(50),            -- 第二父代 ID
+    factor_type VARCHAR(30),                        -- 因子类型
+    category VARCHAR(50),                            -- 因子分类
+    market_condition VARCHAR(50),                   -- 适用市场条件
+    evaluation_score REAL,                           -- 评估得分快照
+    ic REAL,                                        -- IC 快照
+    ir REAL,                                        -- IR 快照
+    sharpe_ratio REAL,                              -- 夏普比率快照
+    status VARCHAR(20),                             -- 因子状态
+    failure_reason TEXT,                            -- 失败原因（淘汰时填写）
+    failure_patterns TEXT,                           -- 失败模式列表（JSON 数组）
+    generation_reasoning TEXT,                      -- LLM 生成推理
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- 因子失败模式表：从历史淘汰因子中提取的共性特征
+CREATE TABLE IF NOT EXISTS factor_failure_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern_signature VARCHAR(200) NOT NULL,       -- 失败模式签名
+    occurrence_count INTEGER DEFAULT 1,             -- 出现次数
+    avg_ic REAL,                                    -- 平均 IC
+    avg_score REAL,                                 -- 平均评估得分
+    failure_description TEXT,                      -- 典型失败原因描述
+    factor_category VARCHAR(50),                   -- 涉及的因子分类
+    first_seen_at TIMESTAMP,                        -- 首次发现时间
+    last_seen_at TIMESTAMP,                         -- 最近发现时间
+    UNIQUE(pattern_signature)
+);
+
+-- 进化因子注册表：已提升到生产因子库的进化因子
+CREATE TABLE IF NOT EXISTS evolved_factor_registry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factor_id VARCHAR(50) NOT NULL UNIQUE,         -- 因子 ID
+    factor_name VARCHAR(100) NOT NULL UNIQUE,      -- 因子名称（生产库内唯一）
+    factor_expression TEXT NOT NULL,               -- 因子表达式
+    category VARCHAR(50),                           -- 因子分类
+    description TEXT,                               -- 因子描述
+    ic REAL,                                        -- 注册时的 IC
+    ir REAL,                                        -- 注册时的 IR
+    sharpe_ratio REAL,                              -- 注册时的夏普比率
+    overall_score REAL,                              -- 注册时的综合评分
+    generation_round INTEGER,                       -- 来源进化代数
+    market_condition VARCHAR(50),                   -- 适用市场条件
+    is_active INTEGER DEFAULT 1,                    -- 是否激活: 1=激活, 0=已淘汰
+    deactivated_reason VARCHAR(200),               -- 淘汰原因
+    signal_correct_count INTEGER DEFAULT 0,         -- 信号正确次数（实盘反馈）
+    signal_incorrect_count INTEGER DEFAULT 0,      -- 信号错误次数（实盘反馈）
+    registered_at TIMESTAMP,                        -- 注册时间
+    deactivated_at TIMESTAMP,                       -- 淘汰时间
+    FOREIGN KEY (factor_id) REFERENCES factor_candidates(factor_id)
+);

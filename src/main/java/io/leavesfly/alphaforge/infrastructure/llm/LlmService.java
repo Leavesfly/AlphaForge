@@ -32,14 +32,27 @@ public class LlmService implements LlmPort {
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final LlmUsageTracker usageTracker;
+    private final LlmRetryExecutor retryExecutor;
+    private final LlmTokenEstimator tokenEstimator;
+    private final LlmResponseParser responseParser;
+    private final LlmChannelManager channelManager;
 
-    /** 当前使用的渠道索引 */
-    private int currentChannelIndex = 0;
+    /** 可选依赖：监控指标埋点 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LlmMetrics llmMetrics;
+
+    /** 可选依赖：响应缓存 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LlmResponseCache responseCache;
 
     public LlmService(AppConfig config, LlmUsageTracker usageTracker) {
         this.config = config;
         this.usageTracker = usageTracker;
         this.objectMapper = new ObjectMapper();
+        this.retryExecutor = new LlmRetryExecutor();
+        this.tokenEstimator = new LlmTokenEstimator();
+        this.responseParser = new LlmResponseParser(objectMapper, tokenEstimator);
+        this.channelManager = new LlmChannelManager(config.getLlmChannels());
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(config.getLlmTimeout(), TimeUnit.SECONDS)
@@ -82,29 +95,51 @@ public class LlmService implements LlmPort {
     public String chatWithMessages(List<Map<String, String>> messages) {
         List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
         if (channels.isEmpty()) {
-            log.error("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
-            return "[错误] 未配置LLM服务";
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
         }
 
-        // 尝试所有渠道(带故障切换)
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = (currentChannelIndex + attempt) % channels.size();
-            AppConfig.LlmChannelConfig channel = channels.get(idx);
-
-            try {
-                String result = callLlmApi(channel, messages);
-                if (result != null && !result.isEmpty()) {
-                    currentChannelIndex = idx; // 记住成功的渠道
-                    return result;
-                }
-            } catch (Exception e) {
-                log.warn("LLM渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
-                // 切换到下一个渠道
+        // 查询缓存
+        String cacheKey = null;
+        if (responseCache != null && responseCache.isEnabled()) {
+            cacheKey = responseCache.buildKey(config.getLlmModel(), messages);
+            String cached = responseCache.get(cacheKey);
+            if (cached != null) {
+                log.debug("LLM缓存命中，直接返回缓存结果");
+                return cached;
             }
         }
 
-        log.error("所有LLM渠道均失败");
-        return "[错误] LLM服务不可用";
+        // 尝试所有渠道(带故障切换)，每个渠道内部带重试
+        Exception lastException = null;
+        for (int attempt = 0; attempt < channels.size(); attempt++) {
+            int idx = channelManager.getChannelIndex(attempt);
+            AppConfig.LlmChannelConfig channel = channels.get(idx);
+
+            try {
+                String result = retryExecutor.executeWithRetry(
+                        () -> executeApiCall(() -> callLlmApi(channel, messages), channel.getModel()),
+                        "chatWithMessages:" + channel.getModel());
+                if (result != null && !result.isEmpty()) {
+                    channelManager.markSuccess(idx); // 记住成功的渠道
+                    // 写入缓存
+                    if (responseCache != null && cacheKey != null) {
+                        responseCache.put(cacheKey, result);
+                    }
+                    return result;
+                }
+            } catch (LlmException e) {
+                log.warn("LLM渠道 {} ({}) 调用失败(含重试): {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
+                // 不可重试的异常（认证/解析）直接跳出，不切换渠道
+                if (e instanceof LlmException.LlmAuthException) break;
+            } catch (Exception e) {
+                log.warn("LLM渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
+            }
+        }
+
+        throw new LlmException.LlmUnavailableException(
+                "所有LLM渠道均失败", lastException);
     }
 
     /**
@@ -142,8 +177,7 @@ public class LlmService implements LlmPort {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                String errorBody = response.body() != null ? response.body().string() : "unknown";
-                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+                throw buildHttpException(response, channel.getModel());
             }
 
             String responseBody = response.body().string();
@@ -172,6 +206,8 @@ public class LlmService implements LlmPort {
                 }
                 usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
                         promptTokens, completionTokens, durationMs);
+                recordMetrics(channel.getModel(), "chatWithMessages", true, durationMs,
+                        promptTokens, completionTokens);
                 return content;
             }
             
@@ -193,7 +229,9 @@ public class LlmService implements LlmPort {
                 return content;
             }
 
-            throw new RuntimeException("无法解析LLM响应: " + responseBody.substring(0, Math.min(200, responseBody.length())));
+            throw new LlmException.LlmParseException(
+                    "无法解析LLM响应: " + responseBody.substring(0, Math.min(200, responseBody.length())),
+                    channel.getModel());
         }
     }
 
@@ -210,27 +248,34 @@ public class LlmService implements LlmPort {
                                                         List<Map<String, Object>> tools) {
         List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
         if (channels.isEmpty()) {
-            log.error("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
-            return LlmPort.LlmResponse.textOnly("[错误] 未配置LLM服务");
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
         }
 
+        Exception lastException = null;
         for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = (currentChannelIndex + attempt) % channels.size();
+            int idx = channelManager.getChannelIndex(attempt);
             AppConfig.LlmChannelConfig channel = channels.get(idx);
             try {
-                LlmPort.LlmResponse result = callLlmApiWithTools(channel, messages, tools);
+                LlmPort.LlmResponse result = retryExecutor.executeWithRetry(
+                        () -> executeApiCall(() -> callLlmApiWithTools(channel, messages, tools), channel.getModel()),
+                        "chatWithFunctionCalling:" + channel.getModel());
                 if (result != null && (result.hasToolCalls()
                         || (result.getContent() != null && !result.getContent().isEmpty()))) {
-                    currentChannelIndex = idx;
+                    channelManager.markSuccess(idx);
                     return result;
                 }
+            } catch (LlmException e) {
+                log.warn("LLM渠道 {} ({}) Function Calling失败(含重试): {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
+                if (e instanceof LlmException.LlmAuthException) break;
             } catch (Exception e) {
                 log.warn("LLM渠道 {} ({}) Function Calling失败: {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
             }
         }
 
-        log.error("所有LLM渠道均失败(Function Calling)");
-        return LlmPort.LlmResponse.textOnly("[错误] LLM服务不可用");
+        throw new LlmException.LlmUnavailableException(
+                "所有LLM渠道均失败(Function Calling)", lastException);
     }
 
     /**
@@ -290,8 +335,7 @@ public class LlmService implements LlmPort {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                String errorBody = response.body() != null ? response.body().string() : "unknown";
-                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+                throw buildHttpException(response, channel.getModel());
             }
 
             String responseBody = response.body().string();
@@ -338,8 +382,10 @@ public class LlmService implements LlmPort {
                         functionCalls.isEmpty() ? null : functionCalls);
             }
 
-            throw new RuntimeException("无法解析LLM响应: " +
-                    responseBody.substring(0, Math.min(200, responseBody.length())));
+            throw new LlmException.LlmParseException(
+                    "无法解析LLM响应: " +
+                    responseBody.substring(0, Math.min(200, responseBody.length())),
+                    channel.getModel());
         }
     }
 
@@ -356,26 +402,33 @@ public class LlmService implements LlmPort {
                                            Map<String, Object> jsonSchema) {
         List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
         if (channels.isEmpty()) {
-            log.error("未配置LLM渠道");
-            return "{}";
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
         }
 
+        Exception lastException = null;
         for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = (currentChannelIndex + attempt) % channels.size();
+            int idx = channelManager.getChannelIndex(attempt);
             AppConfig.LlmChannelConfig channel = channels.get(idx);
             try {
-                String result = callLlmApiForJson(channel, messages, jsonSchema);
+                String result = retryExecutor.executeWithRetry(
+                        () -> executeApiCall(() -> callLlmApiForJson(channel, messages, jsonSchema), channel.getModel()),
+                        "chatForStructuredOutput:" + channel.getModel());
                 if (result != null && !result.isEmpty() && !"{}".equals(result)) {
-                    currentChannelIndex = idx;
+                    channelManager.markSuccess(idx);
                     return result;
                 }
+            } catch (LlmException e) {
+                log.warn("LLM渠道 {} 结构化输出失败(含重试): {}", idx, e.getMessage());
+                lastException = e;
+                if (e instanceof LlmException.LlmAuthException) break;
             } catch (Exception e) {
                 log.warn("LLM渠道 {} 结构化输出失败: {}", idx, e.getMessage());
+                lastException = e;
             }
         }
 
-        log.error("所有LLM渠道均失败(结构化输出)");
-        return "{}";
+        throw new LlmException.LlmUnavailableException(
+                "所有LLM渠道均失败(结构化输出)", lastException);
     }
 
     /**
@@ -428,8 +481,7 @@ public class LlmService implements LlmPort {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                String errorBody = response.body() != null ? response.body().string() : "unknown";
-                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+                throw buildHttpException(response, channel.getModel());
             }
 
             String responseBody = response.body().string();
@@ -463,8 +515,10 @@ public class LlmService implements LlmPort {
                     if (!"{}".equals(extracted)) {
                         return extracted;
                     }
-                    throw new RuntimeException("LLM 未返回有效 JSON: " +
-                            content.substring(0, Math.min(200, content.length())));
+                    throw new LlmException.LlmParseException(
+                            "LLM 未返回有效 JSON: " +
+                            content.substring(0, Math.min(200, content.length())),
+                            channel.getModel());
                 }
             }
             return "{}";
@@ -473,56 +527,21 @@ public class LlmService implements LlmPort {
 
     /** 从文本中提取 JSON（处理 LLM 可能包裹 markdown 代码块的情况） */
     private String extractJsonFromText(String text) {
-        if (text == null || text.isEmpty()) return "{}";
-        String trimmed = text.trim();
-        // 去除 markdown 代码块
-        if (trimmed.startsWith("```")) {
-            int firstNewline = trimmed.indexOf('\n');
-            if (firstNewline > 0) {
-                trimmed = trimmed.substring(firstNewline + 1);
-            }
-            int lastFence = trimmed.lastIndexOf("```");
-            if (lastFence > 0) {
-                trimmed = trimmed.substring(0, lastFence);
-            }
-            trimmed = trimmed.trim();
-        }
-        // 尝试找到 JSON 起始和结束
-        int start = trimmed.indexOf('{');
-        int end = trimmed.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return trimmed.substring(start, end + 1);
-        }
-        return "{}";
+        return responseParser.extractJsonFromText(text);
     }
 
     /** 估算消息列表的 Token 数（支持 Object 类型消息） */
     private int estimateMessagesTokens(List<Map<String, Object>> messages) {
-        int total = 0;
-        for (Map<String, Object> msg : messages) {
-            Object content = msg.get("content");
-            if (content instanceof String s) {
-                total += s.length();
-            } else if (content != null) {
-                total += content.toString().length();
-            }
-        }
-        return Math.max(1, total / 4);
+        return tokenEstimator.estimateMessagesTokens(messages);
     }
 
     /** 粗略估算文本的 token 数（约4字符≈1 token） */
     private int estimateTokens(List<Map<String, String>> messages) {
-        int total = 0;
-        for (Map<String, String> msg : messages) {
-            String content = msg.get("content");
-            if (content != null) total += content.length();
-        }
-        return Math.max(1, total / 4);
+        return tokenEstimator.estimateMessagesTokensStr(messages);
     }
 
     private int estimateTokens(String text) {
-        if (text == null || text.isEmpty()) return 0;
-        return Math.max(1, text.length() / 4);
+        return tokenEstimator.estimateTokens(text);
     }
 
     /**
@@ -536,9 +555,11 @@ public class LlmService implements LlmPort {
      */
     public String chatWithVision(String prompt, String base64Image, String mimeType) {
         List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
-        if (channels.isEmpty()) return "[错误] 未配置LLM服务";
+        if (channels.isEmpty()) {
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
+        }
 
-        AppConfig.LlmChannelConfig channel = channels.get(currentChannelIndex % channels.size());
+        AppConfig.LlmChannelConfig channel = channelManager.getCurrentChannel();
         String apiUrl = resolveApiUrl(channel);
 
         try {
@@ -575,8 +596,7 @@ public class LlmService implements LlmPort {
 
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "";
-                    throw new RuntimeException("Vision API返回错误: " + response.code() + " - " + errorBody);
+                    throw buildHttpException(response, channel.getModel());
                 }
                 String responseBody = response.body().string();
                 JsonNode root = objectMapper.readTree(responseBody);
@@ -586,9 +606,10 @@ public class LlmService implements LlmPort {
                 }
                 return "[]";
             }
+        } catch (LlmException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Vision API调用失败: {}", e.getMessage());
-            return "[错误] Vision API调用失败: " + e.getMessage();
+            throw new LlmException("Vision API调用失败: " + e.getMessage(), null, e);
         }
     }
 
@@ -602,28 +623,32 @@ public class LlmService implements LlmPort {
     public String streamChatWithMessages(List<Map<String, String>> messages, Consumer<String> onChunk) {
         List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
         if (channels.isEmpty()) {
-            String err = "[错误] 未配置LLM服务";
-            onChunk.accept(err);
-            return err;
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
         }
 
+        Exception lastException = null;
         for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = (currentChannelIndex + attempt) % channels.size();
+            int idx = channelManager.getChannelIndex(attempt);
             AppConfig.LlmChannelConfig channel = channels.get(idx);
             try {
-                String result = callLlmStreamApi(channel, messages, onChunk);
+                String result = executeApiCall(
+                        () -> callLlmStreamApi(channel, messages, onChunk), channel.getModel());
                 if (result != null && !result.isEmpty()) {
-                    currentChannelIndex = idx;
+                    channelManager.markSuccess(idx);
                     return result;
                 }
+            } catch (LlmException e) {
+                log.warn("LLM流式渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
+                if (e instanceof LlmException.LlmAuthException) break;
             } catch (Exception e) {
                 log.warn("LLM流式渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
+                lastException = e;
             }
         }
 
-        String err = "[错误] LLM服务不可用";
-        onChunk.accept(err);
-        return err;
+        throw new LlmException.LlmUnavailableException(
+                "所有LLM流式渠道均失败", lastException);
     }
 
     /**
@@ -667,8 +692,7 @@ public class LlmService implements LlmPort {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                String errorBody = response.body() != null ? response.body().string() : "unknown";
-                throw new RuntimeException("LLM API返回错误: " + response.code() + " - " + errorBody);
+                throw buildHttpException(response, channel.getModel());
             }
 
             StringBuilder fullContent = new StringBuilder();
@@ -717,6 +741,96 @@ public class LlmService implements LlmPort {
                 log.debug("流式Token估算: prompt~={}, completion~={}", estPrompt, estCompletion);
             }
             return fullContent.toString();
+        }
+    }
+
+    // ==================== 监控指标辅助方法 ====================
+
+    /** 记录 LLM 调用指标（当 LlmMetrics 可用时） */
+    private void recordMetrics(String model, String method, boolean success,
+                               long durationMs, int promptTokens, int completionTokens) {
+        if (llmMetrics == null) return;
+        try {
+            llmMetrics.recordCallDuration(model, method, durationMs);
+            llmMetrics.recordCallResult(model, method, success);
+            llmMetrics.recordTokenUsage(model, "prompt", promptTokens);
+            llmMetrics.recordTokenUsage(model, "completion", completionTokens);
+        } catch (Exception e) {
+            log.debug("记录指标失败: {}", e.getMessage());
+        }
+    }
+
+    // ==================== 异常处理辅助方法 ====================
+
+    /**
+     * 根据 HTTP 响应构建对应的 LLM 异常类型
+     * - 401/403 → LlmAuthException（不可重试）
+     * - 429 → LlmRateLimitException（可重试，含 Retry-After）
+     * - 5xx → LlmException（可重试）
+     * - 其他 → LlmException（不可重试）
+     */
+    private LlmException buildHttpException(Response response, String model) {
+        int code = response.code();
+        String errorBody = "unknown";
+        try {
+            if (response.body() != null) {
+                errorBody = response.body().string();
+            }
+        } catch (Exception ignored) {
+            // 响应体读取失败时使用默认值
+        }
+
+        String msg = String.format("LLM API返回错误: %d - %s", code,
+                errorBody.length() > 500 ? errorBody.substring(0, 500) : errorBody);
+
+        return switch (code) {
+            case 401, 403 -> new LlmException.LlmAuthException(msg, model);
+            case 429 -> {
+                long retryAfter = parseRetryAfter(response);
+                yield new LlmException.LlmRateLimitException(msg, model, retryAfter);
+            }
+            case 500, 502, 503, 504 ->
+                    new LlmException(msg, model, new RuntimeException("服务端错误: " + code));
+            default -> new LlmException(msg, model);
+        };
+    }
+
+    /** 从响应头解析 Retry-After 值（秒转毫秒） */
+    private long parseRetryAfter(Response response) {
+        String retryAfter = response.header("Retry-After");
+        if (retryAfter != null && !retryAfter.isEmpty()) {
+            try {
+                return Long.parseLong(retryAfter) * 1000L;
+            } catch (NumberFormatException ignored) {
+                // 可能是 HTTP-date 格式，暂不解析
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * 函数式接口：允许抛出 checked exception 的 LLM API 调用
+     */
+    @FunctionalInterface
+    private interface LlmApiCall<T> {
+        T call() throws Exception;
+    }
+
+    /**
+     * 执行 API 调用，将 checked exception 包装为 LlmException
+     * 使其可在 Supplier<T> lambda 中使用（配合 retryExecutor）
+     */
+    private <T> T executeApiCall(LlmApiCall<T> call, String model) {
+        try {
+            return call.call();
+        } catch (LlmException e) {
+            throw e;
+        } catch (java.net.SocketTimeoutException e) {
+            throw new LlmException.LlmTimeoutException("请求超时: " + e.getMessage(), model, e);
+        } catch (java.io.IOException e) {
+            throw new LlmException("网络IO异常: " + e.getMessage(), model, e);
+        } catch (Exception e) {
+            throw new LlmException("LLM调用异常: " + e.getMessage(), model, e);
         }
     }
 

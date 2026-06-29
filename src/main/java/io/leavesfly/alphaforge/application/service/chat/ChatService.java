@@ -8,11 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PreDestroy;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 对话服务 - AI对话的核心业务逻辑
@@ -40,6 +43,22 @@ public class ChatService {
         this.llmService = llmService;
         this.chatRepository = chatRepository;
         this.reactAgent = reactAgent;
+    }
+
+    /** 优雅关闭线程池，避免应用停止时线程泄漏 */
+    @PreDestroy
+    public void shutdown() {
+        log.info("ChatService 正在关闭线程池...");
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                log.warn("ChatService 线程池强制关闭（仍有任务未完成）");
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ===== 会话管理 =====

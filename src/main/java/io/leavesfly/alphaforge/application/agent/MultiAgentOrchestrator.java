@@ -1,9 +1,13 @@
 package io.leavesfly.alphaforge.application.agent;
 
+import io.leavesfly.alphaforge.application.prompt.PromptManager;
+import io.leavesfly.alphaforge.application.agent.reasoning.StructuredReasoningPromptBuilder;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import jakarta.annotation.PreDestroy;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -30,6 +34,14 @@ public class MultiAgentOrchestrator {
     private final List<SubAgent> subAgents;
     private final ExecutorService executor;
 
+    /** 可选依赖：Prompt 管理器（字段注入，避免构造函数参数限制） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PromptManager promptManager;
+
+    /** 可选依赖：结构化推理链 Prompt 构建器 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StructuredReasoningPromptBuilder reasoningPromptBuilder;
+
     public MultiAgentOrchestrator(LlmPort llmService, List<SubAgent> subAgents) {
         this.llmService = llmService;
         this.subAgents = subAgents != null ? subAgents : List.of();
@@ -38,6 +50,22 @@ public class MultiAgentOrchestrator {
         log.info("MultiAgentOrchestrator 初始化完成，已注册 {} 个子 Agent: {}",
                 this.subAgents.size(),
                 this.subAgents.stream().map(SubAgent::getName).toList());
+    }
+
+    /** 优雅关闭线程池，避免应用停止时线程泄漏 */
+    @PreDestroy
+    public void shutdown() {
+        log.info("MultiAgentOrchestrator 正在关闭线程池...");
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                log.warn("MultiAgentOrchestrator 线程池强制关闭（仍有任务未完成）");
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -90,10 +118,61 @@ public class MultiAgentOrchestrator {
     /** 综合各子 Agent 的分析结论 */
     private String synthesizeResults(String stockCode, String stockName,
                                       List<SubAgent.AgentResult> results) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format("请综合以下各专业 Agent 的分析结论，给出 %s(%s) 的最终分析报告。\n\n",
-                stockName, stockCode));
+        // 构建 Agent 分析结果摘要
+        String agentResults = buildAgentResultsText(results);
 
+        // 优先使用外部化 Prompt 模板
+        String systemPrompt = null;
+        String userPrompt = null;
+
+        if (promptManager != null) {
+            systemPrompt = promptManager.getTemplate("synthesis_system");
+            userPrompt = promptManager.render("synthesis_user", Map.of(
+                    "stock_name", stockName,
+                    "stock_code", stockCode,
+                    "agent_results", agentResults
+            ));
+        }
+
+        // Fallback: 使用内嵌模板
+        if (systemPrompt == null || systemPrompt.isEmpty()) {
+            systemPrompt = """
+                    你是一位投资决策综合分析师，负责综合各专业 Agent 的分析结论。
+                    你需要权衡各维度的分析结果，给出客观、平衡的最终结论。
+                    注意：风控 Agent 的意见应适当加权，避免过度乐观。
+                    """;
+        }
+        if (userPrompt == null || userPrompt.isEmpty()) {
+            // 优先使用结构化推理链 prompt
+            if (reasoningPromptBuilder != null) {
+                userPrompt = reasoningPromptBuilder.buildMultiDimensionalUserPrompt(
+                        stockCode, stockName, agentResults, "未知");
+            } else {
+                userPrompt = String.format("""
+                        请综合以下各专业 Agent 的分析结论，给出 %s(%s) 的最终分析报告。
+
+                        %s
+
+                        请综合以上各维度分析，给出：
+                        1. 综合评分（0-100）
+                        2. 最终交易信号（strong_buy/buy/neutral/sell/strong_sell）
+                        3. 综合置信度（高/中等/低）
+                        4. 操作建议
+                        5. 风险提示
+                        6. 关键结论（1-3句话）
+
+                        最终结论以 JSON 格式返回：
+                        {"signal":"...","score":0-100,"confidence":"...","summary":"...","operation_advice":"...","risk_note":"..."}
+                        """, stockName, stockCode, agentResults);
+            }
+        }
+
+        return llmService.chat(systemPrompt, userPrompt);
+    }
+
+    /** 构建各 Agent 分析结果的文本摘要 */
+    private String buildAgentResultsText(List<SubAgent.AgentResult> results) {
+        StringBuilder sb = new StringBuilder();
         for (SubAgent.AgentResult r : results) {
             sb.append(String.format("## %s 分析（置信度：%s）\n", r.role, r.confidence));
             sb.append(r.analysis).append("\n");
@@ -105,27 +184,7 @@ public class MultiAgentOrchestrator {
             }
             sb.append("\n");
         }
-
-        sb.append("""
-                请综合以上各维度分析，给出：
-                1. 综合评分（0-100）
-                2. 最终交易信号（strong_buy/buy/neutral/sell/strong_sell）
-                3. 综合置信度（高/中等/低）
-                4. 操作建议
-                5. 风险提示
-                6. 关键结论（1-3句话）
-
-                最终结论以 JSON 格式返回：
-                {"signal":"...","score":0-100,"confidence":"...","summary":"...","operation_advice":"...","risk_note":"..."}
-                """);
-
-        String systemPrompt = """
-                你是一位投资决策综合分析师，负责综合各专业 Agent 的分析结论。
-                你需要权衡各维度的分析结果，给出客观、平衡的最终结论。
-                注意：风控 Agent 的意见应适当加权，避免过度乐观。
-                """;
-
-        return llmService.chat(systemPrompt, sb.toString());
+        return sb.toString();
     }
 
     // ===== 数据类 =====
