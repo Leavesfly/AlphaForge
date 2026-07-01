@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
+import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import java.time.LocalDate;
 import java.util.List;
@@ -58,6 +60,25 @@ public interface BaseDataFetcher {
      * @return 日K线数据列表
      */
     List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate);
+
+    /**
+     * 获取多频率K线数据（支持日/周/月/分钟级）
+     *
+     * @param stockCode 股票代码
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     * @param frequency K线频率
+     * @param adjust    复权类型
+     * @return K线数据列表
+     */
+    default List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  KLineFrequency frequency, AdjustType adjust) {
+        // 默认实现：仅日频时不复权走旧接口，其他频率返回空
+        if (frequency == KLineFrequency.DAILY) {
+            return getHistoryData(stockCode, startDate, endDate);
+        }
+        return List.of();
+    }
 
     /**
      * 获取实时行情数据
@@ -260,6 +281,49 @@ public interface BaseDataFetcher {
      * @return 公告列表
      */
     default List<Map<String, Object>> getAnnouncements(String stockCode, int count) {
+        return List.of();
+    }
+
+    // ========== 事件驱动数据 ==========
+
+    /**
+     * 获取大宗交易数据（成交价/量 + 买卖方营业部 + 折价率）
+     *
+     * @param stockCode 股票代码
+     * @param days      返回最近天数
+     * @return 大宗交易记录列表
+     */
+    default List<Map<String, Object>> getBlockTrades(String stockCode, int days) {
+        return List.of();
+    }
+
+    /**
+     * 获取限售解禁日历（历史解禁 + 未来待解禁）
+     *
+     * @param stockCode 股票代码
+     * @param days      返回最近天数
+     * @return 解禁记录列表
+     */
+    default List<Map<String, Object>> getRestrictedShareUnlock(String stockCode, int days) {
+        return List.of();
+    }
+
+    /**
+     * 获取行业板块排名（东财行业涨跌/上涨下跌家数）
+     *
+     * @return 行业板块排名列表
+     */
+    default List<Map<String, Object>> getIndustryRanking() {
+        return List.of();
+    }
+
+    /**
+     * 获取全市场龙虎榜（每日全市场上榜股票 + 净买额排名）
+     *
+     * @param date 交易日期
+     * @return 全市场龙虎榜列表
+     */
+    default List<Map<String, Object>> getMarketDragonTiger(LocalDate date) {
         return List.of();
     }
 }

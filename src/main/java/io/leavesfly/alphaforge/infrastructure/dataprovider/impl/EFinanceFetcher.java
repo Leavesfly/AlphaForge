@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
+import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -58,14 +60,27 @@ public class EFinanceFetcher implements BaseDataFetcher {
 
     @Override
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate) {
+        return getHistoryData(stockCode, startDate, endDate, KLineFrequency.DAILY, AdjustType.FRONT);
+    }
+
+    /**
+     * 多频率K线获取 — 支持日/周/月/分钟级 + 复权类型
+     * klt映射: 101=日K, 102=周K, 103=月K, 1/5/15/30/60=分钟K
+     * fqt映射: 0=不复权, 1=前复权, 2=后复权
+     */
+    @Override
+    public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  KLineFrequency frequency, AdjustType adjust) {
         try {
             String secId = toSecId(stockCode);
+            int klt = frequencyToKlt(frequency);
+            int fqt = adjustToFqt(adjust);
             String url = KLINE_URL + "?" +
                     "secid=" + secId +
                     "&fields1=f1,f2,f3,f4,f5,f6" +
                     "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61" +
-                    "&klt=101" +  // 日K
-                    "&fqt=1" +    // 前复权
+                    "&klt=" + klt +
+                    "&fqt=" + fqt +
                     "&beg=" + startDate.format(DateTimeFormatter.BASIC_ISO_DATE) +
                     "&end=" + endDate.format(DateTimeFormatter.BASIC_ISO_DATE) +
                     "&lmt=1000" +
@@ -114,12 +129,37 @@ public class EFinanceFetcher implements BaseDataFetcher {
         }
     }
 
+    /** KLineFrequency → 东财 klt 参数 */
+    private int frequencyToKlt(KLineFrequency freq) {
+        return switch (freq) {
+            case MINUTE_1 -> 1;
+            case MINUTE_5 -> 5;
+            case MINUTE_15 -> 15;
+            case MINUTE_30 -> 30;
+            case MINUTE_60 -> 60;
+            case DAILY -> 101;
+            case WEEKLY -> 102;
+            case MONTHLY -> 103;
+        };
+    }
+
+    /** AdjustType → 东财 fqt 参数 */
+    private int adjustToFqt(AdjustType adjust) {
+        return switch (adjust) {
+            case NONE -> 0;
+            case FRONT -> 1;
+            case BACK -> 2;
+        };
+    }
+
     @Override
     public Map<String, Object> getRealtimeQuote(String stockCode) {
         try {
             String secId = toSecId(stockCode);
             String url = QUOTE_URL + "?secid=" + secId +
-                    "&fields=f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f162,f167,f170,f171";
+                    "&fields=f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60," +
+                    "f116,f117,f162,f167,f170,f171," +
+                    "f164,f163,f168,f169";
 
             Request request = new Request.Builder().url(url)
                     .header("User-Agent", "Mozilla/5.0").build();
@@ -128,22 +168,32 @@ public class EFinanceFetcher implements BaseDataFetcher {
                 JsonNode data = objectMapper.readTree(response.body().string()).path("data");
                 if (data.isMissingNode()) return Collections.emptyMap();
 
+                int dec = data.path("f59").asInt(3);
+                double divisor = Math.pow(10, dec);
+
                 Map<String, Object> quote = new LinkedHashMap<>();
                 quote.put("stock_code", stockCode);
                 quote.put("stock_name", data.path("f58").asText(""));
-                quote.put("current_price", data.path("f43").asDouble() / 100.0);
-                quote.put("open_price", data.path("f46").asDouble() / 100.0);
-                quote.put("high_price", data.path("f44").asDouble() / 100.0);
-                quote.put("low_price", data.path("f45").asDouble() / 100.0);
-                quote.put("previous_close", data.path("f60").asDouble() / 100.0);
+                quote.put("current_price", data.path("f43").asDouble() / divisor);
+                quote.put("open_price", data.path("f46").asDouble() / divisor);
+                quote.put("high_price", data.path("f44").asDouble() / divisor);
+                quote.put("low_price", data.path("f45").asDouble() / divisor);
+                quote.put("previous_close", data.path("f60").asDouble() / divisor);
                 quote.put("volume", data.path("f47").asLong());
                 quote.put("amount", data.path("f48").asDouble());
                 quote.put("change_pct", data.path("f170").asDouble() / 100.0);
-                quote.put("change_amount", data.path("f171").asDouble() / 100.0);
+                quote.put("change_amount", data.path("f171").asDouble() / divisor);
                 quote.put("turnover_rate", data.path("f167").asDouble() / 100.0);
                 quote.put("pe", data.path("f162").asDouble() / 100.0);
                 quote.put("market_cap", data.path("f116").asDouble());
                 quote.put("circulating_cap", data.path("f117").asDouble());
+                // 扩展字段
+                quote.put("amplitude", data.path("f168").asDouble() / 100.0);  // 振幅%
+                quote.put("volume_ratio", data.path("f50").asDouble() / 100.0);  // 量比
+                quote.put("pe_static", data.path("f163").asDouble() / 100.0);  // 静态PE
+                quote.put("limit_up", data.path("f51").asDouble() / divisor);  // 涨停价
+                quote.put("limit_down", data.path("f52").asDouble() / divisor); // 跌停价
+                quote.put("float_market_cap", data.path("f117").asDouble());  // 流通市值(亿)
                 return quote;
             }
         } catch (Exception e) {
@@ -247,7 +297,9 @@ public class EFinanceFetcher implements BaseDataFetcher {
     // ========== 资金面数据 ==========
 
     /** 东财 push2his 日级资金流接口 */
-    private static final String FUND_FLOW_URL = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get";
+    private static final String FUND_FLOW_DAILY_URL = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get";
+    /** 东财 push2his 分钟级资金流接口 */
+    private static final String FUND_FLOW_MINUTE_URL = "https://push2his.eastmoney.com/api/qt/stock/fflow/minutekline/get";
 
     /**
      * 获取日级资金流数据 — 东财 push2his
@@ -255,10 +307,22 @@ public class EFinanceFetcher implements BaseDataFetcher {
      */
     @Override
     public List<Map<String, Object>> getFundFlow(String stockCode, int days) {
+        return getFundFlow(stockCode, days, false);
+    }
+
+    /**
+     * 获取资金流数据 — 支持日级/分钟级
+     * @param stockCode 股票代码
+     * @param days      返回最近天数（日级）或数据条数（分钟级）
+     * @param minuteLevel true=分钟级，false=日级
+     */
+    public List<Map<String, Object>> getFundFlow(String stockCode, int days, boolean minuteLevel) {
         try {
             String secId = toSecId(stockCode);
-            String url = FUND_FLOW_URL + "?secid=" + secId +
-                    "&klt=101&lmt=" + days +
+            String baseUrl = minuteLevel ? FUND_FLOW_MINUTE_URL : FUND_FLOW_DAILY_URL;
+            int klt = minuteLevel ? 1 : 101;  // 101=日K, 1=1分钟
+            String url = baseUrl + "?secid=" + secId +
+                    "&klt=" + klt + "&lmt=" + days +
                     "&fields1=f1,f2,f3,f7" +
                     "&fields2=f51,f52,f53,f54,f55,f56,f57";
 
@@ -385,6 +449,14 @@ public class EFinanceFetcher implements BaseDataFetcher {
                     row.put("current_ratio", item.path("CURRENT_RATIO").asDouble(0));
                     row.put("operate_income_yoy", item.path("OPERATE_INCOME_YOY").asDouble(0));
                     row.put("basic_eps_yoy", item.path("BASIC_EPS_YOY").asDouble(0));
+                    // 扩展字段
+                    row.put("bps", item.path("BPS").asDouble(0));  // 每股净资产
+                    row.put("roic", item.path("ROIC").asDouble(0));  // 投入资本回报率
+                    row.put("equity_ratio", item.path("EQUITY_RATIO").asDouble(0));  // 产权比率
+                    row.put("dps", item.path("DPS").asDouble(0));  // 每股股息
+                    row.put("dividend_ratio", item.path("DIVI_RATIO").asDouble(0));  // 股息率%
+                    row.put("per_netcash_operate", item.path("PER_NETCASH_OPERATE").asDouble(0));  // 每股经营现金流
+                    row.put("ocf_sales", item.path("OCF_SALES").asDouble(0));  // 经营现金流/营收%
                     result.add(row);
                 }
                 return result;
@@ -746,6 +818,162 @@ public class EFinanceFetcher implements BaseDataFetcher {
             }
         } catch (Exception e) {
             log.error("EFinance获取公告失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    // ========== 事件驱动数据 ==========
+
+    /** 东财大宗交易接口 */
+    private static final String BLOCK_TRADE_REPORT = "RPT_BLOCK_TRADE_DETAIL";
+
+    /**
+     * 获取大宗交易数据 — 东财 datacenter
+     * 返回成交价/量/买卖方营业部/折价率
+     */
+    @Override
+    public List<Map<String, Object>> getBlockTrades(String stockCode, int days) {
+        try {
+            String url = DATACENTER_URL + "?reportName=" + BLOCK_TRADE_REPORT +
+                    "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")" +
+                    "&pageNumber=1&pageSize=" + days +
+                    "&sortColumns=TRADE_DATE&sortTypes=-1" +
+                    "&source=WEB&client=WEB";
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("trade_date", item.path("TRADE_DATE").asText(""));
+                    row.put("price", item.path("PRICE").asDouble(0));
+                    row.put("volume", item.path("DEAL_NUM").asDouble(0));
+                    row.put("buyer", item.path("BUYER_NAME").asText(""));
+                    row.put("seller", item.path("SELLER_NAME").asText(""));
+                    row.put("discount_rate", item.path("PREMIUM_RATIO").asDouble(0));  // 折溢价率%
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取大宗交易失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取限售解禁日历 — 东财 datacenter
+     * 返回解禁日期/解禁股数/解禁比例/上市日期
+     */
+    @Override
+    public List<Map<String, Object>> getRestrictedShareUnlock(String stockCode, int days) {
+        try {
+            String url = DATACENTER_URL + "?reportName=RPT_LIFTUP_LISTINFO" +
+                    "&columns=ALL&filter=(SECURITY_CODE=\"" + stockCode + "\")" +
+                    "&pageNumber=1&pageSize=" + days +
+                    "&sortColumns=LIFTUP_DATE&sortTypes=-1" +
+                    "&source=WEB&client=WEB";
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("unlock_date", item.path("LIFTUP_DATE").asText(""));
+                    row.put("share_count", item.path("LIFTUP_NUM").asDouble(0));
+                    row.put("ratio", item.path("LIFTUP_RATIO").asDouble(0));  // 占总股本比例%
+                    row.put("list_date", item.path("LISTING_DATE").asText(""));
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取解禁日历失败: {} - {}", stockCode, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取行业板块排名 — 东财 push2 clist
+     * 返回行业名称/涨跌幅/领涨股/上涨下跌家数
+     */
+    @Override
+    public List<Map<String, Object>> getIndustryRanking() {
+        try {
+            String url = "https://push2.eastmoney.com/api/qt/clist/get?fs=m:90+t:2" +
+                    "&fields=f2,f3,f4,f12,f14,f128,f136,f140" +
+                    "&pn=1&pz=50&fid=f3&po=1";
+            Request request = new Request.Builder().url(url)
+                    .header("User-Agent", UA)
+                    .header("Referer", "https://quote.eastmoney.com/")
+                    .build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode dataNode = objectMapper.readTree(response.body().string()).path("data");
+                JsonNode diff = dataNode.path("diff");
+                if (!diff.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : diff) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("board_code", item.path("f12").asText(""));
+                    row.put("board_name", item.path("f14").asText(""));
+                    row.put("change_pct", item.path("f3").asDouble(0) / 100.0);  // 涨跌幅%
+                    row.put("lead_stock", item.path("f140").asText(""));  // 领涨股
+                    row.put("rise_count", item.path("f136").asInt(0));  // 上涨家数
+                    row.put("fall_count", item.path("f128").asInt(0));  // 下跌家数
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取行业排名失败: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取全市场龙虎榜 — 东财 datacenter
+     * 返回每日全市场上榜股票 + 净买额排名
+     */
+    @Override
+    public List<Map<String, Object>> getMarketDragonTiger(LocalDate date) {
+        try {
+            String dateStr = date.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+            String url = DATACENTER_URL + "?reportName=RPT_DAILYBILLBOARD_DETAILS" +
+                    "&columns=ALL&filter=(TRADE_DATE='" + dateStr + "')" +
+                    "&pageNumber=1&pageSize=50" +
+                    "&sortColumns=NET&sortTypes=-1" +
+                    "&source=WEB&client=WEB";
+            Request request = new Request.Builder().url(url).header("User-Agent", UA).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
+                JsonNode resultNode = objectMapper.readTree(response.body().string()).path("result").path("data");
+                if (!resultNode.isArray()) return Collections.emptyList();
+
+                List<Map<String, Object>> result = new ArrayList<>();
+                for (JsonNode item : resultNode) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("trade_date", item.path("TRADE_DATE").asText(""));
+                    row.put("stock_code", item.path("SECURITY_CODE").asText(""));
+                    row.put("stock_name", item.path("SECURITY_NAME_ABBR").asText(""));
+                    row.put("net_buy", item.path("NET").asDouble(0));
+                    row.put("buy_amount", item.path("BUY").asDouble(0));
+                    row.put("sell_amount", item.path("SELL").asDouble(0));
+                    row.put("reason", item.path("EXPLAIN").asText(""));
+                    row.put("change_pct", item.path("CHANGE_RATE").asDouble(0));
+                    result.add(row);
+                }
+                return result;
+            }
+        } catch (Exception e) {
+            log.error("EFinance获取全市场龙虎榜失败: {}", e.getMessage());
             return Collections.emptyList();
         }
     }

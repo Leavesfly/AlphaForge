@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
+import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 /**
@@ -58,16 +62,29 @@ public class YFinanceFetcher implements BaseDataFetcher {
 
     @Override
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate) {
+        return getHistoryData(stockCode, startDate, endDate, KLineFrequency.DAILY, AdjustType.FRONT);
+    }
+
+    /**
+     * 多频率K线获取 — Yahoo Finance chart API
+     * interval映射: 1m/5m/15m/1h/1d/1wk/1mo
+     * adjust: FRONT通过events=div,splits自动前复权，NONE不传events
+     */
+    @Override
+    public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  KLineFrequency frequency, AdjustType adjust) {
         try {
             String symbol = convertToYahooSymbol(stockCode);
             long period1 = startDate.atStartOfDay().toEpochSecond(java.time.ZoneOffset.UTC);
             long period2 = endDate.atStartOfDay().toEpochSecond(java.time.ZoneOffset.UTC);
+            String interval = frequencyToYahooInterval(frequency);
+            String events = (adjust == AdjustType.NONE) ? "" : "&events=div,splits";
 
             String url = YAHOO_CHART_URL + symbol + "?" +
                     "period1=" + period1 +
                     "&period2=" + period2 +
-                    "&interval=1d" +
-                    "&events=history";
+                    "&interval=" + interval +
+                    events;
 
             Request request = new Request.Builder().url(url)
                     .header("User-Agent", "Mozilla/5.0")
@@ -101,10 +118,12 @@ public class YFinanceFetcher implements BaseDataFetcher {
                 JsonNode closes = indicators.path("close");
                 JsonNode volumes = indicators.path("volume");
 
+                ZoneId tz = getSymbolTimezone(symbol);
                 for (int i = 0; i < timestamps.size(); i++) {
                     StockDailyData data = new StockDailyData();
                     data.setStockCode(stockCode);
-                    data.setTradeDate(LocalDate.ofEpochDay(timestamps.get(i).asLong() / 86400));
+                    long ts = timestamps.get(i).asLong();
+                    data.setTradeDate(Instant.ofEpochSecond(ts).atZone(tz).toLocalDate());
                     data.setOpenPrice(getDoubleOrNull(opens, i));
                     data.setHighPrice(getDoubleOrNull(highs, i));
                     data.setLowPrice(getDoubleOrNull(lows, i));
@@ -214,5 +233,33 @@ public class YFinanceFetcher implements BaseDataFetcher {
     private Double getDoubleOrNull(JsonNode array, int index) {
         if (!array.has(index) || array.get(index).isNull()) return null;
         return array.get(index).asDouble();
+    }
+
+    /**
+     * 根据Yahoo symbol后缀返回对应交易所时区
+     * .SS/.SZ → Asia/Shanghai, .HK → Asia/Hong_Kong, .T → Asia/Tokyo, .KS → Asia/Seoul, 无后缀(美股) → America/New_York
+     */
+    private ZoneId getSymbolTimezone(String symbol) {
+        if (symbol == null || symbol.isEmpty()) return ZoneId.of("America/New_York");
+        String upper = symbol.toUpperCase();
+        if (upper.endsWith(".SS") || upper.endsWith(".SZ")) return ZoneId.of("Asia/Shanghai");
+        if (upper.endsWith(".HK")) return ZoneId.of("Asia/Hong_Kong");
+        if (upper.endsWith(".T")) return ZoneId.of("Asia/Tokyo");
+        if (upper.endsWith(".KS")) return ZoneId.of("Asia/Seoul");
+        return ZoneId.of("America/New_York");
+    }
+
+    /** KLineFrequency → Yahoo interval 参数 */
+    private String frequencyToYahooInterval(KLineFrequency freq) {
+        return switch (freq) {
+            case MINUTE_1 -> "1m";
+            case MINUTE_5 -> "5m";
+            case MINUTE_15 -> "15m";
+            case MINUTE_30 -> "30m";
+            case MINUTE_60 -> "1h";
+            case DAILY -> "1d";
+            case WEEKLY -> "1wk";
+            case MONTHLY -> "1mo";
+        };
     }
 }

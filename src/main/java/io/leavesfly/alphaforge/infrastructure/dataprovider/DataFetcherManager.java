@@ -4,7 +4,9 @@ import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 
 import io.leavesfly.alphaforge.config.DataProviderConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
 import io.leavesfly.alphaforge.domain.model.enums.DataProviderType;
+import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import io.leavesfly.alphaforge.domain.repository.market.StockDailyDataRepository;
@@ -45,8 +47,10 @@ public class DataFetcherManager implements MarketDataPort {
     /** 熔断器状态: 数据源名称 -> 熔断信息 */
     private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
 
-    /** 限流器状态: 数据源名称 -> 限流信息 */
+    /** 限流器状态: 数据源名称 -> 限流器 */
     private final Map<String, RateLimiter> rateLimiters = new ConcurrentHashMap<>();
+    /** 滑动窗口限流器: 东财系数据源专用（名称 -> 限流器） */
+    private final Map<String, SlidingWindowRateLimiter> slidingWindowLimiters = new ConcurrentHashMap<>();
 
     /** TTL缓存: 缓存键 -> 缓存条目 */
     private final Map<String, TtlCacheEntry> cache = new ConcurrentHashMap<>();
@@ -287,6 +291,23 @@ public class DataFetcherManager implements MarketDataPort {
                 Collections.emptyList());
     }
 
+    /**
+     * 获取多频率K线数据（支持日/周/月/分钟级 + 复权类型）
+     * 非日频数据不走DB缓存，直接走数据源获取
+     */
+    @Override
+    public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  KLineFrequency frequency, AdjustType adjust) {
+        if (frequency == KLineFrequency.DAILY) {
+            return getHistoryData(stockCode, startDate, endDate);
+        }
+        // 非日频：直接走数据源故障切换，不走DB缓存
+        return executeWithFailover(stockCode,
+                f -> f.getHistoryData(stockCode, startDate, endDate, frequency, adjust),
+                r -> r == null || r.isEmpty(),
+                Collections.emptyList());
+    }
+
     // ==================== 资金面数据 ====================
 
     /** 获取日级资金流数据（带缓存） */
@@ -296,6 +317,27 @@ public class DataFetcherManager implements MarketDataPort {
                         f -> f.getFundFlow(stockCode, days),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
+    }
+
+    /**
+     * 获取资金流数据（支持日级/分钟级）
+     * 分钟级数据不缓存（实时性要求高），直接走数据源
+     */
+    @Override
+    public List<Map<String, Object>> getFundFlow(String stockCode, int days, boolean minuteLevel) {
+        if (!minuteLevel) {
+            return getFundFlow(stockCode, days);
+        }
+        // 分钟级：直接走数据源故障切换
+        return executeWithFailover(stockCode,
+                f -> {
+                    if (f instanceof io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher ef) {
+                        return ef.getFundFlow(stockCode, days, true);
+                    }
+                    return List.of();
+                },
+                r -> r == null || r.isEmpty(),
+                Collections.emptyList());
     }
 
     // ==================== 基本面数据 ====================
@@ -395,6 +437,44 @@ public class DataFetcherManager implements MarketDataPort {
                 Collections.emptyList());
     }
 
+    // ==================== 事件驱动数据 ====================
+
+    /** 获取大宗交易数据 */
+    public List<Map<String, Object>> getBlockTrades(String stockCode, int days) {
+        return getOrFetch("blocktrade:" + stockCode + ":" + days, CACHE_TTL_DAY, () ->
+                executeWithFailover(stockCode,
+                        f -> f.getBlockTrades(stockCode, days),
+                        r -> r == null || r.isEmpty(),
+                        Collections.emptyList()));
+    }
+
+    /** 获取限售解禁日历 */
+    public List<Map<String, Object>> getRestrictedShareUnlock(String stockCode, int days) {
+        return getOrFetch("unlock:" + stockCode + ":" + days, CACHE_TTL_DAY, () ->
+                executeWithFailover(stockCode,
+                        f -> f.getRestrictedShareUnlock(stockCode, days),
+                        r -> r == null || r.isEmpty(),
+                        Collections.emptyList()));
+    }
+
+    /** 获取行业板块排名 */
+    public List<Map<String, Object>> getIndustryRanking() {
+        return getOrFetch("industry_ranking", CACHE_TTL_HOUR, () ->
+                executeWithFailoverNoStock(
+                        f -> f.getIndustryRanking(),
+                        r -> r == null || r.isEmpty(),
+                        Collections.emptyList()));
+    }
+
+    /** 获取全市场龙虎榜 */
+    public List<Map<String, Object>> getMarketDragonTiger(LocalDate date) {
+        return getOrFetch("market_dragon_tiger:" + date, CACHE_TTL_DAY, () ->
+                executeWithFailoverNoStock(
+                        f -> f.getMarketDragonTiger(date),
+                        r -> r == null || r.isEmpty(),
+                        Collections.emptyList()));
+    }
+
     // ========== 熔断器逻辑 ==========
 
     /**
@@ -439,13 +519,26 @@ public class DataFetcherManager implements MarketDataPort {
 
     /**
      * 尝试获取请求许可（差异化限流）
-     * 使用数据源自身的限流间隔 + 随机抖动，防止规律性请求被封禁
+     * - 东财系数据源（名称含 efinance）：使用滑动窗口限流器（1分钟≤180次/5分钟≤280次）
+     * - 其他数据源：使用简单限流器（单次间隔 + 随机抖动）
      */
     private boolean tryAcquire(BaseDataFetcher fetcher) {
         String fetcherName = fetcher.getName();
         long rateLimitMs = fetcher.getRateLimitMs();
+
+        // 东财系数据源使用滑动窗口限流器
+        if (fetcherName != null && fetcherName.toLowerCase().contains("efinance")) {
+            SlidingWindowRateLimiter swLimiter = slidingWindowLimiters.computeIfAbsent(
+                    fetcherName, k -> new SlidingWindowRateLimiter(rateLimitMs));
+            if (swLimiter.getMinIntervalMs() != rateLimitMs) {
+                swLimiter = new SlidingWindowRateLimiter(rateLimitMs);
+                slidingWindowLimiters.put(fetcherName, swLimiter);
+            }
+            return swLimiter.tryAcquire();
+        }
+
+        // 其他数据源使用简单限流器
         RateLimiter limiter = rateLimiters.computeIfAbsent(fetcherName, k -> new RateLimiter(rateLimitMs, JITTER_MS));
-        // 如果限流间隔变了（配置更新），更新限流器
         if (limiter.getMinIntervalMs() != rateLimitMs) {
             limiter = new RateLimiter(rateLimitMs, JITTER_MS);
             rateLimiters.put(fetcherName, limiter);
@@ -469,8 +562,9 @@ public class DataFetcherManager implements MarketDataPort {
             LocalDate maxDate = dailyDataRepo.findMaxTradeDate(stockCode);
             if (maxDate == null) return null;
 
-            // 交易日感知的缓存有效性判断
-            if (!isCacheFresh(maxDate, stockCode)) {
+            // 交易日感知的缓存有效性判断（多市场感知）
+            MarketType marketType = MarketType.detectFromCode(stockCode);
+            if (!isCacheFresh(maxDate, stockCode, marketType)) {
                 return null; // 缓存过期
             }
 
@@ -483,9 +577,14 @@ public class DataFetcherManager implements MarketDataPort {
     }
 
     /**
-     * 判断缓存是否新鲜（交易日感知）
+     * 判断缓存是否新鲜（交易日感知 + 多市场感知）
+     *
+     * 各市场收盘缓冲时间不同：
+     * - A股: 15:00 + 2h = 17:00 CST
+     * - 港股: 16:00 + 2h = 18:00 HKT
+     * - 美股: 16:00 + 2h = 18:00 ET（即北京时间次日06:00）
      */
-    private boolean isCacheFresh(LocalDate maxCachedDate, String stockCode) {
+    private boolean isCacheFresh(LocalDate maxCachedDate, String stockCode, MarketType market) {
         LocalDate today = LocalDate.now();
 
         if (tradingCalendar == null) {
@@ -493,21 +592,19 @@ public class DataFetcherManager implements MarketDataPort {
             return maxCachedDate.plusDays(1).isAfter(today);
         }
 
-        // 获取最近一个交易日
+        // 获取最近一个交易日（A股用A股日历，其他市场暂用周末判断）
         LocalDate lastTradingDay = tradingCalendar.getPreviousTradingDay(today.plusDays(1));
 
         // 如果缓存的最大日期 >= 最近交易日，则缓存有效
-        // （收盘后已有当日数据，或非交易日时已有上一交易日数据）
         if (!maxCachedDate.isBefore(lastTradingDay)) {
             return true;
         }
 
         // 如果今天是交易日且市场已收盘超过缓冲时间，缓存应包含今日数据
         if (tradingCalendar.isTradingDay(today)) {
-            LocalDateTime now = LocalDateTime.now();
-            // A股15:00收盘 + 2小时缓冲 = 17:00后期望有当日数据
-            if (now.getHour() >= 17) {
-                return false; // 期望有今日数据，但缓存没有
+            // 使用市场对应的时区判断收盘时间
+            if (tradingCalendar.isMarketClosed(market)) {
+                return false; // 市场已收盘+缓冲，期望有当日数据，但缓存没有
             }
             // 盘中或盘前，缓存有上一交易日数据即可
             return maxCachedDate.isEqual(lastTradingDay);

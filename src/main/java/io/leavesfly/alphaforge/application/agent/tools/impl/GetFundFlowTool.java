@@ -28,7 +28,7 @@ public class GetFundFlowTool implements Tool {
 
     @Override
     public String description() {
-        return "获取股票资金流向数据，包括主力、大单、中单、小单的日级净流入金额，用于判断资金动向";
+        return "获取股票资金流向数据，支持日级和分钟级，包括主力、大单、中单、小单净流入金额，用于判断资金动向";
     }
 
     @Override
@@ -44,9 +44,15 @@ public class GetFundFlowTool implements Tool {
 
         Map<String, Object> days = new HashMap<>();
         days.put("type", "integer");
-        days.put("description", "获取最近N天的资金流数据，默认10天");
+        days.put("description", "获取最近N天的资金流数据（日级）或N条分钟级数据，默认10");
         days.put("default", 10);
         properties.put("days", days);
+
+        Map<String, Object> minuteLevel = new HashMap<>();
+        minuteLevel.put("type", "boolean");
+        minuteLevel.put("description", "是否获取分钟级资金流数据（盘中实时动向），默认false（日级）");
+        minuteLevel.put("default", false);
+        properties.put("minute_level", minuteLevel);
 
         params.put("properties", properties);
         params.put("required", new String[]{"stock_code"});
@@ -62,13 +68,15 @@ public class GetFundFlowTool implements Tool {
         int days = 10;
         Object daysObj = args.get("days");
         if (daysObj instanceof Number) days = ((Number) daysObj).intValue();
+        boolean minuteLevel = Boolean.TRUE.equals(args.get("minute_level"));
 
-        List<Map<String, Object>> data = dataFetcher.getFundFlow(code, days);
+        List<Map<String, Object>> data = dataFetcher.getFundFlow(code, days, minuteLevel);
         if (data == null || data.isEmpty()) {
             return "无法获取 " + code + " 的资金流数据";
         }
 
-        StringBuilder sb = new StringBuilder("最近" + days + "天资金流:\n");
+        String label = minuteLevel ? "分钟级资金流" : "最近" + days + "天资金流";
+        StringBuilder sb = new StringBuilder(label + ":\n");
         int start = Math.max(0, data.size() - 5);
         for (int i = start; i < data.size(); i++) {
             Map<String, Object> d = data.get(i);

@@ -28,7 +28,7 @@ public class GetSignalTool implements Tool {
 
     @Override
     public String description() {
-        return "获取交易信号数据，包括龙虎榜(游资/机构动向)、北向资金(外资流向)、个股板块归属(行业/概念)";
+        return "获取交易信号数据，包括龙虎榜(游资/机构动向)、北向资金(外资流向)、个股板块归属(行业/概念)、大宗交易(机构减持)、解禁日历(抛压预警)、行业排名(轮动信号)";
     }
 
     @Override
@@ -44,7 +44,7 @@ public class GetSignalTool implements Tool {
 
         Map<String, Object> signalType = new HashMap<>();
         signalType.put("type", "string");
-        signalType.put("description", "信号类型: dragon_tiger(龙虎榜) / northbound(北向资金) / boards(板块归属)，默认dragon_tiger");
+        signalType.put("description", "信号类型: dragon_tiger(龙虎榜) / northbound(北向资金) / boards(板块归属) / block_trade(大宗交易) / unlock(解禁日历) / industry(行业排名)，默认dragon_tiger");
         signalType.put("default", "dragon_tiger");
         properties.put("signal_type", signalType);
 
@@ -94,7 +94,41 @@ public class GetSignalTool implements Tool {
                 }
                 return sb.toString().trim();
             }
-            default -> { return "不支持的信号类型: " + signalType; }
+            case "block_trade" -> {
+                List<Map<String, Object>> data = dataFetcher.getBlockTrades(code, 30);
+                if (data == null || data.isEmpty()) return code + " 近期无大宗交易记录";
+                StringBuilder sb = new StringBuilder("大宗交易记录:\n");
+                for (Map<String, Object> d : data) {
+                    sb.append(String.format("[%s] 成交价:%.2f 成交量:%.0f 折溢价率:%.2f%% 买方:%s 卖方:%s\n",
+                            d.get("trade_date"), num(d.get("price")), num(d.get("volume")),
+                            num(d.get("discount_rate")), d.get("buyer"), d.get("seller")));
+                }
+                return sb.toString().trim();
+            }
+            case "unlock" -> {
+                List<Map<String, Object>> data = dataFetcher.getRestrictedShareUnlock(code, 90);
+                if (data == null || data.isEmpty()) return code + " 近期无限售解禁记录";
+                StringBuilder sb = new StringBuilder("限售解禁日历:\n");
+                for (Map<String, Object> d : data) {
+                    sb.append(String.format("[%s] 解禁股数:%.0f 占总股本:%.2f%%\n",
+                            d.get("unlock_date"), num(d.get("share_count")), num(d.get("ratio"))));
+                }
+                return sb.toString().trim();
+            }
+            case "industry" -> {
+                List<Map<String, Object>> data = dataFetcher.getIndustryRanking();
+                if (data == null || data.isEmpty()) return "无法获取行业板块排名数据";
+                StringBuilder sb = new StringBuilder("行业板块排名(TOP20):\n");
+                int limit = Math.min(20, data.size());
+                for (int i = 0; i < limit; i++) {
+                    Map<String, Object> d = data.get(i);
+                    sb.append(String.format("%d. %s 涨跌幅%.2f%% 上涨%d家 下跌%d家 领涨:%s\n",
+                            i + 1, d.get("board_name"), num(d.get("change_pct")),
+                            (int) num(d.get("rise_count")), (int) num(d.get("fall_count")), d.get("lead_stock")));
+                }
+                return sb.toString().trim();
+            }
+            default -> { return "不支持的信号类型: " + signalType + ", 可选: dragon_tiger/northbound/boards/block_trade/unlock/industry"; }
         }
     }
 

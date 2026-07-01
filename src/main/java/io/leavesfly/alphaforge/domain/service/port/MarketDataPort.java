@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.domain.service.port;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
+import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,6 +19,23 @@ public interface MarketDataPort {
     /** 获取股票历史日K线数据 */
     List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate);
 
+    /**
+     * 获取多频率K线数据（支持日/周/月/分钟级 + 复权类型）
+     *
+     * @param stockCode 股票代码
+     * @param startDate 开始日期
+     * @param endDate   结束日期
+     * @param frequency K线频率（DAILY/WEEKLY/MONTHLY/MINUTE_x）
+     * @param adjust    复权类型（NONE/FRONT/BACK）
+     */
+    default List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  KLineFrequency frequency, AdjustType adjust) {
+        if (frequency == KLineFrequency.DAILY) {
+            return getHistoryData(stockCode, startDate, endDate);
+        }
+        return List.of();
+    }
+
     /** 获取实时行情数据 */
     Map<String, Object> getRealtimeQuote(String stockCode);
 
@@ -31,6 +50,20 @@ public interface MarketDataPort {
 
     /** 获取日级资金流数据 */
     List<Map<String, Object>> getFundFlow(String stockCode, int days);
+
+    /**
+     * 获取资金流数据（支持日级/分钟级）
+     *
+     * @param stockCode   股票代码
+     * @param days        返回最近天数（日级）或数据条数（分钟级）
+     * @param minuteLevel true=分钟级，false=日级
+     */
+    default List<Map<String, Object>> getFundFlow(String stockCode, int days, boolean minuteLevel) {
+        if (!minuteLevel) {
+            return getFundFlow(stockCode, days);
+        }
+        return List.of();
+    }
 
     /** 获取财报三表数据 */
     List<Map<String, Object>> getFinancialStatements(String stockCode, String statementType);
@@ -70,4 +103,18 @@ public interface MarketDataPort {
 
     /** 获取个股公告列表 */
     List<Map<String, Object>> getAnnouncements(String stockCode, int count);
+
+    // ========== 事件驱动数据 ==========
+
+    /** 获取大宗交易数据 */
+    List<Map<String, Object>> getBlockTrades(String stockCode, int days);
+
+    /** 获取限售解禁日历 */
+    List<Map<String, Object>> getRestrictedShareUnlock(String stockCode, int days);
+
+    /** 获取行业板块排名 */
+    List<Map<String, Object>> getIndustryRanking();
+
+    /** 获取全市场龙虎榜 */
+    List<Map<String, Object>> getMarketDragonTiger(LocalDate date);
 }
