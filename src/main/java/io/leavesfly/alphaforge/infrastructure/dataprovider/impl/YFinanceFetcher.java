@@ -1,8 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
-import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
+import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.BaseDataFetcher;
@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Yahoo Finance数据源适配器
@@ -26,17 +25,12 @@ public class YFinanceFetcher implements BaseDataFetcher {
     private static final Logger log = LoggerFactory.getLogger(YFinanceFetcher.class);
     private static final String YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/";
 
-    private final AppConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public YFinanceFetcher(AppConfig config) {
-        this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build();
+    public YFinanceFetcher(OkHttpClient httpClient, ObjectMapper objectMapper) {
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -207,7 +201,7 @@ public class YFinanceFetcher implements BaseDataFetcher {
         
         // A股
         if (code.matches("^\\d{6}$")) {
-            if (code.startsWith("6") || code.startsWith("9")) {
+            if (StockCodeUtils.isSSE(code)) {
                 return code + ".SS";
             } else {
                 return code + ".SZ";

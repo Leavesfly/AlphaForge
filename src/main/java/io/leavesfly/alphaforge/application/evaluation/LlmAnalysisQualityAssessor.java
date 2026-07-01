@@ -99,18 +99,18 @@ public class LlmAnalysisQualityAssessor {
 
         // 幻觉和逻辑矛盾额外惩罚
         if (!hallucinations.isEmpty()) {
-            overall -= hallucinations.size() * 5;
+            overall = QualityScoreUtils.applyPenalty(overall, 5, hallucinations.size());
             suggestions.add("报告中存在 " + hallucinations.size() + " 处数据幻觉，请核对引用数据");
         }
         if (!contradictions.isEmpty()) {
-            overall -= contradictions.size() * 5;
+            overall = QualityScoreUtils.applyPenalty(overall, 5, contradictions.size());
             suggestions.add("报告存在 " + contradictions.size() + " 处逻辑矛盾，请检查信号与评分匹配性");
         }
         if (!missingDims.isEmpty()) {
             suggestions.add("缺失分析维度: " + String.join(", ", missingDims));
         }
 
-        overall = Math.max(0, Math.min(100, overall));
+        overall = QualityScoreUtils.clampScore(overall);
 
         log.info("LLM分析质量评估: score={:.1f} level={} 幻觉={} 矛盾={} 缺失={}",
                 overall, LlmAnalysisQuality.QualityLevel.fromScore(overall),

@@ -1,34 +1,26 @@
 package io.leavesfly.alphaforge.infrastructure.notification.sender;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.NotificationConfig;
 import io.leavesfly.alphaforge.domain.model.enums.NotificationChannel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import okhttp3.*;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * 飞书Webhook通知发送器
  */
 @Component
-public class FeishuSender implements BaseNotificationSender {
+public class FeishuSender extends AbstractWebhookSender {
 
     private static final Logger log = LoggerFactory.getLogger(FeishuSender.class);
-    private final AppConfig config;
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
+    private final NotificationConfig config;
 
-    public FeishuSender(AppConfig config) {
+    public FeishuSender(NotificationConfig config, OkHttpClient httpClient, ObjectMapper objectMapper) {
+        super(httpClient, objectMapper);
         this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .build();
     }
 
     @Override
@@ -42,39 +34,29 @@ public class FeishuSender implements BaseNotificationSender {
     }
 
     @Override
-    public boolean send(String title, String content) {
+    protected String getWebhookUrl() {
         String webhook = config.getFeishuWebhook();
         if (webhook == null || webhook.isEmpty()) {
             log.warn("飞书Webhook未配置");
-            return false;
         }
+        return webhook;
+    }
 
-        try {
-            ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("msg_type", "interactive");
-            
-            ObjectNode card = payload.putObject("card");
-            ObjectNode cardHeader = card.putObject("header");
-            ObjectNode titleNode = cardHeader.putObject("title");
-            titleNode.put("tag", "plain_text");
-            titleNode.put("content", title);
-            
-            var elements = card.putArray("elements");
-            ObjectNode mdElement = elements.addObject();
-            mdElement.put("tag", "markdown");
-            mdElement.put("content", content);
+    @Override
+    protected ObjectNode buildPayload(String title, String content) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("msg_type", "interactive");
 
-            RequestBody body = RequestBody.create(
-                    objectMapper.writeValueAsString(payload),
-                    MediaType.get("application/json"));
+        ObjectNode card = payload.putObject("card");
+        ObjectNode cardHeader = card.putObject("header");
+        ObjectNode titleNode = cardHeader.putObject("title");
+        titleNode.put("tag", "plain_text");
+        titleNode.put("content", title);
 
-            Request request = new Request.Builder().url(webhook).post(body).build();
-            try (Response response = httpClient.newCall(request).execute()) {
-                return response.isSuccessful();
-            }
-        } catch (Exception e) {
-            log.error("飞书通知发送失败: {}", e.getMessage());
-            return false;
-        }
+        var elements = card.putArray("elements");
+        ObjectNode mdElement = elements.addObject();
+        mdElement.put("tag", "markdown");
+        mdElement.put("content", content);
+        return payload;
     }
 }

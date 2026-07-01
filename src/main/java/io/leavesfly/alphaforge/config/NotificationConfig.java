@@ -1,9 +1,32 @@
 package io.leavesfly.alphaforge.config;
 
+import jakarta.annotation.PostConstruct;
+import org.springframework.stereotype.Component;
+
 /**
- * 通知渠道相关配置
+ * 通知渠道相关配置 — 独立 Spring Bean，通过 EnvVarProvider 加载环境变量
  */
+@Component
 public class NotificationConfig {
+
+    private final EnvVarProvider env;
+
+    public NotificationConfig(EnvVarProvider env) {
+        this.env = env;
+    }
+
+    @PostConstruct
+    public void init() {
+        notificationChannels = env.get("NOTIFICATION_CHANNELS", "");
+        wecomWebhook = env.get("WECOM_WEBHOOK", "");
+        feishuWebhook = env.get("FEISHU_WEBHOOK", "");
+        dingtalkWebhook = env.get("DINGTALK_WEBHOOK", "");
+        emailSmtpHost = env.get("EMAIL_SMTP_HOST", "");
+        emailSmtpPort = env.getInt("EMAIL_SMTP_PORT", 465);
+        emailUser = env.get("EMAIL_USER", "");
+        emailPassword = env.get("EMAIL_PASSWORD", "");
+        emailTo = env.get("EMAIL_TO", "");
+    }
 
     private String notificationChannels = "";
     private String wecomWebhook = "";

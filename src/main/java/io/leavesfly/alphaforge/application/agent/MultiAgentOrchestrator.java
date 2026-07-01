@@ -46,7 +46,7 @@ public class MultiAgentOrchestrator {
         this.llmService = llmService;
         this.subAgents = subAgents != null ? subAgents : List.of();
         this.executor = Executors.newFixedThreadPool(
-                Math.min(this.subAgents.size(), 3));
+                Math.max(1, Math.min(this.subAgents.size(), 3)));
         log.info("MultiAgentOrchestrator 初始化完成，已注册 {} 个子 Agent: {}",
                 this.subAgents.size(),
                 this.subAgents.stream().map(SubAgent::getName).toList());

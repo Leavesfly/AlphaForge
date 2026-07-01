@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 决策信号反馈 Mapper：管理对决策信号的人工/系统反馈记录，用于信号质量评估与策略优化闭环 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalFeedbackRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalFeedbackRepository">
 
     <!-- 结果映射：数据库字段 ↔ DecisionSignalFeedback 实体属性 -->
     <resultMap id="feedbackMap" type="io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalFeedback">

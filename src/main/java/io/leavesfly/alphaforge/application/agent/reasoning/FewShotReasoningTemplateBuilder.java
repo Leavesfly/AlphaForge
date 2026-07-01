@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.agent.reasoning;
 
-import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
-import io.leavesfly.alphaforge.application.service.feedback.SignalFeedbackLoop;
+import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
+import io.leavesfly.alphaforge.domain.model.feedback.ErrorPattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -15,8 +15,8 @@ import java.util.*;
  * 利用推理时扩展（inference-time scaling），通过 Few-shot 注入让 LLM 学习
  * "在什么条件下，什么推理路径能得出正确结论"。
  *
- * 与现有 SignalFeedbackLoop 的关系：
- * - SignalFeedbackLoop 提供原始的信号案例（信号→结果→收益）
+ * 与现有 SignalLearningService 的关系：
+ * - SignalLearningService 提供原始的信号案例（信号→结果→收益）
  * - FewShotReasoningTemplateBuilder 在此基础上增加"推理路径分析"：
  *   1. 从正确信号中提取"成功推理模式"（什么推理路径导致正确判断）
  *   2. 从错误信号中提取"失败推理模式"（什么推理缺陷导致错误判断）
@@ -40,13 +40,10 @@ public class FewShotReasoningTemplateBuilder {
     /** 推理路径模板最大长度 */
     private static final int MAX_REASONING_LENGTH = 300;
 
-    private final SignalFeedbackLoop signalFeedbackLoop;
-    private final ExperienceMemory experienceMemory;
+    private final SignalLearningService signalLearningService;
 
-    public FewShotReasoningTemplateBuilder(SignalFeedbackLoop signalFeedbackLoop,
-                                             ExperienceMemory experienceMemory) {
-        this.signalFeedbackLoop = signalFeedbackLoop;
-        this.experienceMemory = experienceMemory;
+    public FewShotReasoningTemplateBuilder(SignalLearningService signalLearningService) {
+        this.signalLearningService = signalLearningService;
     }
 
     /**
@@ -61,13 +58,13 @@ public class FewShotReasoningTemplateBuilder {
         StringBuilder sb = new StringBuilder();
 
         // 1. 从信号反馈中提取推理范例
-        String signalExamples = signalFeedbackLoop.buildFeedbackPrompt(stockCode);
+        String signalExamples = signalLearningService.buildFeedbackPrompt(stockCode);
         if (signalExamples != null && !signalExamples.isBlank()) {
             sb.append(signalExamples);
         }
 
         // 2. 从经验记忆中提取错误模式
-        List<ExperienceMemory.ErrorPattern> errorPatterns = experienceMemory.getErrorPatterns();
+        List<ErrorPattern> errorPatterns = signalLearningService.getErrorPatterns();
         if (errorPatterns != null && !errorPatterns.isEmpty()) {
             sb.append(buildErrorPatternTemplate(errorPatterns));
         }
@@ -84,12 +81,12 @@ public class FewShotReasoningTemplateBuilder {
     /**
      * 构建错误模式模板
      */
-    private String buildErrorPatternTemplate(List<ExperienceMemory.ErrorPattern> patterns) {
+    private String buildErrorPatternTemplate(List<ErrorPattern> patterns) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n## 条件→结果映射（从历史经验中学习）\n");
         sb.append("以下是在特定技术条件组合下，信号的历史准确率：\n\n");
 
-        for (ExperienceMemory.ErrorPattern p : patterns) {
+        for (ErrorPattern p : patterns) {
             sb.append(String.format("- 条件签名: %s\n", p.conditionSignature()));
             sb.append(String.format("  准确率: %.1f%% (样本数: %d)\n", p.accuracy(), p.sampleSize()));
             if (p.accuracy() < 40) {
@@ -108,12 +105,12 @@ public class FewShotReasoningTemplateBuilder {
      * "这个信号之所以对/错，是因为推理路径中哪些环节做对了/做错了"
      */
     private String buildReasoningPathExamples(String stockCode) {
-        // 获取信号反馈的基础数据（通过 SignalFeedbackLoop 的公共接口）
-        // 由于 SignalFeedbackLoop 的 SignalCase 是 private 的，
+        // 获取信号反馈的基础数据（通过 SignalLearningService 的公共接口）
+        // 由于 SignalLearningService 的 SignalCase 是 private 的，
         // 我们通过 buildFeedbackPrompt 获取原始数据后做增强处理
 
         // 从经验记忆获取该股票的历史经验提示
-        String experienceHint = experienceMemory.getExperienceHint(stockCode, Map.of());
+        String experienceHint = signalLearningService.getExperienceHint(stockCode, Map.of());
 
         if (experienceHint == null || experienceHint.isBlank()) {
             // 无历史数据时，提供通用的推理路径指导

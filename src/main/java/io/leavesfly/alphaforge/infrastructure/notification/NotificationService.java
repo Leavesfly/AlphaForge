@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.infrastructure.notification;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.NotificationConfig;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.alphaforge.domain.model.enums.NotificationChannel;
 import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
@@ -22,13 +22,13 @@ public class NotificationService implements NotificationPort {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
-    private final AppConfig config;
+    private final NotificationConfig notificationConfig;
     private final NotificationRouter notificationRouter;
     private final Map<NotificationChannel, BaseNotificationSender> senders = new LinkedHashMap<>();
 
-    public NotificationService(AppConfig config, NotificationRouter notificationRouter,
+    public NotificationService(NotificationConfig notificationConfig, NotificationRouter notificationRouter,
                                List<BaseNotificationSender> senderList) {
-        this.config = config;
+        this.notificationConfig = notificationConfig;
         this.notificationRouter = notificationRouter;
         // 注册所有sender
         for (BaseNotificationSender sender : senderList) {
@@ -108,7 +108,7 @@ public class NotificationService implements NotificationPort {
      * 获取已启用的通知渠道列表
      */
     private List<NotificationChannel> getEnabledChannels() {
-        String channelsStr = config.getNotificationChannels();
+        String channelsStr = notificationConfig.getNotificationChannels();
         if (channelsStr == null || channelsStr.isEmpty()) {
             return Collections.emptyList();
         }

@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.infrastructure.storage;
 
 import io.leavesfly.alphaforge.AppInitializer;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.EnvVarProvider;
 import io.leavesfly.alphaforge.domain.service.port.StoragePort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,11 +38,11 @@ public class StorageService implements StoragePort {
     /** 内存缓存 */
     private final Map<String, CacheEntry> memoryCache = new ConcurrentHashMap<>();
 
-    public StorageService(AppConfig config) {
+    public StorageService(EnvVarProvider envVarProvider) {
         // 优先使用 STORAGE_DIR 环境变量覆盖；未设置时回退到 app.home/data (即 ~/.alphaforge/data)
         String appHome = System.getProperty(AppInitializer.PROP_APP_HOME, "");
         String defaultStorageDir = appHome.isEmpty() ? "./data" : appHome + "/data";
-        this.baseDir = config.getEnv("STORAGE_DIR", defaultStorageDir);
+        this.baseDir = envVarProvider.get("STORAGE_DIR", defaultStorageDir);
         this.reportDir = baseDir + "/reports";
         this.cacheDir = baseDir + "/cache";
         this.dataDir = baseDir + "/stocks";

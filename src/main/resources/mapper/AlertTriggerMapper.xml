@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 告警触发记录 Mapper：记录告警规则被触发时的详细信息，包括观测值、阈值、触发时间等 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertTriggerRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.alert.AlertTriggerRepository">
 
     <!-- 结果映射：数据库字段 ↔ AlertTrigger 实体属性 -->
     <resultMap id="triggerMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertTrigger">

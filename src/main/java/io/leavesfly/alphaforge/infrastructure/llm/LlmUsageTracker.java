@@ -3,7 +3,7 @@ package io.leavesfly.alphaforge.infrastructure.llm;
 import io.leavesfly.alphaforge.domain.service.port.LlmUsagePort;
 
 import io.leavesfly.alphaforge.domain.model.entity.usage.LlmUsageDaily;
-import io.leavesfly.alphaforge.infrastructure.persistence.usage.LlmUsageDailyRepository;
+import io.leavesfly.alphaforge.domain.repository.usage.LlmUsageDailyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

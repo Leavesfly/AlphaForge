@@ -1,12 +1,14 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.ScoringConfig;
 import io.leavesfly.alphaforge.domain.service.port.FactorLibrary;
 import io.leavesfly.alphaforge.application.strategy.engine.AdaptiveScoreBlender;
 import io.leavesfly.alphaforge.application.strategy.engine.CompositeScoringEngine;
 import io.leavesfly.alphaforge.application.strategy.engine.CompositeScoringResult;
 import io.leavesfly.alphaforge.application.strategy.engine.ScoringContext;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisResult;
+import io.leavesfly.alphaforge.domain.model.entity.analysis.TrendAnalysisResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,23 +32,23 @@ public class AnalysisPostProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisPostProcessor.class);
     private final CompositeScoringEngine compositeScoringEngine;
-    private final AppConfig appConfig;
+    private final ScoringConfig scoringConfig;
     private final AdaptiveScoreBlender adaptiveBlender;
     private final FactorLibrary factorLibrary;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, AppConfig appConfig,
+    public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, ScoringConfig scoringConfig,
                                   @org.springframework.beans.factory.annotation.Autowired(required = false) FactorLibrary factorLibrary) {
         this.compositeScoringEngine = compositeScoringEngine;
-        this.appConfig = appConfig;
+        this.scoringConfig = scoringConfig;
         this.factorLibrary = factorLibrary;
         this.adaptiveBlender = new AdaptiveScoreBlender(
-                appConfig.getAdaptiveBlendBaseRatio(),
-                appConfig.getAdaptiveStrategyConfidenceImpact(),
-                appConfig.getAdaptiveMarketClarityImpact(),
-                appConfig.getAdaptiveLlmConfidenceImpact(),
-                appConfig.getAdaptiveBlendMinRatio(),
-                appConfig.getAdaptiveBlendMaxRatio());
+                scoringConfig.getAdaptiveBlendBaseRatio(),
+                scoringConfig.getAdaptiveStrategyConfidenceImpact(),
+                scoringConfig.getAdaptiveMarketClarityImpact(),
+                scoringConfig.getAdaptiveLlmConfidenceImpact(),
+                scoringConfig.getAdaptiveBlendMinRatio(),
+                scoringConfig.getAdaptiveBlendMaxRatio());
     }
 
     /**
@@ -82,7 +84,7 @@ public class AnalysisPostProcessor {
         }
 
         Integer llmScore = result.score;
-        if (appConfig.isAdaptiveBlendEnabled()) {
+        if (scoringConfig.isAdaptiveBlendEnabled()) {
             AdaptiveScoreBlender.BlendResult blend = adaptiveBlender.blend(
                     llmScore, scoring.getTotalScore(),
                     scoring.getEarnedWeight(), scoring.getMaxWeight(),
@@ -90,7 +92,7 @@ public class AnalysisPostProcessor {
             result.score = blend.score();
             result.fallbackSource = blend.source();
         } else {
-            double llmRatio = appConfig.getLlmScoreBlendRatio();
+            double llmRatio = scoringConfig.getLlmScoreBlendRatio();
             if (llmScore == null || llmScore == 50) {
                 result.score = scoring.getTotalScore();
                 result.fallbackSource = "composite_scoring";
@@ -100,8 +102,8 @@ public class AnalysisPostProcessor {
             }
         }
 
-        int buyThreshold = appConfig.getBuyScoreThreshold();
-        int sellThreshold = appConfig.getSellScoreThreshold();
+        int buyThreshold = scoringConfig.getBuyScoreThreshold();
+        int sellThreshold = scoringConfig.getSellScoreThreshold();
         if (result.signal == null || "neutral".equals(result.signal)) {
             if (result.score >= buyThreshold) result.signal = "buy";
             else if (result.score <= sellThreshold) result.signal = "sell";
@@ -142,8 +144,8 @@ public class AnalysisPostProcessor {
         }
 
         if (result.signal == null || "neutral".equals(result.signal)) {
-            int buyThreshold = appConfig.getBuyScoreThreshold();
-            int sellThreshold = appConfig.getSellScoreThreshold();
+            int buyThreshold = scoringConfig.getBuyScoreThreshold();
+            int sellThreshold = scoringConfig.getSellScoreThreshold();
             if (trend.score >= buyThreshold) result.signal = "buy";
             else if (trend.score <= sellThreshold) result.signal = "sell";
         }
@@ -237,41 +239,7 @@ public class AnalysisPostProcessor {
                 result.signal != null ? result.signal : "中性");
     }
 
-    // ========== 共享数据类（从 Pipeline 提取） ==========
-
-    /** 分析结果（中间态） */
-    public static class AnalysisResult {
-        public String stockCode;
-        public String stockName;
-        public String signal;
-        public Integer score;
-        public String fullReport;
-        public String summary;
-        public String operationAdvice;
-        public String confidence;
-        public String riskNote;
-        public String trendLabel;
-        public String fallbackSource;
-        public String source;
-        public Double currentPrice;
-        public Double targetPrice;
-        public Double stopLossPrice;
-        public Double pricePosition;
-        public Map<String, Object> compositeScoring;
-        public Double qualityScore; // LLM 分析质量评分（0-100，由 LlmAnalysisQualityAssessor 评估）
-
-        public static AnalysisResult dryRun(String code, String name) {
-            AnalysisResult r = new AnalysisResult();
-            r.stockCode = code; r.stockName = name;
-            r.signal = "neutral"; r.score = 50;
-            r.fullReport = "[DRY RUN] 模拟分析结果"; r.source = "dry_run";
-            return r;
-        }
-    }
-
-    /** 趋势分析结果 */
-    public static class TrendAnalysisResult {
-        public int score;
-        public String trendLabel;
-    }
+    // ========== 共享数据类已提取到 domain 层 ==========
+    // AnalysisResult → io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisResult
+    // TrendAnalysisResult → io.leavesfly.alphaforge.domain.model.entity.analysis.TrendAnalysisResult
 }

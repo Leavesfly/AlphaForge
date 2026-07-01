@@ -1,7 +1,5 @@
 package io.leavesfly.alphaforge.application.service.loop;
 
-import io.leavesfly.alphaforge.application.service.signal.SignalOutcomeEvaluator;
-import io.leavesfly.alphaforge.application.strategy.engine.StrategyPerformanceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -13,13 +11,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Loop 状态管理器（系统自我感知层）
+ * Loop 状态管理器（系统自我感知层）— 纯运行时状态监控
  *
  * 追踪 Loop 循环的健康状态与性能指标，为系统决策提供依据。
- * 对标论文中"知道Loop何时健康、何时退化"的能力：
+ * 准确率刷新逻辑已移至 SignalOutcomeEvaluator.refreshAndSyncAccuracy()，
+ * 本类仅负责循环计数和 Verifier 统计。
  *
  * - lastRunTime:     最后一次完整分析的时间
- * - signalAccuracy:  历史信号准确率（由 SignalOutcomeEvaluator 更新）
  * - totalLoopRuns:   累计循环轮次
  * - avgLoopDuration: 平均每轮耗时
  * - consecutiveErrors: 连续失败次数（触发降级策略）
@@ -29,9 +27,6 @@ public class LoopStateManager {
 
     private static final Logger log = LoggerFactory.getLogger(LoopStateManager.class);
 
-    private final SignalOutcomeEvaluator outcomeEvaluator;
-    private final StrategyPerformanceTracker performanceTracker;
-
     // ===== 状态字段（线程安全）=====
     private final AtomicLong totalLoopRuns = new AtomicLong(0);
     private final AtomicLong totalDurationMs = new AtomicLong(0);
@@ -40,15 +35,7 @@ public class LoopStateManager {
     private final AtomicInteger totalSignalsAdjusted = new AtomicInteger(0);
 
     private volatile LocalDateTime lastRunTime;
-    private volatile LocalDateTime lastEvalTime;
     private volatile String lastRunStatus = "idle";
-    private volatile double lastSignalAccuracyPct = -1.0;
-
-    public LoopStateManager(SignalOutcomeEvaluator outcomeEvaluator,
-                            StrategyPerformanceTracker performanceTracker) {
-        this.outcomeEvaluator = outcomeEvaluator;
-        this.performanceTracker = performanceTracker;
-    }
 
     // ===== 状态更新 =====
 
@@ -88,23 +75,6 @@ public class LoopStateManager {
     public void onSignalVerified(boolean wasAdjusted) {
         totalSignalsVerified.incrementAndGet();
         if (wasAdjusted) totalSignalsAdjusted.incrementAndGet();
-    }
-
-    /**
-     * 刷新信号准确率（由 Scheduler 评估后调用）
-     */
-    public void refreshAccuracy() {
-        try {
-            SignalOutcomeEvaluator.AccuracyStats stats = outcomeEvaluator.getAccuracyStats();
-            lastSignalAccuracyPct = stats.accuracyPct;
-            lastEvalTime = LocalDateTime.now();
-            // P4: 将全局准确率同步到策略权重追踪器，驱动自动调优闭环
-            performanceTracker.updateGlobalAccuracy(stats.accuracyPct);
-            log.info("Loop信号准确率刷新: {}% (correct:{} incorrect:{} partial:{})",
-                    String.format("%.1f", stats.accuracyPct), stats.correct, stats.incorrect, stats.partial);
-        } catch (Exception e) {
-            log.debug("刷新准确率失败: {}", e.getMessage());
-        }
     }
 
     // ===== 状态查询 =====
@@ -155,12 +125,9 @@ public class LoopStateManager {
         report.put("healthy", isHealthy());
         report.put("status", lastRunStatus);
         report.put("last_run_time", lastRunTime != null ? lastRunTime.toString() : "never");
-        report.put("last_eval_time", lastEvalTime != null ? lastEvalTime.toString() : "never");
         report.put("total_loop_runs", totalLoopRuns.get());
         report.put("avg_loop_duration_ms", getAvgLoopDurationMs());
         report.put("consecutive_errors", consecutiveErrors.get());
-        report.put("signal_accuracy_pct",
-                lastSignalAccuracyPct >= 0 ? String.format("%.1f%%", lastSignalAccuracyPct) : "未评估");
         report.put("verifier_adjustment_rate",
                 String.format("%.1f%%", getVerifierAdjustmentRate()));
         report.put("total_signals_verified", totalSignalsVerified.get());

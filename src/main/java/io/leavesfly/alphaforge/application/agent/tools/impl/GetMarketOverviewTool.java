@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.application.agent.tools.impl;
 
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
 import io.leavesfly.alphaforge.application.agent.tools.ToolException;
-import io.leavesfly.alphaforge.application.service.market.MarketLightService;
+import io.leavesfly.alphaforge.application.service.market.MarketAnalysisService;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -16,10 +16,10 @@ import java.util.Map;
 @Component
 public class GetMarketOverviewTool implements Tool {
 
-    private final MarketLightService marketLightService;
+    private final MarketAnalysisService marketAnalysisService;
 
-    public GetMarketOverviewTool(MarketLightService marketLightService) {
-        this.marketLightService = marketLightService;
+    public GetMarketOverviewTool(MarketAnalysisService marketAnalysisService) {
+        this.marketAnalysisService = marketAnalysisService;
     }
 
     @Override
@@ -43,7 +43,7 @@ public class GetMarketOverviewTool implements Tool {
 
     @Override
     public String execute(Map<String, Object> args) throws ToolException {
-        Map<String, Object> marketLight = marketLightService.getMarketLight();
+        Map<String, Object> marketLight = marketAnalysisService.getMarketLight();
         if (marketLight == null || marketLight.isEmpty()) {
             return "暂无市场概览数据";
         }

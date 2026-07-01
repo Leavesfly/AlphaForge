@@ -95,7 +95,7 @@ public class StrategyQualityScorer {
                 + W_COST * costDim.score()
                 + W_CONSISTENCY * consistencyDim.score();
 
-        overall = Math.max(0, Math.min(100, overall));
+        overall = QualityScoreUtils.clampScore(overall);
 
         String summary = buildSummary(backtestResult, overall);
         log.info("策略质量评分: {} (等级:{}) — 收益:{:.0f} 风控:{:.0f} 胜率:{:.0f} 稳健:{:.0f} 成本:{:.0f} 一致:{:.0f}",

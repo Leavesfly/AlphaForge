@@ -1,86 +1,385 @@
 package io.leavesfly.alphaforge.application.factor.evolution;
 
-import io.leavesfly.alphaforge.application.factor.evolution.model.EvolutionResult;
+import io.leavesfly.alphaforge.application.factor.evolution.model.*;
+import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 因子进化编排器 — 驱动 生成→评估→选择→变异 的完整进化闭环
  *
- * 对应论文：
- * - FactorMiner: "Self-Evolving Agent" — Agent 自主驱动因子发现循环
- * - AlphaAgentEvo: "Agentic RL Framework" — RL 驱动的进化编排
- *
  * 进化闭环流程：
- *
- *   ┌──→ generateInitialFactors (第 0 代)
- *   │         │
- *   │         ▼
- *   │    evaluateFactors (IC/IR/回测)
- *   │         │
- *   │         ▼
- *   │    selectTopFactors (按综合评分排序)
- *   │         │
- *   │         ▼
- *   │    recordEvolution (写入记忆)
- *   │         │
- *   │         ▼
- *   │    promoteValidated (提升到因子库)
- *   │         │
- *   │         ▼
- *   │    checkConvergence ──→ 未收敛 ──→ mutateFactors + crossbreedFactors + inverseMutate
- *   │         │                                    │
- *   │         │                                    └──→ 下一代 candidates
- *   │    已收敛
- *   │         │
- *   │         ▼
- *   └──  return EvolutionResult (最终结果)
- *
- * 与现有系统的集成点：
- * 1. FactorGeneratorAgent 实现 SubAgent 接口 → 可注册到 MultiAgentOrchestrator
- * 2. FactorEvaluator 复用 BacktestSimulator → 因子深度回测
- * 3. FactorEvolutionMemory 整合 ExperienceMemory → 统一经验注入
- * 4. 提升的因子注册到 FactorLibrary → 参与实盘分析信号生成
+ *   generateInitialFactors (第 0 代)
+ *         ↓
+ *    evaluateFactors (IC/IR/回测)
+ *         ↓
+ *    selectTopFactors (按综合评分排序)
+ *         ↓
+ *    recordEvolution (写入记忆)
+ *         ↓
+ *    promoteValidated (提升到因子库)
+ *         ↓
+ *    checkConvergence → 未收敛 → mutateFactors + crossbreedFactors + inverseMutate
+ *         ↓ 已收敛
+ *    return EvolutionResult
  */
-public interface FactorEvolutionOrchestrator {
+@Component
+public class FactorEvolutionOrchestrator {
 
-    /**
-     * 执行一轮完整的进化循环
-     *
-     * @param config 进化配置
-     * @return 进化结果
-     */
-    EvolutionResult runEvolutionCycle(FactorEvolutionConfig config);
+    private static final Logger log = LoggerFactory.getLogger(FactorEvolutionOrchestrator.class);
 
-    /**
-     * 使用默认配置执行进化循环
-     */
-    default EvolutionResult runEvolutionCycle() {
+    private final FactorGeneratorAgent generatorAgent;
+    private final FactorEvaluator evaluator;
+    private final FactorEvolutionMemory evolutionMemory;
+    private final EvolvableFactorLibrary evolvableLibrary;
+    private final MarketDataPort marketDataPort;
+
+    /** 评估股票池（默认使用沪深300成分股的子集） */
+    private List<String> evaluationUniverse = List.of(
+            "600519", "000858", "601318", "600036", "000333",
+            "600276", "000651", "601166", "002415", "300750"
+    );
+
+    public FactorEvolutionOrchestrator(FactorGeneratorAgent generatorAgent,
+                                         FactorEvaluator evaluator,
+                                         FactorEvolutionMemory evolutionMemory,
+                                         EvolvableFactorLibrary evolvableLibrary,
+                                         MarketDataPort marketDataPort) {
+        this.generatorAgent = generatorAgent;
+        this.evaluator = evaluator;
+        this.evolutionMemory = evolutionMemory;
+        this.evolvableLibrary = evolvableLibrary;
+        this.marketDataPort = marketDataPort;
+    }
+
+    public EvolutionResult runEvolutionCycle(FactorEvolutionConfig config) {
+        long startTime = System.currentTimeMillis();
+        int generation = evolutionMemory.getCurrentGeneration();
+        log.info("===== 开始第 {} 代因子进化 =====", generation);
+
+        // 1. 构建生成上下文
+        Map<String, List<StockDailyData>> universe = loadUniverseData(config);
+        FactorGenerationContext context = buildGenerationContext(generation, config);
+
+        // 2. 生成因子候选
+        List<FactorCandidate> candidates;
+        if (generation == 0) {
+            candidates = generatorAgent.generateInitialFactors(context);
+        } else {
+            candidates = generateNextGeneration(context, config);
+        }
+
+        if (candidates.isEmpty()) {
+            log.warn("第 {} 代未生成任何因子候选", generation);
+            return buildEmptyResult(generation, startTime);
+        }
+
+        log.info("第 {} 代生成 {} 个因子候选", generation, candidates.size());
+
+        // 3. 评估因子
+        List<FactorEvaluation> evaluations = evaluator.evaluateBatch(candidates, universe);
+        log.info("第 {} 代评估完成", generation);
+
+        // 4. 记录进化历史
+        for (int i = 0; i < candidates.size(); i++) {
+            FactorCandidate candidate = candidates.get(i);
+            FactorEvaluation evaluation = evaluations.get(i);
+
+            FactorStatus status = determineStatus(evaluation, config);
+            String failureReason = status == FactorStatus.DEPRECATED
+                    ? describeFailure(evaluation, config) : null;
+            List<String> failurePatterns = status == FactorStatus.DEPRECATED
+                    ? extractFailurePatterns(candidate, evaluation) : null;
+
+            FactorEvolutionRecord record = new FactorEvolutionRecord(
+                    candidate.getFactorId(),
+                    candidate.getFactorName(),
+                    candidate.getFactorExpression(),
+                    candidate.getGenerationRound(),
+                    candidate.getMutationType(),
+                    candidate.getParentFactorId(),
+                    candidate.getSecondParentFactorId(),
+                    candidate.getFactorType(),
+                    candidate.getCategory(),
+                    candidate.getMarketCondition(),
+                    evaluation.getOverallScore(),
+                    evaluation.getIc(),
+                    evaluation.getIr(),
+                    evaluation.getSharpeRatio(),
+                    status,
+                    failureReason,
+                    failurePatterns,
+                    candidate.getDescription()
+            );
+            evolutionMemory.recordEvolution(record);
+
+            // 5. 提升通过评估的因子
+            if (status == FactorStatus.VALIDATED || status == FactorStatus.PROMOTED) {
+                boolean promoted = evolvableLibrary.registerFactor(candidate, evaluation);
+                if (promoted) {
+                    log.info("因子 {} 已注册到生产因子库", candidate.getFactorName());
+                }
+            }
+        }
+
+        // 6. 选择 Top 因子
+        List<FactorEvaluation> topEvals = evaluations.stream()
+                .sorted(Comparator.comparingDouble(FactorEvaluation::getOverallScore).reversed())
+                .limit(config.getTopKSelection())
+                .collect(Collectors.toList());
+
+        int passed = (int) evaluations.stream()
+                .filter(e -> e.isPassing(config.getMinIC(), config.getMinIR(), config.getMinSharpe()))
+                .count();
+        int promoted = (int) evaluations.stream()
+                .filter(e -> e.getOverallScore() >= config.getMinOverallScore())
+                .count();
+
+        // 7. 收敛判断
+        boolean converged = evolutionMemory.isConverged(
+                config.getConvergenceGenerations(), config.getConvergenceThreshold());
+        String convergenceReason = converged ? "连续 " + config.getConvergenceGenerations()
+                + " 代 IC 无显著提升" : null;
+
+        long durationMs = System.currentTimeMillis() - startTime;
+        log.info("===== 第 {} 代进化完成: 生成={}, 通过={}, 提升={}, 耗时={}ms =====",
+                generation, candidates.size(), passed, promoted, durationMs);
+
+        return new EvolutionResult(
+                generation,
+                candidates.size(),
+                passed,
+                promoted,
+                topEvals,
+                candidates,
+                durationMs,
+                converged,
+                convergenceReason
+        );
+    }
+
+    /** 使用默认配置执行进化循环 */
+    public EvolutionResult runEvolutionCycle() {
         return runEvolutionCycle(FactorEvolutionConfig.defaultConfig());
     }
 
-    /**
-     * 执行多轮进化（直到收敛或达到最大代数）
-     *
-     * @param config        进化配置
-     * @param maxGenerations 最大进化代数（覆盖 config 中的设置）
-     * @return 最终一代的进化结果
-     */
-    EvolutionResult runMultiGenerationEvolution(FactorEvolutionConfig config, int maxGenerations);
+    public EvolutionResult runMultiGenerationEvolution(FactorEvolutionConfig config, int maxGenerations) {
+        EvolutionResult lastResult = null;
+        for (int i = 0; i < maxGenerations; i++) {
+            lastResult = runEvolutionCycle(config);
+            if (lastResult.isConverged()) {
+                log.info("进化在第 {} 代收敛: {}", lastResult.getGeneration(), lastResult.getConvergenceReason());
+                break;
+            }
+        }
+        return lastResult;
+    }
 
-    /**
-     * 将已验证的因子提升到生产因子库
-     *
-     * 提升后，因子将通过 FactorLibrary.calculate() 参与实盘信号生成，
-     * 并在后续分析 Pipeline 中被自动调用。
-     *
-     * @param factorId 因子 ID
-     * @return 是否提升成功
-     */
-    boolean promoteFactor(String factorId);
+    public boolean promoteFactor(String factorId) {
+        List<FactorEvolutionRecord> history = evolutionMemory.getEvolutionHistory(factorId);
+        if (history.isEmpty()) return false;
 
-    /**
-     * 获取当前进化状态摘要
-     *
-     * @return 状态摘要（含当前代数、累计生成数、累计提升数、Top IC 等）
-     */
-    String getEvolutionStatusSummary();
+        FactorEvolutionRecord latest = history.get(history.size() - 1);
+        if (!latest.isSuccessful()) return false;
+
+        return true;
+    }
+
+    public String getEvolutionStatusSummary() {
+        int gen = evolutionMemory.getCurrentGeneration();
+        List<FactorEvolutionRecord> promoted = evolutionMemory.getPromotedFactors();
+        List<FailurePattern> failures = evolutionMemory.getFailurePatterns();
+        List<FactorEvolutionRecord> top = evolutionMemory.getTopPerformers(1);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("进化代数: %d\n", gen));
+        sb.append(String.format("已提升因子: %d\n", promoted.size()));
+        sb.append(String.format("失败模式: %d\n", failures.size()));
+        if (!top.isEmpty()) {
+            sb.append(String.format("最优因子: %s (IC=%.4f, Score=%.1f)\n",
+                    top.get(0).getFactorName(), top.get(0).getIc(), top.get(0).getEvaluationScore()));
+        }
+        return sb.toString();
+    }
+
+    // ===== 内部方法 =====
+
+    private List<FactorCandidate> generateNextGeneration(FactorGenerationContext context,
+                                                          FactorEvolutionConfig config) {
+        List<FactorCandidate> nextGen = new ArrayList<>();
+
+        List<FactorEvolutionRecord> topRecords = evolutionMemory.getTopPerformers(config.getTopKSelection());
+        List<FactorCandidate> topFactors = topRecords.stream()
+                .map(this::recordToCandidate)
+                .collect(Collectors.toList());
+
+        if (!topFactors.isEmpty() && config.getMutationRate() > 0) {
+            int mutationCount = (int) (topFactors.size() * config.getMutationRate());
+            List<FactorCandidate> mutated = generatorAgent.mutateFactors(
+                    topFactors.subList(0, Math.min(mutationCount, topFactors.size())), context);
+            nextGen.addAll(mutated);
+        }
+
+        if (topFactors.size() >= 2 && config.getCrossbreedRate() > 0) {
+            int crossCount = (int) (topFactors.size() * config.getCrossbreedRate());
+            List<FactorCandidate> crossed = generatorAgent.crossbreedFactors(
+                    topFactors.subList(0, Math.min(crossCount + 1, topFactors.size())), context);
+            nextGen.addAll(crossed);
+        }
+
+        List<FailurePattern> failures = evolutionMemory.getFailurePatterns();
+        if (!failures.isEmpty() && config.getInverseMutateRate() > 0) {
+            List<FactorCandidate> inversed = generatorAgent.inverseMutate(failures, context);
+            nextGen.addAll(inversed);
+        }
+
+        if (nextGen.size() < config.getCandidatesPerRound()) {
+            int need = config.getCandidatesPerRound() - nextGen.size();
+            List<FactorCandidate> fresh = generatorAgent.generateInitialFactors(context);
+            nextGen.addAll(fresh.subList(0, Math.min(need, fresh.size())));
+        }
+
+        return nextGen;
+    }
+
+    private FactorGenerationContext buildGenerationContext(int generation, FactorEvolutionConfig config) {
+        List<FactorEvolutionRecord> topPerformers = evolutionMemory.getTopPerformers(config.getTopKSelection());
+        List<FailurePattern> failurePatterns = evolutionMemory.getFailurePatterns();
+        String evolutionHint = evolutionMemory.buildEvolutionHint(
+                new FactorGenerationContext(
+                        "any", evaluationUniverse, "", "",
+                        evolvableLibrary.listEvolvedFactors(),
+                        evolvableLibrary.getFactorCategories(),
+                        generation, topPerformers, failurePatterns, "", null
+                ));
+
+        return new FactorGenerationContext(
+                "any",
+                evaluationUniverse,
+                LocalDate.now().minusDays(config.getBacktestPeriodDays()).toString(),
+                LocalDate.now().toString(),
+                evolvableLibrary.listAvailableFactors(),
+                evolvableLibrary.getFactorCategories(),
+                generation,
+                topPerformers,
+                failurePatterns,
+                evolutionHint,
+                null
+        );
+    }
+
+    private Map<String, List<StockDailyData>> loadUniverseData(FactorEvolutionConfig config) {
+        Map<String, List<StockDailyData>> universe = new LinkedHashMap<>();
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(config.getBacktestPeriodDays());
+
+        for (String stockCode : evaluationUniverse) {
+            try {
+                List<StockDailyData> data = marketDataPort.getHistoryData(stockCode, start, end);
+                if (data != null && !data.isEmpty()) {
+                    universe.put(stockCode, data);
+                }
+            } catch (Exception e) {
+                log.debug("获取 {} 历史数据失败: {}", stockCode, e.getMessage());
+            }
+        }
+
+        if (universe.isEmpty()) {
+            log.warn("评估股票池数据为空，使用模拟数据");
+            universe = generateMockUniverse(config.getBacktestPeriodDays());
+        }
+
+        return universe;
+    }
+
+    private Map<String, List<StockDailyData>> generateMockUniverse(int days) {
+        Map<String, List<StockDailyData>> universe = new LinkedHashMap<>();
+        Random random = new Random(42);
+        for (String code : evaluationUniverse) {
+            List<StockDailyData> data = new ArrayList<>();
+            double price = 50 + random.nextDouble() * 100;
+            LocalDate start = LocalDate.now().minusDays(days);
+            for (int i = 0; i < days; i++) {
+                StockDailyData bar = new StockDailyData();
+                bar.setStockCode(code);
+                bar.setTradeDate(start.plusDays(i));
+                double change = (random.nextDouble() - 0.48) * 5;
+                price = Math.max(1, price * (1 + change / 100));
+                bar.setClosePrice(price);
+                bar.setOpenPrice(price * (1 + (random.nextDouble() - 0.5) / 100));
+                bar.setHighPrice(price * 1.02);
+                bar.setLowPrice(price * 0.98);
+                bar.setVolume((long) (1000000 + random.nextDouble() * 5000000));
+                bar.setChangePct(change);
+                data.add(bar);
+            }
+            universe.put(code, data);
+        }
+        return universe;
+    }
+
+    private FactorStatus determineStatus(FactorEvaluation evaluation, FactorEvolutionConfig config) {
+        if (!evaluation.isPassing(config.getMinIC(), config.getMinIR(), config.getMinSharpe())) {
+            return FactorStatus.DEPRECATED;
+        }
+        if (evaluation.getOverallScore() >= config.getMinOverallScore()) {
+            return FactorStatus.PROMOTED;
+        }
+        return FactorStatus.VALIDATED;
+    }
+
+    private String describeFailure(FactorEvaluation evaluation, FactorEvolutionConfig config) {
+        List<String> reasons = new ArrayList<>();
+        if (evaluation.getIc() < config.getMinIC())
+            reasons.add(String.format("IC=%.4f 低于阈值 %.4f", evaluation.getIc(), config.getMinIC()));
+        if (evaluation.getIr() < config.getMinIR())
+            reasons.add(String.format("IR=%.4f 低于阈值 %.4f", evaluation.getIr(), config.getMinIR()));
+        if (evaluation.getSharpeRatio() < config.getMinSharpe())
+            reasons.add(String.format("Sharpe=%.2f 低于阈值 %.2f", evaluation.getSharpeRatio(), config.getMinSharpe()));
+        return String.join("; ", reasons);
+    }
+
+    private List<String> extractFailurePatterns(FactorCandidate candidate, FactorEvaluation evaluation) {
+        List<String> patterns = new ArrayList<>();
+        if (evaluation.getIc() < 0) patterns.add("IC 为负（因子方向相反）");
+        if (evaluation.getCoverageRate() < 0.5) patterns.add("覆盖率低（< 50%）");
+        if (evaluation.getTurnoverRate() > 0.5) patterns.add("换手率过高（> 50%）");
+        patterns.add("分类: " + candidate.getCategory());
+        patterns.add("市况: " + candidate.getMarketCondition());
+        return patterns;
+    }
+
+    private FactorCandidate recordToCandidate(FactorEvolutionRecord record) {
+        return new FactorCandidate.Builder()
+                .factorId(record.getFactorId())
+                .factorName(record.getFactorName())
+                .factorExpression(record.getFactorExpression())
+                .factorType(record.getFactorType())
+                .category(record.getCategory())
+                .marketCondition(record.getMarketCondition())
+                .generationRound(record.getGenerationRound())
+                .mutationType(record.getMutationType())
+                .parentFactorId(record.getParentFactorId())
+                .secondParentFactorId(record.getSecondParentFactorId())
+                .build();
+    }
+
+    private EvolutionResult buildEmptyResult(int generation, long startTime) {
+        return new EvolutionResult(
+                generation, 0, 0, 0,
+                Collections.emptyList(), Collections.emptyList(),
+                System.currentTimeMillis() - startTime, false, null
+        );
+    }
+
+    /** 设置评估股票池 */
+    public void setEvaluationUniverse(List<String> universe) {
+        this.evaluationUniverse = universe;
+    }
 }

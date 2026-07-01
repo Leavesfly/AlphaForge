@@ -2,7 +2,6 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.report.AnalysisHistoryService;
 import io.leavesfly.alphaforge.application.service.market.MarketAnalysisService;
-import io.leavesfly.alphaforge.application.service.market.MarketLightService;
 import io.leavesfly.alphaforge.application.service.task.TaskService;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
@@ -26,16 +25,14 @@ public class AnalysisController {
     private final StockAnalysisPipeline pipeline;
     private final AnalysisHistoryService historyService;
     private final MarketAnalysisService marketService;
-    private final MarketLightService marketLightService;
     private final TaskService taskService;
 
     public AnalysisController(StockAnalysisPipeline pipeline, AnalysisHistoryService historyService,
-                             MarketAnalysisService marketService, MarketLightService marketLightService,
+                             MarketAnalysisService marketService,
                              TaskService taskService) {
         this.pipeline = pipeline;
         this.historyService = historyService;
         this.marketService = marketService;
-        this.marketLightService = marketLightService;
         this.taskService = taskService;
     }
 
@@ -96,7 +93,7 @@ public class AnalysisController {
     public ResponseEntity<Map<String, Object>> marketOverview() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("overview", marketService.getMarketOverview());
-        result.put("light", marketLightService.getMarketLight());
+        result.put("light", marketService.getMarketLight());
         return ResponseEntity.ok(result);
     }
 }

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 回测记录 Mapper：管理策略回测结果的存储与查询，包含收益率、最大回撤、夏普比率等核心绩效指标 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.backtest.BacktestRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.backtest.BacktestRepository">
 
     <!-- 结果映射：数据库字段 ↔ BacktestRecord 实体属性 -->
     <resultMap id="backtestRecordMap" type="io.leavesfly.alphaforge.domain.model.entity.backtest.BacktestRecord">

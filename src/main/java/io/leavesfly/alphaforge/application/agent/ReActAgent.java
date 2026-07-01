@@ -2,8 +2,7 @@ package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.application.agent.skills.SkillsLoader;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
-import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
-import io.leavesfly.alphaforge.application.service.feedback.SignalFeedbackLoop;
+import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
@@ -39,20 +38,18 @@ public class ReActAgent {
     private final LlmToolAdapter toolAdapter;
     private final ToolRegistry toolRegistry;
     private final SkillsLoader skillsLoader;
-    private final SignalFeedbackLoop signalFeedbackLoop;
-    private final ExperienceMemory experienceMemory;
+    private final SignalLearningService signalLearningService;
     private final PromptManager promptManager;
 
     public ReActAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
                       ToolRegistry toolRegistry, SkillsLoader skillsLoader,
-                      SignalFeedbackLoop signalFeedbackLoop, ExperienceMemory experienceMemory,
+                      SignalLearningService signalLearningService,
                       PromptManager promptManager) {
         this.llmService = llmService;
         this.toolAdapter = toolAdapter;
         this.toolRegistry = toolRegistry;
         this.skillsLoader = skillsLoader;
-        this.signalFeedbackLoop = signalFeedbackLoop;
-        this.experienceMemory = experienceMemory;
+        this.signalLearningService = signalLearningService;
         this.promptManager = promptManager;
     }
 
@@ -91,15 +88,14 @@ public class ReActAgent {
      * 构建System Prompt（工具列表+技能摘要动态注入）
      */
     public String buildSystemPrompt() {
-        // 优先使用外部 Prompt 模板（PromptManager）
-        if (promptManager != null && promptManager.hasTemplate("react_agent_system")) {
+        // 优先使用外部 Prompt 模板（PromptManager），无模板时 fallback 到内嵌模板
+        if (promptManager != null) {
             String template = promptManager.render("react_agent_system", Map.of(
                     "tools", toolRegistry.getToolSummaryText(),
                     "skills", skillsLoader.buildSkillsSummary()
             ));
             if (template != null && !template.isEmpty()) return template;
         }
-        // Fallback: 使用内嵌模板
         return String.format(SYSTEM_PROMPT_TEMPLATE,
                 toolRegistry.getToolSummaryText(),
                 skillsLoader.buildSkillsSummary());
@@ -182,21 +178,17 @@ public class ReActAgent {
             }
         }
 
-        // 注入信号反馈（Few-shot 示例：历史信号效果）
-        String feedback = signalFeedbackLoop.buildFeedbackPrompt(stockCode);
-        if (feedback != null && !feedback.isEmpty()) {
-            sb.append(feedback);
-        }
-
-        // 注入经验记忆（相似条件下的历史经验）
+        // 注入学习提示（统一入口：合并信号反馈 Few-shot + 经验记忆）
         Object techObj = context != null ? context.get("technical_analysis") : null;
+        Map<String, Object> techContext = null;
         if (techObj instanceof Map<?, ?> techMap) {
             @SuppressWarnings("unchecked")
-            Map<String, Object> techContext = (Map<String, Object>) techMap;
-            String expHint = experienceMemory.getExperienceHint(stockCode, techContext);
-            if (expHint != null && !expHint.isEmpty()) {
-                sb.append(expHint);
-            }
+            Map<String, Object> casted = (Map<String, Object>) techMap;
+            techContext = casted;
+        }
+        String learningPrompt = signalLearningService.buildLearningPrompt(stockCode, techContext);
+        if (learningPrompt != null && !learningPrompt.isEmpty()) {
+            sb.append(learningPrompt);
         }
 
         sb.append("""

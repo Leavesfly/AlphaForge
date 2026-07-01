@@ -26,7 +26,7 @@ class LlmToolAdapterTest {
     void setUp() {
         llmService = Mockito.mock(LlmPort.class);
         toolRegistry = Mockito.mock(ToolRegistry.class);
-        toolAdapter = new LlmToolAdapter(llmService, toolRegistry);
+        toolAdapter = new LlmToolAdapter(llmService, toolRegistry, new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     @Test

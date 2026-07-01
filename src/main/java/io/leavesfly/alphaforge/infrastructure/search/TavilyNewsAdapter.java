@@ -5,14 +5,13 @@ import io.leavesfly.alphaforge.domain.service.port.NewsSearchPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.SearchConfig;
 import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Tavily 搜索 API 适配器
@@ -25,17 +24,14 @@ public class TavilyNewsAdapter implements NewsSearchPort {
     private static final Logger log = LoggerFactory.getLogger(TavilyNewsAdapter.class);
     private static final String TAVILY_API_URL = "https://api.tavily.com/search";
 
-    private final AppConfig config;
+    private final SearchConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public TavilyNewsAdapter(AppConfig config) {
+    public TavilyNewsAdapter(SearchConfig config, OkHttpClient httpClient, ObjectMapper objectMapper) {
         this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
-                .build();
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override

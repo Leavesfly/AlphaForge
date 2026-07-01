@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 自选股列表 Mapper：管理用户关注的股票列表，支持添加、删除和查询自选股 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.watchlist.WatchlistRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.watchlist.WatchlistRepository">
 
     <!-- 结果映射：数据库字段 ↔ WatchlistItem 实体属性 -->
     <resultMap id="watchlistMap" type="io.leavesfly.alphaforge.domain.model.entity.watchlist.WatchlistItem">

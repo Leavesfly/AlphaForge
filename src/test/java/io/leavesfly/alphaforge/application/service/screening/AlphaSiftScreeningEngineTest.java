@@ -4,8 +4,9 @@ import io.leavesfly.alphaforge.application.service.watchlist.WatchlistService;
 import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.engine.ScreeningScoreEngine;
 import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.EnvVarProvider;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.alphaforge.infrastructure.persistence.screening.AlphaSiftTaskRepository;
+import io.leavesfly.alphaforge.domain.repository.screening.AlphaSiftTaskRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,8 @@ class AlphaSiftScreeningEngineTest {
     @Mock
     private AppConfig config;
     @Mock
+    private EnvVarProvider envVarProvider;
+    @Mock
     private WatchlistService watchlistService;
     @Mock
     private AlphaSiftTaskRepository taskRepo;
@@ -41,12 +44,12 @@ class AlphaSiftScreeningEngineTest {
 
     @BeforeEach
     void setUp() {
-        when(config.getEnv(eq("SCREENING_UNIVERSE"), anyString())).thenReturn("watchlist");
+        when(envVarProvider.get(eq("SCREENING_UNIVERSE"), anyString())).thenReturn("watchlist");
         when(watchlistService.asStockPool()).thenReturn(List.of(
                 Map.of("code", "600519", "name", "贵州茅台", "market", "A"),
                 Map.of("code", "000858", "name", "五粮液", "market", "A")
         ));
-        engine = new AlphaSiftScreeningEngine(dataFetcher, config, StrategyTestData.loadCatalog(),
+        engine = new AlphaSiftScreeningEngine(dataFetcher, config, envVarProvider, StrategyTestData.loadCatalog(),
                 new ScreeningScoreEngine(), watchlistService, taskRepo, new ObjectMapper());
     }
 

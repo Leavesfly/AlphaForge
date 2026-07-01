@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 东方财富新闻搜索适配器
@@ -38,12 +37,9 @@ public class EastmoneyNewsAdapter implements NewsSearchPort {
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public EastmoneyNewsAdapter() {
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
-                .build();
+    public EastmoneyNewsAdapter(OkHttpClient httpClient, ObjectMapper objectMapper) {
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override

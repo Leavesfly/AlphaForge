@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- LLM 用量统计 Mapper：按天记录大语言模型的调用量、Token 消耗和费用，用于成本监控与分析 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.usage.LlmUsageDailyRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.usage.LlmUsageDailyRepository">
 
     <!-- 结果映射：数据库字段 ↔ LlmUsageDaily 实体属性 -->
     <resultMap id="usageMap" type="io.leavesfly.alphaforge.domain.model.entity.usage.LlmUsageDaily">

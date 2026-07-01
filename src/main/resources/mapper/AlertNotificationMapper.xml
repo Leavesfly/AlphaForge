@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 告警通知 Mapper：管理告警触发后的通知发送记录（渠道、成功/失败状态等） -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertNotificationRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.alert.AlertNotificationRepository">
 
     <!-- 结果映射：数据库字段 ↔ AlertNotification 实体属性 -->
     <resultMap id="notifMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertNotification">

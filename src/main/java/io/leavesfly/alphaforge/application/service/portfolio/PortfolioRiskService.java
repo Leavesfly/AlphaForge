@@ -3,7 +3,7 @@ package io.leavesfly.alphaforge.application.service.portfolio;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
 import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

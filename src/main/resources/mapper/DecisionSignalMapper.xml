@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 决策信号 Mapper：管理投资决策信号的增删改查，包含操作方向、置信度、入场/止损/目标价等交易计划字段 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository">
 
     <!-- 结果映射：数据库字段 ↔ DecisionSignal 实体属性 -->
     <resultMap id="decisionSignalMap" type="io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal">

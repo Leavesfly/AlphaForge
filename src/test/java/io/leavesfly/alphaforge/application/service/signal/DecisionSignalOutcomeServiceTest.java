@@ -1,9 +1,9 @@
 package io.leavesfly.alphaforge.application.service.signal;
 
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalFeedback;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalFeedbackRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalOutcomeRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalFeedbackRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalOutcomeRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

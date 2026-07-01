@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.infrastructure.llm;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.LlmConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,14 +21,14 @@ public class LlmChannelManager {
 
     private static final Logger log = LoggerFactory.getLogger(LlmChannelManager.class);
 
-    private final List<AppConfig.LlmChannelConfig> channels;
+    private final List<LlmConfig.LlmChannelConfig> channels;
     private volatile int currentChannelIndex = 0;
 
-    public LlmChannelManager(List<AppConfig.LlmChannelConfig> channels) {
+    public LlmChannelManager(List<LlmConfig.LlmChannelConfig> channels) {
         this.channels = channels != null ? channels : List.of();
         log.info("LlmChannelManager 初始化: {} 个渠道 - {}",
                 this.channels.size(),
-                this.channels.stream().map(AppConfig.LlmChannelConfig::getModel).toList());
+                this.channels.stream().map(LlmConfig.LlmChannelConfig::getModel).toList());
     }
 
     /** 渠道列表是否为空 */
@@ -37,7 +37,7 @@ public class LlmChannelManager {
     }
 
     /** 获取渠道列表 */
-    public List<AppConfig.LlmChannelConfig> getChannels() {
+    public List<LlmConfig.LlmChannelConfig> getChannels() {
         return channels;
     }
 
@@ -52,7 +52,7 @@ public class LlmChannelManager {
      * @param attempt 第几次尝试（0=当前渠道，1=下一个，...）
      * @return 渠道配置
      */
-    public AppConfig.LlmChannelConfig getChannel(int attempt) {
+    public LlmConfig.LlmChannelConfig getChannel(int attempt) {
         int idx = (currentChannelIndex + attempt) % channels.size();
         return channels.get(idx);
     }
@@ -84,7 +84,7 @@ public class LlmChannelManager {
     }
 
     /** 获取当前活跃渠道 */
-    public AppConfig.LlmChannelConfig getCurrentChannel() {
+    public LlmConfig.LlmChannelConfig getCurrentChannel() {
         if (channels.isEmpty()) return null;
         return channels.get(currentChannelIndex % channels.size());
     }

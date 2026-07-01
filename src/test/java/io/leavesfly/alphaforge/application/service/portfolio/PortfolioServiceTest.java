@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.application.service.portfolio;
 
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -188,80 +188,6 @@ class PortfolioServiceTest {
             assertEquals(1L, summary.get("profit_count"));
             assertEquals(1L, summary.get("loss_count"));
             assertEquals(50.0, (Double) summary.get("win_rate_pct"), 0.01);
-        }
-    }
-
-    @Nested
-    @DisplayName("assessRisk - 风险评估")
-    class AssessRiskTests {
-
-        @Test
-        @DisplayName("空持仓风险等级为medium")
-        void emptyPositionsRiskMedium() {
-            when(portfolioRepo.findAll()).thenReturn(Collections.emptyList());
-            Map<String, Object> risk = service.assessRisk();
-            assertNotNull(risk);
-            assertEquals(0.0, (Double) risk.get("max_concentration_pct"), 0.01);
-            assertEquals("medium", risk.get("overall_risk_level"));
-        }
-
-        @Test
-        @DisplayName("高集中度风险等级为high")
-        void highConcentrationRiskHigh() {
-            PortfolioPosition p1 = createPosition(1L, "600519", 100, 1800.0);
-            p1.setPositionPct(50.0);
-            p1.setProfitLossPct(5.0);
-
-            when(portfolioRepo.findAll()).thenReturn(Collections.singletonList(p1));
-            Map<String, Object> risk = service.assessRisk();
-            assertNotNull(risk);
-            assertEquals("高", risk.get("concentration_risk"));
-            assertEquals("high", risk.get("overall_risk_level"));
-        }
-
-        @Test
-        @DisplayName("中等集中度风险等级为中")
-        void mediumConcentrationRiskMedium() {
-            PortfolioPosition p1 = createPosition(1L, "600519", 100, 1800.0);
-            p1.setPositionPct(25.0);
-            p1.setProfitLossPct(5.0);
-
-            when(portfolioRepo.findAll()).thenReturn(Collections.singletonList(p1));
-            Map<String, Object> risk = service.assessRisk();
-            assertNotNull(risk);
-            assertEquals("中", risk.get("concentration_risk"));
-            assertEquals("medium", risk.get("overall_risk_level"));
-        }
-
-        @Test
-        @DisplayName("低集中度风险等级为低")
-        void lowConcentrationRiskLow() {
-            PortfolioPosition p1 = createPosition(1L, "600519", 100, 1800.0);
-            p1.setPositionPct(10.0);
-            p1.setProfitLossPct(5.0);
-
-            when(portfolioRepo.findAll()).thenReturn(Collections.singletonList(p1));
-            Map<String, Object> risk = service.assessRisk();
-            assertNotNull(risk);
-            assertEquals("低", risk.get("concentration_risk"));
-        }
-
-        @Test
-        @DisplayName("深度亏损持仓数量统计")
-        void deepLossCountCalculated() {
-            PortfolioPosition p1 = createPosition(1L, "600519", 100, 1800.0);
-            p1.setPositionPct(50.0);
-            p1.setProfitLossPct(-15.0); // 深度亏损
-
-            PortfolioPosition p2 = createPosition(2L, "000001", 200, 15.0);
-            p2.setPositionPct(50.0);
-            p2.setProfitLossPct(5.0); // 盈利
-
-            when(portfolioRepo.findAll()).thenReturn(Arrays.asList(p1, p2));
-            Map<String, Object> risk = service.assessRisk();
-            assertNotNull(risk);
-            assertEquals(1L, risk.get("deep_loss_count"));
-            assertEquals("high", risk.get("overall_risk_level"));
         }
     }
 

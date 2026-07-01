@@ -2,7 +2,14 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.task.SystemService;
 import io.leavesfly.alphaforge.application.service.loop.LoopStateManager;
+import io.leavesfly.alphaforge.config.LlmConfig;
 import io.leavesfly.alphaforge.config.AppConfig;
+
+import io.leavesfly.alphaforge.config.DataProviderConfig;
+import io.leavesfly.alphaforge.config.NotificationConfig;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
+import io.leavesfly.alphaforge.config.ScoringConfig;
+import io.leavesfly.alphaforge.config.SearchConfig;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,12 +27,30 @@ import java.util.Map;
 public class SystemController {
 
     private final AppConfig config;
+    private final LlmConfig llmConfig;
+    private final DataProviderConfig dataProviderConfig;
+    private final SchedulerAuthConfig schedulerAuthConfig;
+    private final NotificationConfig notificationConfig;
+    private final SearchConfig searchConfig;
+    private final ScoringConfig scoringConfig;
     private final SystemService systemService;
     private final LoopStateManager loopStateManager;
 
-    public SystemController(AppConfig config, SystemService systemService,
+    public SystemController(AppConfig config, LlmConfig llmConfig,
+                            DataProviderConfig dataProviderConfig,
+                            SchedulerAuthConfig schedulerAuthConfig,
+                            NotificationConfig notificationConfig,
+                            SearchConfig searchConfig,
+                            ScoringConfig scoringConfig,
+                            SystemService systemService,
                             LoopStateManager loopStateManager) {
         this.config = config;
+        this.llmConfig = llmConfig;
+        this.dataProviderConfig = dataProviderConfig;
+        this.schedulerAuthConfig = schedulerAuthConfig;
+        this.notificationConfig = notificationConfig;
+        this.searchConfig = searchConfig;
+        this.scoringConfig = scoringConfig;
         this.systemService = systemService;
         this.loopStateManager = loopStateManager;
     }
@@ -43,17 +68,17 @@ public class SystemController {
     @GetMapping("/system-config")
     public ResponseEntity<Map<String, Object>> systemConfig() {
         Map<String, Object> cfg = new LinkedHashMap<>();
-        cfg.put("llm_model", config.getLlmModel());
-        cfg.put("agent_mode", config.getAgentMode());
+        cfg.put("llm_model", llmConfig.getLlmModel());
+        cfg.put("agent_mode", schedulerAuthConfig.getAgentMode());
         cfg.put("market", config.getMarket());
         cfg.put("history_days", config.getHistoryDays());
-        cfg.put("data_provider", config.getDataProvider());
-        cfg.put("search_provider", config.getSearchProvider());
+        cfg.put("data_provider", dataProviderConfig.getDataProvider());
+        cfg.put("search_provider", searchConfig.getSearchProvider());
         cfg.put("stock_count", config.getStockList().size());
-        cfg.put("notification_channels", config.getNotificationChannels());
-        cfg.put("auth_enabled", config.isAuthEnabled());
-        cfg.put("buy_score_threshold", config.getBuyScoreThreshold());
-        cfg.put("sell_score_threshold", config.getSellScoreThreshold());
+        cfg.put("notification_channels", notificationConfig.getNotificationChannels());
+        cfg.put("auth_enabled", schedulerAuthConfig.isAuthEnabled());
+        cfg.put("buy_score_threshold", scoringConfig.getBuyScoreThreshold());
+        cfg.put("sell_score_threshold", scoringConfig.getSellScoreThreshold());
         return ResponseEntity.ok(cfg);
     }
 

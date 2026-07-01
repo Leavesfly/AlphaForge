@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 持仓管理 Mapper：管理投资组合中的股票持仓记录，包含持仓数量、成本价、市值、盈亏及止损/目标价等 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository">
 
     <!-- 结果映射：数据库字段 ↔ PortfolioPosition 实体属性 -->
     <resultMap id="portfolioPositionMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition">

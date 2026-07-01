@@ -1,7 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.DataProviderConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.BaseDataFetcher;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Tushare数据源适配器
@@ -24,23 +24,20 @@ public class TushareFetcher implements BaseDataFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(TushareFetcher.class);
     private static final String TUSHARE_API_URL = "http://api.tushare.pro";
-    private final AppConfig config;
+    private final DataProviderConfig dataProviderConfig;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public TushareFetcher(AppConfig config) {
-        this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build();
+    public TushareFetcher(DataProviderConfig dataProviderConfig, OkHttpClient httpClient, ObjectMapper objectMapper) {
+        this.dataProviderConfig = dataProviderConfig;
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override public String getName() { return "tushare"; }
     @Override public int getPriority() { return 2; }
     @Override public boolean isAvailable() {
-        return config.getTushareToken() != null && !config.getTushareToken().isEmpty();
+        return dataProviderConfig.getTushareToken() != null && !dataProviderConfig.getTushareToken().isEmpty();
     }
 
     @Override
@@ -127,7 +124,7 @@ public class TushareFetcher implements BaseDataFetcher {
     private JsonNode callTushareApi(String apiName, Map<String, Object> params, String fields) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("api_name", apiName);
-        body.put("token", config.getTushareToken());
+        body.put("token", dataProviderConfig.getTushareToken());
         body.put("params", params);
         body.put("fields", fields);
 
@@ -147,8 +144,6 @@ public class TushareFetcher implements BaseDataFetcher {
     }
 
     private String convertToTsCode(String stockCode) {
-        String code = stockCode.replaceAll("^(sh|sz|SH|SZ)", "");
-        if (code.startsWith("6") || code.startsWith("9")) return code + ".SH";
-        return code + ".SZ";
+        return StockCodeUtils.toTsCode(stockCode);
     }
 }

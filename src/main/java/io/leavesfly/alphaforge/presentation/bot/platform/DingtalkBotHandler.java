@@ -4,8 +4,6 @@ import io.leavesfly.alphaforge.presentation.bot.command.CommandDispatcher;
 import io.leavesfly.alphaforge.presentation.bot.model.BotMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
@@ -15,45 +13,49 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/bot/dingtalk")
-public class DingtalkBotHandler {
+public class DingtalkBotHandler extends AbstractBotHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(DingtalkBotHandler.class);
-    private final CommandDispatcher dispatcher;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    public DingtalkBotHandler(CommandDispatcher dispatcher, ObjectMapper objectMapper) {
+        super(dispatcher, objectMapper);
+    }
 
-    public DingtalkBotHandler(CommandDispatcher dispatcher) {
-        this.dispatcher = dispatcher;
+    @Override
+    protected String getPlatform() {
+        return "dingtalk";
+    }
+
+    @Override
+    protected BotMessage extractMessage(JsonNode root) {
+        String msgType = root.path("msgtype").asText("text");
+        String content = "";
+
+        if ("text".equals(msgType)) {
+            content = root.path("text").path("content").asText("").trim();
+        }
+
+        if (content.isEmpty()) return null;
+
+        BotMessage botMsg = new BotMessage(content, "dingtalk");
+        botMsg.setSenderId(root.path("senderStaffId").asText(""));
+        botMsg.setSenderName(root.path("senderNick").asText("用户"));
+        return botMsg;
+    }
+
+    @Override
+    protected ResponseEntity<Map<String, Object>> buildSuccessResponse(String reply) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("msgtype", "text");
+        response.put("text", Map.of("content", reply));
+        return ResponseEntity.ok(response);
+    }
+
+    @Override
+    protected ResponseEntity<Map<String, Object>> buildEmptyResponse() {
+        return ResponseEntity.ok(Map.of("msgtype", "empty"));
     }
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> handleWebhook(@RequestBody String body) {
-        try {
-            JsonNode root = objectMapper.readTree(body);
-            String msgType = root.path("msgtype").asText("text");
-            String content = "";
-            
-            if ("text".equals(msgType)) {
-                content = root.path("text").path("content").asText("").trim();
-            }
-            
-            String senderId = root.path("senderStaffId").asText("");
-            String senderNick = root.path("senderNick").asText("用户");
-
-            if (content.isEmpty()) return ResponseEntity.ok(Map.of("msgtype", "empty"));
-
-            BotMessage botMsg = new BotMessage(content, "dingtalk");
-            botMsg.setSenderId(senderId);
-            botMsg.setSenderName(senderNick);
-
-            String reply = dispatcher.dispatch(botMsg);
-
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("msgtype", "text");
-            response.put("text", Map.of("content", reply));
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("钉钉Webhook处理失败: {}", e.getMessage());
-            return ResponseEntity.ok(Map.of("msgtype", "text", "text", Map.of("content", "处理失败: " + e.getMessage())));
-        }
+        return super.handleWebhook(body);
     }
 }

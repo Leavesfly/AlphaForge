@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 公司行为 Mapper：管理公司行为记录（如分红、送股、拆股等），用于持仓成本和数量调整 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CorporateActionRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.portfolio.CorporateActionRepository">
 
     <!-- 结果映射：数据库字段 ↔ CorporateAction 实体属性 -->
     <resultMap id="corpMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.CorporateAction">

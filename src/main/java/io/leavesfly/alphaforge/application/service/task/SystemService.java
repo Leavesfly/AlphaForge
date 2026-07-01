@@ -3,9 +3,10 @@ package io.leavesfly.alphaforge.application.service.task;
 import io.leavesfly.alphaforge.application.service.report.AnalysisHistoryService;
 import io.leavesfly.alphaforge.application.service.signal.DecisionSignalService;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.LlmConfig;
+
 import io.leavesfly.alphaforge.domain.service.port.LlmUsagePort;
-import io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisTaskRepository;
+import io.leavesfly.alphaforge.domain.repository.analysis.AnalysisTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -32,12 +33,12 @@ public class SystemService {
     private final StrategyCatalog strategyCatalog;
     private final AnalysisHistoryService historyService;
     private final DecisionSignalService signalService;
-    private final AppConfig config;
+    private final LlmConfig config;
 
     public SystemService(LlmUsagePort usageTracker, AnalysisTaskRepository analysisTaskRepository,
                          DataSource dataSource, StrategyCatalog strategyCatalog,
                          AnalysisHistoryService historyService, DecisionSignalService signalService,
-                         AppConfig config) {
+                         LlmConfig config) {
         this.usageTracker = usageTracker;
         this.analysisTaskRepository = analysisTaskRepository;
         this.dataSource = dataSource;

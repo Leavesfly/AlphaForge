@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
+import io.leavesfly.alphaforge.util.CommonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.application.agent.tools.ToolException;
@@ -23,11 +24,12 @@ public class LlmToolAdapter {
     private static final Logger log = LoggerFactory.getLogger(LlmToolAdapter.class);
     private final LlmPort llmService;
     private final ToolRegistry toolRegistry;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
-    public LlmToolAdapter(LlmPort llmService, ToolRegistry toolRegistry) {
+    public LlmToolAdapter(LlmPort llmService, ToolRegistry toolRegistry, ObjectMapper objectMapper) {
         this.llmService = llmService;
         this.toolRegistry = toolRegistry;
+        this.objectMapper = objectMapper;
     }
 
     // ==================== 公共入口 ====================
@@ -180,7 +182,7 @@ public class LlmToolAdapter {
                 result = "工具调用异常: " + e.getMessage();
             }
             long durationMs = System.currentTimeMillis() - startTime;
-            toolCallLog.add(fc.getName() + " → " + truncate(result, 200));
+            toolCallLog.add(fc.getName() + " → " + CommonUtils.truncate(result, 200));
 
             if (callback != null) {
                 callback.onToolCall(fc.getName(), args, result, durationMs);
@@ -221,8 +223,8 @@ public class LlmToolAdapter {
                     result = "工具调用失败: " + e.getMessage();
                 }
                 long durationMs = System.currentTimeMillis() - startTime;
-                toolCallLog.add(call.name + " → " + truncate(result, 200));
-
+                toolCallLog.add(call.name + " → " + CommonUtils.truncate(result, 200));
+                
                 if (callback != null) {
                     callback.onToolCall(call.name, call.arguments, result, durationMs);
                 }
@@ -266,8 +268,8 @@ public class LlmToolAdapter {
                     result = "工具调用失败: " + e.getMessage();
                 }
                 long durationMs = System.currentTimeMillis() - startTime;
-                toolCallLog.add(call.name + " → " + truncate(result, 200));
-
+                toolCallLog.add(call.name + " → " + CommonUtils.truncate(result, 200));
+                
                 if (callback != null) {
                     callback.onToolCall(call.name, call.arguments, result, durationMs);
                 }
@@ -353,10 +355,6 @@ public class LlmToolAdapter {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String truncate(String s, int max) {
-        return s != null && s.length() > max ? s.substring(0, max) + "..." : s;
     }
 
     // ==================== 数据类 ====================

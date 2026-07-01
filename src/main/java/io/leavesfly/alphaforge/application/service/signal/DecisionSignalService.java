@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.service.signal;
 
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

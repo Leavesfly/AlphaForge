@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.presentation.api.dto.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,16 +21,16 @@ public class AuthController {
 
     private static final long TOKEN_TTL_MS = 24 * 60 * 60 * 1000L;
 
-    private final AppConfig appConfig;
+    private final SchedulerAuthConfig schedulerAuthConfig;
 
-    public AuthController(AppConfig appConfig) {
-        this.appConfig = appConfig;
+    public AuthController(SchedulerAuthConfig schedulerAuthConfig) {
+        this.schedulerAuthConfig = schedulerAuthConfig;
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody Map<String, String> body) {
         String password = body.get("password");
-        String configured = appConfig.getAuthPassword();
+        String configured = schedulerAuthConfig.getAuthPassword();
         if (configured == null || configured.isEmpty()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error(400, "AUTH_PASSWORD 未配置"));
@@ -39,7 +39,7 @@ public class AuthController {
             return ResponseEntity.status(401).body(ApiResponse.error(401, "密码错误"));
         }
         SecretKey key = Keys.hmacShaKeyFor(
-                appConfig.getAuthSecret().getBytes(StandardCharsets.UTF_8));
+                schedulerAuthConfig.getAuthSecret().getBytes(StandardCharsets.UTF_8));
         String token = Jwts.builder()
                 .subject("user")
                 .issuedAt(new Date())
@@ -52,8 +52,8 @@ public class AuthController {
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> status() {
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
-                "auth_enabled", appConfig.isAuthEnabled(),
-                "password_configured", appConfig.getAuthPassword() != null && !appConfig.getAuthPassword().isEmpty()
+                "auth_enabled", schedulerAuthConfig.isAuthEnabled(),
+                "password_configured", schedulerAuthConfig.getAuthPassword() != null && !schedulerAuthConfig.getAuthPassword().isEmpty()
         )));
     }
 }

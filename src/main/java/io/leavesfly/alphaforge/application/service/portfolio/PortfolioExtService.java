@@ -4,10 +4,10 @@ import io.leavesfly.alphaforge.domain.model.entity.portfolio.CashLedgerEntry;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.CorporateAction;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioAccount;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioTrade;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CashLedgerRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CorporateActionRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioAccountRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.TradeRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.CashLedgerRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.CorporateActionRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioAccountRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.TradeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

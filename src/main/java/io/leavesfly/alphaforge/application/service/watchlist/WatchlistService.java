@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.service.watchlist;
 
 import io.leavesfly.alphaforge.domain.model.entity.watchlist.WatchlistItem;
-import io.leavesfly.alphaforge.infrastructure.persistence.watchlist.WatchlistRepository;
+import io.leavesfly.alphaforge.domain.repository.watchlist.WatchlistRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;

@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.presentation.bot.command;
 
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.alphaforge.application.service.report.AnalysisHistoryService;
-import io.leavesfly.alphaforge.application.service.market.MarketLightService;
+import io.leavesfly.alphaforge.application.service.market.MarketAnalysisService;
 import io.leavesfly.alphaforge.domain.service.NameToCodeResolver;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
@@ -31,7 +31,7 @@ public class CommandDispatcher {
     private final ChatService chatService;
     private final AnalysisHistoryService historyService;
     private final NameToCodeResolver nameResolver;
-    private final MarketLightService marketLightService;
+    private final MarketAnalysisService marketAnalysisService;
     private final StrategyCatalog strategyCatalog;
 
     private final Map<String, CommandHandler> commands = new LinkedHashMap<>();
@@ -42,12 +42,12 @@ public class CommandDispatcher {
 
     public CommandDispatcher(StockAnalysisPipeline pipeline, ChatService chatService,
                              AnalysisHistoryService historyService, NameToCodeResolver nameResolver,
-                             MarketLightService marketLightService, StrategyCatalog strategyCatalog) {
+                             MarketAnalysisService marketAnalysisService, StrategyCatalog strategyCatalog) {
         this.pipeline = pipeline;
         this.chatService = chatService;
         this.historyService = historyService;
         this.nameResolver = nameResolver;
-        this.marketLightService = marketLightService;
+        this.marketAnalysisService = marketAnalysisService;
         this.strategyCatalog = strategyCatalog;
         registerCommands();
     }
@@ -121,7 +121,7 @@ public class CommandDispatcher {
         });
 
         commands.put("market", msg -> {
-            Map<String, Object> light = marketLightService.getMarketLight();
+            Map<String, Object> light = marketAnalysisService.getMarketLight();
             return String.format("🏛️ 市场信号灯: %s\n%s",
                     colorEmoji((String) light.get("color")), light.get("reason"));
         });

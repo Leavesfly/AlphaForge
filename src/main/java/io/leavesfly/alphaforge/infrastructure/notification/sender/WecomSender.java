@@ -1,34 +1,26 @@
 package io.leavesfly.alphaforge.infrastructure.notification.sender;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.NotificationConfig;
 import io.leavesfly.alphaforge.domain.model.enums.NotificationChannel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import okhttp3.*;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * 企业微信Webhook通知发送器
  */
 @Component
-public class WecomSender implements BaseNotificationSender {
+public class WecomSender extends AbstractWebhookSender {
 
     private static final Logger log = LoggerFactory.getLogger(WecomSender.class);
-    private final AppConfig config;
-    private final OkHttpClient httpClient;
-    private final ObjectMapper objectMapper;
+    private final NotificationConfig config;
 
-    public WecomSender(AppConfig config) {
+    public WecomSender(NotificationConfig config, OkHttpClient httpClient, ObjectMapper objectMapper) {
+        super(httpClient, objectMapper);
         this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .build();
     }
 
     @Override
@@ -47,43 +39,20 @@ public class WecomSender implements BaseNotificationSender {
     }
 
     @Override
-    public boolean send(String title, String content) {
+    protected String getWebhookUrl() {
         String webhook = config.getWecomWebhook();
         if (webhook == null || webhook.isEmpty()) {
             log.warn("企业微信Webhook未配置");
-            return false;
         }
-
-        try {
-            // 截断内容
-            String truncated = truncateContent(content, getMaxContentLength());
-            
-            ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("msgtype", "markdown");
-            ObjectNode markdown = payload.putObject("markdown");
-            markdown.put("content", truncated);
-
-            RequestBody body = RequestBody.create(
-                    objectMapper.writeValueAsString(payload),
-                    MediaType.get("application/json"));
-
-            Request request = new Request.Builder()
-                    .url(webhook)
-                    .post(body)
-                    .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                return response.isSuccessful();
-            }
-        } catch (Exception e) {
-            log.error("企业微信通知发送失败: {}", e.getMessage());
-            return false;
-        }
+        return webhook;
     }
 
-    private String truncateContent(String content, int maxLen) {
-        if (content == null) return "";
-        if (content.length() <= maxLen) return content;
-        return content.substring(0, maxLen - 10) + "\n...(已截断)";
+    @Override
+    protected ObjectNode buildPayload(String title, String content) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("msgtype", "markdown");
+        ObjectNode markdown = payload.putObject("markdown");
+        markdown.put("content", content);
+        return payload;
     }
 }

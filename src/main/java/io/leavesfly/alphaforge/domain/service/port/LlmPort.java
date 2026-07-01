@@ -11,17 +11,11 @@ import java.util.function.Consumer;
  */
 public interface LlmPort {
 
-    /** 调用LLM进行股票分析 */
-    String analyzeStock(Map<String, Object> context);
-
     /** 基础对话 */
     String chat(String systemPrompt, String userMessage);
 
     /** 多轮消息对话 */
     String chatWithMessages(List<Map<String, String>> messages);
-
-    /** 视觉对话（图片+文本） */
-    String chatWithVision(String prompt, String base64Image, String mimeType);
 
     /** 流式多轮消息对话，逐块回调 */
     String streamChatWithMessages(List<Map<String, String>> messages, Consumer<String> onChunk);

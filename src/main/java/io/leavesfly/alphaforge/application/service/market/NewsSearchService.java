@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.application.service.market;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.SearchConfig;
 import io.leavesfly.alphaforge.domain.service.port.NewsSearchPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,10 +18,10 @@ public class NewsSearchService {
 
     private static final Logger log = LoggerFactory.getLogger(NewsSearchService.class);
 
-    private final AppConfig config;
+    private final SearchConfig config;
     private final Map<String, NewsSearchPort> adapterMap;
 
-    public NewsSearchService(AppConfig config, List<NewsSearchPort> adapters) {
+    public NewsSearchService(SearchConfig config, List<NewsSearchPort> adapters) {
         this.config = config;
         this.adapterMap = new LinkedHashMap<>();
         for (NewsSearchPort adapter : adapters) {

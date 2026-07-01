@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.presentation.api;
 
-import io.leavesfly.alphaforge.infrastructure.llm.LlmException;
+import io.leavesfly.alphaforge.domain.service.exception.LlmException;
 import io.leavesfly.alphaforge.presentation.api.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

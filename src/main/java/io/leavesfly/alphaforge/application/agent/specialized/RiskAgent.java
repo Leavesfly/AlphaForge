@@ -4,6 +4,7 @@ import io.leavesfly.alphaforge.application.agent.AbstractSpecializedAgent;
 import io.leavesfly.alphaforge.application.agent.LlmToolAdapter;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -37,8 +38,8 @@ public class RiskAgent extends AbstractSpecializedAgent {
             """;
 
     public RiskAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
-                     ToolRegistry toolRegistry) {
-        super(llmService, toolAdapter, toolRegistry);
+                     ToolRegistry toolRegistry, ObjectMapper objectMapper) {
+        super(llmService, toolAdapter, toolRegistry, objectMapper);
     }
 
     @Override

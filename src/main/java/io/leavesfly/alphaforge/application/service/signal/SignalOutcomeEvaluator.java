@@ -2,10 +2,10 @@ package io.leavesfly.alphaforge.application.service.signal;
 
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignalOutcome;
-import io.leavesfly.alphaforge.application.service.feedback.ExperienceMemory;
+import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalOutcomeRepository;
-import io.leavesfly.alphaforge.infrastructure.persistence.signal.DecisionSignalRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalOutcomeRepository;
+import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository;
 import io.leavesfly.alphaforge.application.strategy.engine.StrategyPerformanceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,18 +54,18 @@ public class SignalOutcomeEvaluator {
     private final DecisionSignalOutcomeRepository outcomeRepository;
     private final MarketDataPort marketDataPort;
     private final StrategyPerformanceTracker performanceTracker;
-    private final ExperienceMemory experienceMemory;
+    private final SignalLearningService signalLearningService;
 
     public SignalOutcomeEvaluator(DecisionSignalRepository signalRepository,
                                   DecisionSignalOutcomeRepository outcomeRepository,
                                   MarketDataPort marketDataPort,
                                   StrategyPerformanceTracker performanceTracker,
-                                  @org.springframework.beans.factory.annotation.Autowired(required = false) ExperienceMemory experienceMemory) {
+                                  @org.springframework.beans.factory.annotation.Autowired(required = false) SignalLearningService signalLearningService) {
         this.signalRepository = signalRepository;
         this.outcomeRepository = outcomeRepository;
         this.marketDataPort = marketDataPort;
         this.performanceTracker = performanceTracker;
-        this.experienceMemory = experienceMemory;
+        this.signalLearningService = signalLearningService;
     }
 
     /**
@@ -186,9 +186,9 @@ public class SignalOutcomeEvaluator {
         performanceTracker.recordOutcome(agentId, wasCorrect);
 
         // 更新跨轮次经验记忆（闭环：信号效果→经验更新→下次分析参考）
-        if (experienceMemory != null) {
+        if (signalLearningService != null) {
             try {
-                experienceMemory.updateOutcome(
+                signalLearningService.updateOutcome(
                         signal.getStockCode(),
                         signal.getCreatedAt().toLocalDate().toString(),
                         outcomeStr,
@@ -281,7 +281,7 @@ public class SignalOutcomeEvaluator {
     }
 
     /**
-     * 获取信号准确率统计（用于 LoopStateManager）
+     * 获取信号准确率统计
      */
     public AccuracyStats getAccuracyStats() {
         try {
@@ -303,6 +303,22 @@ public class SignalOutcomeEvaluator {
         } catch (Exception e) {
             log.debug("获取准确率统计失败: {}", e.getMessage());
             return new AccuracyStats();
+        }
+    }
+
+    /**
+     * 刷新准确率并同步到策略权重追踪器（原 LoopStateManager.refreshAccuracy 逻辑）
+     *
+     * 在信号评估完成后调用，驱动自动调优闭环。
+     */
+    public void refreshAndSyncAccuracy() {
+        try {
+            AccuracyStats stats = getAccuracyStats();
+            performanceTracker.updateGlobalAccuracy(stats.accuracyPct);
+            log.info("信号准确率刷新: {}% (correct:{} incorrect:{} partial:{})",
+                    String.format("%.1f", stats.accuracyPct), stats.correct, stats.incorrect, stats.partial);
+        } catch (Exception e) {
+            log.debug("刷新准确率失败: {}", e.getMessage());
         }
     }
 

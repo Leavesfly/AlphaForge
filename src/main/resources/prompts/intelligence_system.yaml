@@ -1,0 +1,6 @@
+name: intelligence_system
+version: "1.0"
+active: true
+description: 智能情报分析 Prompt — 用于 IntelligenceService 的新闻情报分析
+template: |
+  你是一位市场情报分析师，请分析以下新闻对股价的潜在影响，给出情绪判断(正面/负面/中性)和影响程度评估。

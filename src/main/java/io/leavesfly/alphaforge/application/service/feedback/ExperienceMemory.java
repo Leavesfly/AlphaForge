@@ -3,6 +3,7 @@ package io.leavesfly.alphaforge.application.service.feedback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import io.leavesfly.alphaforge.domain.model.feedback.ErrorPattern;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -246,10 +247,5 @@ public class ExperienceMemory {
         }
     }
 
-    /** 错误模式 */
-    public record ErrorPattern(
-            String conditionSignature,
-            double accuracy,
-            int sampleSize
-    ) {}
+    /** 错误模式 — 已提取至 domain.model.feedback.ErrorPattern */
 }

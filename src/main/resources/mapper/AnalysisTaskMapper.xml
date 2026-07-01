@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 分析任务 Mapper：管理股票分析任务的生命周期，包括任务创建、状态更新、进度追踪和结果回写 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisTaskRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.analysis.AnalysisTaskRepository">
 
     <!-- 结果映射：数据库字段 ↔ AnalysisTask 实体属性 -->
     <resultMap id="taskMap" type="io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisTask">

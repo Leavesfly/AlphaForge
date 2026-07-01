@@ -1,11 +1,11 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
-import io.leavesfly.alphaforge.application.pipeline.AnalysisPostProcessor.AnalysisResult;
-import io.leavesfly.alphaforge.application.pipeline.AnalysisPostProcessor.TrendAnalysisResult;
+import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisResult;
+import io.leavesfly.alphaforge.domain.model.entity.analysis.TrendAnalysisResult;
 import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.engine.CompositeScoringEngine;
 import io.leavesfly.alphaforge.application.strategy.engine.StrategyPerformanceTracker;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.ScoringConfig;
 import io.leavesfly.alphaforge.domain.service.TechnicalAnalysisService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,16 +31,16 @@ class AnalysisPostProcessorTest {
     private TechnicalAnalysisService technicalAnalysisService;
 
     @Mock
-    private AppConfig appConfig;
+    private ScoringConfig scoringConfig;
 
     @BeforeEach
     void setUp() {
-        when(appConfig.getLlmScoreBlendRatio()).thenReturn(0.6);
-        when(appConfig.getBuyScoreThreshold()).thenReturn(70);
-        when(appConfig.getSellScoreThreshold()).thenReturn(30);
-        when(appConfig.isAdaptiveBlendEnabled()).thenReturn(false);
+        when(scoringConfig.getLlmScoreBlendRatio()).thenReturn(0.6);
+        when(scoringConfig.getBuyScoreThreshold()).thenReturn(70);
+        when(scoringConfig.getSellScoreThreshold()).thenReturn(30);
+        when(scoringConfig.isAdaptiveBlendEnabled()).thenReturn(false);
         processor = new AnalysisPostProcessor(
-                new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker()), appConfig, null);
+                new CompositeScoringEngine(StrategyTestData.loadCatalog(), new StrategyPerformanceTracker()), scoringConfig, null);
         technicalAnalysisService = new TechnicalAnalysisService();
     }
 

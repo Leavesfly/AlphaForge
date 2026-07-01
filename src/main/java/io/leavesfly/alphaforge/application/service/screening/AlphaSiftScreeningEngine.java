@@ -5,9 +5,10 @@ import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.engine.ScreeningScoreEngine;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.EnvVarProvider;
 import io.leavesfly.alphaforge.domain.model.entity.screening.AlphaSiftTask;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
-import io.leavesfly.alphaforge.infrastructure.persistence.screening.AlphaSiftTaskRepository;
+import io.leavesfly.alphaforge.domain.repository.screening.AlphaSiftTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class AlphaSiftScreeningEngine {
 
     private final MarketDataPort dataFetcher;
     private final AppConfig config;
+    private final EnvVarProvider envVarProvider;
     private final StrategyCatalog catalog;
     private final ScreeningScoreEngine scoreEngine;
     private final WatchlistService watchlistService;
@@ -51,6 +53,7 @@ public class AlphaSiftScreeningEngine {
 
     public AlphaSiftScreeningEngine(MarketDataPort dataFetcher,
                                     AppConfig config,
+                                    EnvVarProvider envVarProvider,
                                     StrategyCatalog catalog,
                                     ScreeningScoreEngine scoreEngine,
                                     WatchlistService watchlistService,
@@ -58,6 +61,7 @@ public class AlphaSiftScreeningEngine {
                                     ObjectMapper objectMapper) {
         this.dataFetcher = dataFetcher;
         this.config = config;
+        this.envVarProvider = envVarProvider;
         this.catalog = catalog;
         this.scoreEngine = scoreEngine;
         this.watchlistService = watchlistService;
@@ -162,7 +166,7 @@ public class AlphaSiftScreeningEngine {
     }
 
     private List<Map<String, String>> resolveStockPool(String market) {
-        String universe = config.getEnv("SCREENING_UNIVERSE", "watchlist");
+        String universe = envVarProvider.get("SCREENING_UNIVERSE", "watchlist");
         List<Map<String, String>> pool = new ArrayList<>();
 
         if ("watchlist".equalsIgnoreCase(universe) || "all".equalsIgnoreCase(universe)) {

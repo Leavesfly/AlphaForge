@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- AlphaSift 选股任务 Mapper：管理智能选股任务的创建、进度更新和结果查询 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.screening.AlphaSiftTaskRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.screening.AlphaSiftTaskRepository">
 
     <!-- 结果映射：数据库字段 ↔ AlphaSiftTask 实体属性 -->
     <resultMap id="taskMap" type="io.leavesfly.alphaforge.domain.model.entity.screening.AlphaSiftTask">

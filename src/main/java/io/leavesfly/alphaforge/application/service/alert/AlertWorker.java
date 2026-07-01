@@ -1,10 +1,9 @@
 package io.leavesfly.alphaforge.application.service.alert;
 
-import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.domain.model.entity.alert.AlertRule;
 import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
-import io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertRuleRepository;
+import io.leavesfly.alphaforge.domain.repository.alert.AlertRuleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,16 +25,13 @@ public class AlertWorker {
     private final AlertIndicators indicators;
     private final MarketDataPort dataFetcher;
     private final NotificationPort notificationService;
-    private final AppConfig config;
 
     public AlertWorker(AlertRuleRepository alertRuleRepo, AlertIndicators indicators,
-                       MarketDataPort dataFetcher, NotificationPort notificationService,
-                       AppConfig config) {
+                       MarketDataPort dataFetcher, NotificationPort notificationService) {
         this.alertRuleRepo = alertRuleRepo;
         this.indicators = indicators;
         this.dataFetcher = dataFetcher;
         this.notificationService = notificationService;
-        this.config = config;
     }
 
     /**

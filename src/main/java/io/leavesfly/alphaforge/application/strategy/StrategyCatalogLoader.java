@@ -1,7 +1,6 @@
 package io.leavesfly.alphaforge.application.strategy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.condition.ScoringConditionRegistry;
 import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
@@ -30,19 +29,23 @@ public class StrategyCatalogLoader {
 
     private final StrategyCatalog catalog;
     private final BacktestConditionEvaluator backtestConditionEvaluator;
-    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper yamlMapper;
 
     public StrategyCatalogLoader(StrategyCatalog catalog,
-                                 BacktestConditionEvaluator backtestConditionEvaluator) {
+                                 BacktestConditionEvaluator backtestConditionEvaluator,
+                                 @org.springframework.beans.factory.annotation.Qualifier("yamlObjectMapper")
+                                 ObjectMapper yamlMapper) {
         this.catalog = catalog;
         this.backtestConditionEvaluator = backtestConditionEvaluator;
+        this.yamlMapper = yamlMapper;
     }
 
     /** 测试用：无 Spring 上下文时加载 catalog */
     public static StrategyCatalogLoader createAndLoad() {
         StrategyCatalog catalog = new StrategyCatalog();
         BacktestConditionEvaluator evaluator = new BacktestConditionEvaluator();
-        StrategyCatalogLoader loader = new StrategyCatalogLoader(catalog, evaluator);
+        ObjectMapper yamlMapper = new ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+        StrategyCatalogLoader loader = new StrategyCatalogLoader(catalog, evaluator, yamlMapper);
         loader.load();
         return loader;
     }

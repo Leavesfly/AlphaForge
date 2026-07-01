@@ -1,8 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
-import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
+import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.BaseDataFetcher;
@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * EFinance数据源适配器(Java版)
@@ -42,12 +41,9 @@ public class EFinanceFetcher implements BaseDataFetcher {
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public EFinanceFetcher(AppConfig config) {
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
-                .build();
+    public EFinanceFetcher(OkHttpClient httpClient, ObjectMapper objectMapper) {
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override public String getName() { return "efinance"; }
@@ -759,10 +755,6 @@ public class EFinanceFetcher implements BaseDataFetcher {
      * 沪市: 1.代码, 深市: 0.代码, 北交所: 0.代码
      */
     private String toSecId(String stockCode) {
-        String code = stockCode.replaceAll("^(sh|sz|SH|SZ)", "");
-        if (code.startsWith("6") || code.startsWith("9") || code.startsWith("11") || code.startsWith("13")) {
-            return "1." + code;
-        }
-        return "0." + code;
+        return StockCodeUtils.toSecId(stockCode);
     }
 }

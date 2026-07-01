@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisTask;
-import io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisTaskRepository;
+import io.leavesfly.alphaforge.domain.repository.analysis.AnalysisTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

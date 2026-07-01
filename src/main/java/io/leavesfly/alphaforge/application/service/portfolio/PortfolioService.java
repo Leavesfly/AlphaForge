@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.application.service.portfolio;
 
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
-import io.leavesfly.alphaforge.infrastructure.persistence.portfolio.PortfolioRepository;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -128,28 +128,4 @@ public class PortfolioService {
         return summary;
     }
 
-    /**
-     * 风险评估
-     */
-    public Map<String, Object> assessRisk() {
-        List<PortfolioPosition> positions = portfolioRepo.findAll();
-        Map<String, Object> risk = new LinkedHashMap<>();
-
-        // 单只股票集中度
-        double totalValue = positions.stream()
-                .mapToDouble(p -> p.getMarketValue() != null ? p.getMarketValue() : 0).sum();
-        double maxConcentration = positions.stream()
-                .mapToDouble(p -> p.getPositionPct() != null ? p.getPositionPct() : 0).max().orElse(0);
-
-        // 亏损持仓比例
-        long lossCount = positions.stream()
-                .filter(p -> p.getProfitLossPct() != null && p.getProfitLossPct() < -10).count();
-
-        risk.put("max_concentration_pct", maxConcentration);
-        risk.put("concentration_risk", maxConcentration > 30 ? "高" : maxConcentration > 20 ? "中" : "低");
-        risk.put("deep_loss_count", lossCount);
-        risk.put("overall_risk_level", lossCount > 3 || maxConcentration > 40 ? "high" : "medium");
-        
-        return risk;
-    }
 }

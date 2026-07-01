@@ -1,13 +1,7 @@
 package io.leavesfly.alphaforge.config;
 
-import io.github.cdimascio.dotenv.Dotenv;
-import io.leavesfly.alphaforge.domain.service.NameToCodeResolver;
-import io.leavesfly.alphaforge.domain.service.TechnicalAnalysisService;
-import io.leavesfly.alphaforge.domain.service.TechnicalIndicatorCalculator;
-import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import jakarta.annotation.PostConstruct;
 
@@ -15,474 +9,75 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 应用配置管理器 - 门面模式
- * 
- * 从.env文件和环境变量加载配置。
- * 内部委托给职责分离的子配置类（LlmConfig、DataProviderConfig、NotificationConfig、SchedulerAuthConfig）。
- * 对外保持原有 getter 接口不变，确保向后兼容。
+ * 应用配置 — 仅管理全局配置（服务端口、股票列表）
+ *
+ * LLM 配置已独立为 LlmConfig Bean。
+ * 通知、搜索、Bot、评分、认证等子配置已独立为 @Component Bean。
  */
 @Configuration
 public class AppConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
 
-    private Dotenv dotenv;
+    private final EnvVarProvider envVarProvider;
 
-    // ========== 子配置组合 ==========
-    private final LlmConfig llmConfig = new LlmConfig();
-    private final DataProviderConfig dataProviderConfig = new DataProviderConfig();
-    private final NotificationConfig notificationConfig = new NotificationConfig();
-    private final SchedulerAuthConfig schedulerAuthConfig = new SchedulerAuthConfig();
-    private final ScoringConfig scoringConfig = new ScoringConfig();
-
-    // ========== 服务配置 ==========
+    // ========== 全局服务配置 ==========
     private int serverPort = 8000;
     private String serverHost = "0.0.0.0";
 
-    // ========== LLM配置 ==========
-    private String llmApi;
-    private String llmModel;
-    private String llmApiKey;
-    private double llmTemperature = 0.7;
-    private int llmMaxTokens = 8000;
-    private int llmTimeout = 120;
-
-    // ========== 多LLM渠道 ==========
-    private List<LlmChannelConfig> llmChannels = new ArrayList<>();
-
     // ========== 股票配置 ==========
     private List<String> stockList = new ArrayList<>();
-    private String market = "A";  // A/HK/US/JP/KR
+    private String market = "A";
     private int historyDays = 60;
 
-    // ========== 数据源配置 ==========
-    private String dataProvider = "auto";
-    private String tushareToken;
-    private String longbridgeAppKey;
-    private String longbridgeAppSecret;
-    private String longbridgeAccessToken;
-    private String alphavantageApiKey;
-    private String finnhubApiKey;
-    private String tickflowApiKey;
-    private String tickflowBaseUrl = "https://api.tickflow.io";
-
-    // ========== 通知配置 ==========
-    private String notificationChannels = "";
-    private String wecomWebhook;
-    private String feishuWebhook;
-    private String dingtalkWebhook;
-    private String emailSmtpHost;
-    private int emailSmtpPort = 465;
-    private String emailUser;
-    private String emailPassword;
-    private String emailTo;
-
-    // ========== Bot配置 ==========
-    private boolean botEnabled = false;
-    private String feishuAppId;
-    private String feishuAppSecret;
-    private String dingtalkAppKey;
-    private String dingtalkAppSecret;
-    private String wecomCorpId;
-    private String wecomAgentId;
-    private String wecomSecret;
-    private String discordBotToken;
-
-    // ========== 搜索配置 ==========
-    private String searchProvider = "tavily";
-    private String tavilyApiKey;
-    private String anspireApiKey;
-    private int newsMaxResults = 5;
-
-    // ========== 认证配置 ==========
-    private String authSecret;
-    private String authPassword;
-    private boolean authEnabled = false;
-
-    // ========== 调度配置 ==========
-    private String scheduleCron = "0 0 18 * * MON-FRI";
-    private String timezone = "Asia/Shanghai";
-
-    // ========== Agent配置 ==========
-    private String agentMode = "standard"; // quick/standard/full/specialist
-    private int agentMaxIterations = 10;
-
-    // ========== 评分配置（委托给 ScoringConfig）==========
-    // 评分相关字段已迁移至 ScoringConfig，此处仅保留 getter 委托
+    public AppConfig(EnvVarProvider envVarProvider) {
+        this.envVarProvider = envVarProvider;
+    }
 
     @PostConstruct
     public void init() {
-        try {
-            dotenv = Dotenv.configure()
-                    .ignoreIfMissing()
-                    .load();
-        } catch (Exception e) {
-            log.warn("未找到.env文件，使用系统环境变量");
-            dotenv = null;
-        }
         loadConfig();
-        validateConfig();
-        log.info("配置加载完成: market={}, stocks={}, provider={}", market, stockList.size(), dataProvider);
+        log.info("配置加载完成: market={}, stocks={}", market, stockList.size());
     }
 
-    /**
-     * 校验必填配置项，缺失时打印警告信息
-     */
-    private void validateConfig() {
-        List<String> errors = new ArrayList<>();
-        List<String> warnings = new ArrayList<>();
-
-        // 必填项校验 - 缺失将导致核心功能不可用
-        if (llmApiKey == null || llmApiKey.isEmpty()) {
-            errors.add("LLM_API_KEY 未配置 - AI分析功能将不可用，请配置阿里云百炼API Key");
-        }
-        if (stockList.isEmpty()) {
-            warnings.add("STOCK_LIST 未配置 - Web模式下可通过API传入，其他模式需要配置股票列表");
-        }
-
-        // 警告项 - 不影响启动但可能影响部分功能
-        if (notificationChannels != null && !notificationChannels.isEmpty()) {
-            // 检查配置的通知渠道是否有对应的凭据
-            for (String channel : notificationChannels.split(",")) {
-                String ch = channel.trim().toLowerCase();
-                switch (ch) {
-                    case "wecom":
-                        if (wecomWebhook == null || wecomWebhook.isEmpty())
-                            warnings.add("通知渠道 wecom 已启用但 WECOM_WEBHOOK 未配置");
-                        break;
-                    case "feishu":
-                        if (feishuWebhook == null || feishuWebhook.isEmpty())
-                            warnings.add("通知渠道 feishu 已启用但 FEISHU_WEBHOOK 未配置");
-                        break;
-                    case "dingtalk":
-                        if (dingtalkWebhook == null || dingtalkWebhook.isEmpty())
-                            warnings.add("通知渠道 dingtalk 已启用但 DINGTALK_WEBHOOK 未配置");
-                        break;
-                    case "email":
-                        if (emailSmtpHost == null || emailSmtpHost.isEmpty())
-                            warnings.add("通知渠道 email 已启用但 EMAIL_SMTP_HOST 未配置");
-                        break;
-                }
-            }
-        }
-
-        // 打印校验结果
-        if (!errors.isEmpty()) {
-            log.error("========================================");
-            log.error("配置校验失败 - 以下必填配置缺失:");
-            for (String error : errors) {
-                log.error("  ✗ {}", error);
-            }
-            log.error("请参考 .env.example 文件配置必填项");
-            log.error("========================================");
-        }
-        if (!warnings.isEmpty()) {
-            log.warn("----------------------------------------");
-            log.warn("配置提醒 - 以下配置可能影响部分功能:");
-            for (String warning : warnings) {
-                log.warn("  ⚠ {}", warning);
-            }
-            log.warn("----------------------------------------");
-        }
-    }
-
-    /**
-     * 加载所有配置项
-     */
     private void loadConfig() {
-        // 服务配置
-        serverPort = getIntEnv("SERVER_PORT", 8000);
-        serverHost = getEnv("SERVER_HOST", "0.0.0.0");
+        serverPort = envVarProvider.getInt("SERVER_PORT", 8000);
+        serverHost = envVarProvider.get("SERVER_HOST", "0.0.0.0");
 
-        // LLM配置
-        llmApi = getEnv("LLM_API", "https://dashscope.aliyuncs.com/compatible-mode/v1");
-        llmModel = getEnv("LLM_MODEL", "qwen-plus");
-        llmApiKey = getEnv("LLM_API_KEY", "");
-        llmTemperature = getDoubleEnv("LLM_TEMPERATURE", 0.7);
-        llmMaxTokens = getIntEnv("LLM_MAX_TOKENS", 8000);
-        llmTimeout = getIntEnv("LLM_TIMEOUT", 120);
-
-        // 解析多渠道LLM配置
-        parseLlmChannels();
-
-        // 股票配置
-        String stockStr = getEnv("STOCK_LIST", "");
+        String stockStr = envVarProvider.get("STOCK_LIST", "");
         if (!stockStr.isEmpty()) {
             stockList = Arrays.stream(stockStr.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .collect(Collectors.toList());
         }
-        market = getEnv("MARKET", "A");
-        historyDays = getIntEnv("HISTORY_DAYS", 60);
-
-        // 数据源配置
-        dataProvider = getEnv("DATA_PROVIDER", "auto");
-        tushareToken = getEnv("TUSHARE_TOKEN", "");
-        longbridgeAppKey = getEnv("LONGBRIDGE_APP_KEY", "");
-        longbridgeAppSecret = getEnv("LONGBRIDGE_APP_SECRET", "");
-        longbridgeAccessToken = getEnv("LONGBRIDGE_ACCESS_TOKEN", "");
-        alphavantageApiKey = getEnv("ALPHAVANTAGE_API_KEY", "");
-        finnhubApiKey = getEnv("FINNHUB_API_KEY", "");
-        tickflowApiKey = getEnv("TICKFLOW_API_KEY", "");
-        tickflowBaseUrl = getEnv("TICKFLOW_BASE_URL", "https://api.tickflow.io");
-
-        // 通知配置
-        notificationChannels = getEnv("NOTIFICATION_CHANNELS", "");
-        wecomWebhook = getEnv("WECOM_WEBHOOK", "");
-        feishuWebhook = getEnv("FEISHU_WEBHOOK", "");
-        dingtalkWebhook = getEnv("DINGTALK_WEBHOOK", "");
-        emailSmtpHost = getEnv("EMAIL_SMTP_HOST", "");
-        emailSmtpPort = getIntEnv("EMAIL_SMTP_PORT", 465);
-        emailUser = getEnv("EMAIL_USER", "");
-        emailPassword = getEnv("EMAIL_PASSWORD", "");
-        emailTo = getEnv("EMAIL_TO", "");
-
-        // Bot配置
-        botEnabled = getBoolEnv("BOT_ENABLED", false);
-        feishuAppId = getEnv("FEISHU_APP_ID", "");
-        feishuAppSecret = getEnv("FEISHU_APP_SECRET", "");
-        dingtalkAppKey = getEnv("DINGTALK_APP_KEY", "");
-        dingtalkAppSecret = getEnv("DINGTALK_APP_SECRET", "");
-        wecomCorpId = getEnv("WECOM_CORP_ID", "");
-        wecomAgentId = getEnv("WECOM_AGENT_ID", "");
-        wecomSecret = getEnv("WECOM_SECRET", "");
-        discordBotToken = getEnv("DISCORD_BOT_TOKEN", "");
-
-        // 搜索配置
-        searchProvider = getEnv("SEARCH_PROVIDER", "tavily");
-        tavilyApiKey = getEnv("TAVILY_API_KEY", "");
-        anspireApiKey = getEnv("ANSPIRE_API_KEY", "");
-        newsMaxResults = getIntEnv("NEWS_MAX_RESULTS", 5);
-
-        // 认证配置
-        authSecret = getEnv("AUTH_SECRET", UUID.randomUUID().toString());
-        authPassword = getEnv("AUTH_PASSWORD", "");
-        authEnabled = getBoolEnv("AUTH_ENABLED", false);
-
-        // 调度配置
-        scheduleCron = getEnv("SCHEDULE_CRON", "0 0 18 * * MON-FRI");
-        timezone = getEnv("TIMEZONE", "Asia/Shanghai");
-
-        // Agent配置
-        agentMode = getEnv("AGENT_MODE", "standard");
-        agentMaxIterations = getIntEnv("AGENT_MAX_ITERATIONS", 10);
-
-        // 评分配置委托给 ScoringConfig 加载
-        scoringConfig.loadFromEnv(this::getEnv);
+        market = envVarProvider.get("MARKET", "A");
+        historyDays = envVarProvider.getInt("HISTORY_DAYS", 60);
     }
 
-    /**
-     * 解析多渠道LLM配置协议
-     * 格式: provider://api_key@endpoint/model
-     */
-    private void parseLlmChannels() {
-        llmChannels.clear();
-        String channelsStr = getEnv("LLM_CHANNELS", "");
-        if (channelsStr.isEmpty() && !llmApi.isEmpty()) {
-            // 单渠道模式
-            LlmChannelConfig channel = new LlmChannelConfig();
-            channel.setApi(llmApi);
-            channel.setModel(llmModel);
-            channel.setApiKey(llmApiKey);
-            channel.setTemperature(llmTemperature);
-            channel.setMaxTokens(llmMaxTokens);
-            channel.setTimeout(llmTimeout);
-            llmChannels.add(channel);
-        } else if (!channelsStr.isEmpty()) {
-            // 多渠道模式: 按逗号分隔
-            for (String channelUri : channelsStr.split(",")) {
-                LlmChannelConfig channel = parseLlmUri(channelUri.trim());
-                if (channel != null) {
-                    llmChannels.add(channel);
-                }
-            }
-        }
-    }
-
-    /**
-     * 解析单个LLM渠道URI
-     * 格式: provider://api_key@endpoint/model
-     */
-    private LlmChannelConfig parseLlmUri(String uri) {
-        try {
-            LlmChannelConfig config = new LlmChannelConfig();
-            // 简单格式: model_name 或 完整URI
-            if (!uri.contains("://")) {
-                config.setModel(uri);
-                config.setApi(llmApi);
-                config.setApiKey(llmApiKey);
-                config.setTemperature(llmTemperature);
-                config.setMaxTokens(llmMaxTokens);
-                config.setTimeout(llmTimeout);
-                return config;
-            }
-            // URI格式解析
-            int schemeEnd = uri.indexOf("://");
-            String provider = uri.substring(0, schemeEnd);
-            String rest = uri.substring(schemeEnd + 3);
-            
-            String apiKey = "";
-            String endpoint = "";
-            String model = "";
-            
-            if (rest.contains("@")) {
-                apiKey = rest.substring(0, rest.indexOf("@"));
-                rest = rest.substring(rest.indexOf("@") + 1);
-            }
-            if (rest.contains("/")) {
-                int slashIdx = rest.lastIndexOf("/");
-                endpoint = rest.substring(0, slashIdx);
-                model = rest.substring(slashIdx + 1);
-            } else {
-                model = rest;
-            }
-            
-            config.setProvider(provider);
-            config.setApi(endpoint.isEmpty() ? llmApi : "https://" + endpoint);
-            config.setModel(model);
-            config.setApiKey(apiKey.isEmpty() ? llmApiKey : apiKey);
-            config.setTemperature(llmTemperature);
-            config.setMaxTokens(llmMaxTokens);
-            config.setTimeout(llmTimeout);
-            return config;
-        } catch (Exception e) {
-            log.error("解析LLM渠道URI失败: {}", uri, e);
-            return null;
-        }
-    }
-
-    // ========== 环境变量读取辅助方法 ==========
+    // ========== 环境变量读取（委托给 EnvVarProvider，供子配置加载时使用）==========
 
     public String getEnv(String key, String defaultValue) {
-        // 优先系统环境变量，其次.env文件
-        String value = System.getenv(key);
-        if (value != null && !value.isEmpty()) return value;
-        if (dotenv != null) {
-            value = dotenv.get(key);
-            if (value != null && !value.isEmpty()) return value;
-        }
-        return defaultValue;
+        return envVarProvider.get(key, defaultValue);
     }
 
     public int getIntEnv(String key, int defaultValue) {
-        String value = getEnv(key, "");
-        if (value.isEmpty()) return defaultValue;
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return envVarProvider.getInt(key, defaultValue);
     }
 
     public double getDoubleEnv(String key, double defaultValue) {
-        String value = getEnv(key, "");
-        if (value.isEmpty()) return defaultValue;
-        try {
-            return Double.parseDouble(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+        return envVarProvider.getDouble(key, defaultValue);
     }
 
     public boolean getBoolEnv(String key, boolean defaultValue) {
-        String value = getEnv(key, "");
-        if (value.isEmpty()) return defaultValue;
-        return "true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value);
+        return envVarProvider.getBool(key, defaultValue);
     }
 
-    // ========== Getter方法 ==========
+    // ========== Getter ==========
+
     public int getServerPort() { return serverPort; }
     public String getServerHost() { return serverHost; }
-    public String getLlmApi() { return llmApi; }
-    public String getLlmModel() { return llmModel; }
-    public String getLlmApiKey() { return llmApiKey; }
-    public double getLlmTemperature() { return llmTemperature; }
-    public int getLlmMaxTokens() { return llmMaxTokens; }
-    public int getLlmTimeout() { return llmTimeout; }
-    public List<LlmChannelConfig> getLlmChannels() { return llmChannels; }
     public List<String> getStockList() { return stockList; }
     public String getMarket() { return market; }
     public int getHistoryDays() { return historyDays; }
-    public String getDataProvider() { return dataProvider; }
-    public String getTushareToken() { return tushareToken; }
-    public String getLongbridgeAppKey() { return longbridgeAppKey; }
-    public String getLongbridgeAppSecret() { return longbridgeAppSecret; }
-    public String getLongbridgeAccessToken() { return longbridgeAccessToken; }
-    public String getAlphavantageApiKey() { return alphavantageApiKey; }
-    public String getFinnhubApiKey() { return finnhubApiKey; }
-    public String getTickflowApiKey() { return tickflowApiKey; }
-    public String getTickflowBaseUrl() { return tickflowBaseUrl; }
-    public String getNotificationChannels() { return notificationChannels; }
-    public String getWecomWebhook() { return wecomWebhook; }
-    public String getFeishuWebhook() { return feishuWebhook; }
-    public String getDingtalkWebhook() { return dingtalkWebhook; }
-    public boolean isBotEnabled() { return botEnabled; }
-    public String getFeishuAppId() { return feishuAppId; }
-    public String getFeishuAppSecret() { return feishuAppSecret; }
-    public String getDingtalkAppKey() { return dingtalkAppKey; }
-    public String getDingtalkAppSecret() { return dingtalkAppSecret; }
-    public String getWecomCorpId() { return wecomCorpId; }
-    public String getWecomAgentId() { return wecomAgentId; }
-    public String getWecomSecret() { return wecomSecret; }
-    public String getDiscordBotToken() { return discordBotToken; }
-    public String getSearchProvider() { return searchProvider; }
-    public String getTavilyApiKey() { return tavilyApiKey; }
-    public String getAnspireApiKey() { return anspireApiKey; }
-    public int getNewsMaxResults() { return newsMaxResults; }
-    public String getAuthSecret() { return authSecret; }
-    public String getAuthPassword() { return authPassword; }
-    public boolean isAuthEnabled() { return authEnabled; }
-    public void setAuthPasswordRuntime(String password) { this.authPassword = password; }
-    public void setAuthEnabledRuntime(boolean enabled) { this.authEnabled = enabled; }
-    public void setAuthSecretRuntime(String secret) { this.authSecret = secret; }
-    public String getScheduleCron() { return scheduleCron; }
-    public String getTimezone() { return timezone; }
-    public String getAgentMode() { return agentMode; }
-    public int getAgentMaxIterations() { return agentMaxIterations; }
-    public double getLlmScoreBlendRatio() { return scoringConfig.getLlmScoreBlendRatio(); }
-    public int getBuyScoreThreshold() { return scoringConfig.getBuyScoreThreshold(); }
-    public int getSellScoreThreshold() { return scoringConfig.getSellScoreThreshold(); }
-    public boolean isAdaptiveBlendEnabled() { return scoringConfig.isAdaptiveBlendEnabled(); }
-    public double getAdaptiveBlendBaseRatio() { return scoringConfig.getAdaptiveBlendBaseRatio(); }
-    public double getAdaptiveStrategyConfidenceImpact() { return scoringConfig.getAdaptiveStrategyConfidenceImpact(); }
-    public double getAdaptiveMarketClarityImpact() { return scoringConfig.getAdaptiveMarketClarityImpact(); }
-    public double getAdaptiveLlmConfidenceImpact() { return scoringConfig.getAdaptiveLlmConfidenceImpact(); }
-    public double getAdaptiveBlendMinRatio() { return scoringConfig.getAdaptiveBlendMinRatio(); }
-    public double getAdaptiveBlendMaxRatio() { return scoringConfig.getAdaptiveBlendMaxRatio(); }
-    public String getEmailSmtpHost() { return emailSmtpHost; }
-    public int getEmailSmtpPort() { return emailSmtpPort; }
-    public String getEmailUser() { return emailUser; }
-    public String getEmailPassword() { return emailPassword; }
-    public String getEmailTo() { return emailTo; }
-
-    // 领域服务 Bean 装配已迁移至 DomainServiceConfig
-
-    /**
-     * LLM渠道配置
-     */
-    public static class LlmChannelConfig {
-        private String provider;
-        private String api;
-        private String model;
-        private String apiKey;
-        private double temperature = 0.7;
-        private int maxTokens = 8000;
-        private int timeout = 120;
-
-        public String getProvider() { return provider; }
-        public void setProvider(String provider) { this.provider = provider; }
-        public String getApi() { return api; }
-        public void setApi(String api) { this.api = api; }
-        public String getModel() { return model; }
-        public void setModel(String model) { this.model = model; }
-        public String getApiKey() { return apiKey; }
-        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
-        public double getTemperature() { return temperature; }
-        public void setTemperature(double temperature) { this.temperature = temperature; }
-        public int getMaxTokens() { return maxTokens; }
-        public void setMaxTokens(int maxTokens) { this.maxTokens = maxTokens; }
-        public int getTimeout() { return timeout; }
-        public void setTimeout(int timeout) { this.timeout = timeout; }
-    }
 }

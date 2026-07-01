@@ -3,6 +3,8 @@ package io.leavesfly.alphaforge.application.agent;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
 import io.leavesfly.alphaforge.application.agent.reasoning.StructuredReasoningPromptBuilder;
+import io.leavesfly.alphaforge.application.prompt.PromptManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,16 +22,22 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
     protected final LlmPort llmService;
     protected final LlmToolAdapter toolAdapter;
     protected final ToolRegistry toolRegistry;
+    protected final ObjectMapper objectMapper;
 
     /** 结构化推理链 Prompt 构建器（可选依赖，字段注入） */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     protected StructuredReasoningPromptBuilder reasoningPromptBuilder;
 
+    /** Prompt 模板管理器（可选依赖，字段注入） */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    protected PromptManager promptManager;
+
     protected AbstractSpecializedAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
-                                       ToolRegistry toolRegistry) {
+                                       ToolRegistry toolRegistry, ObjectMapper objectMapper) {
         this.llmService = llmService;
         this.toolAdapter = toolAdapter;
         this.toolRegistry = toolRegistry;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -39,7 +47,7 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
             String userPrompt = buildUserPrompt(stockCode, stockName, context);
 
             // 结构化推理链增强：在 system prompt 中注入推理框架
-            String systemPrompt = getSystemPrompt();
+            String systemPrompt = resolveSystemPrompt();
             if (reasoningPromptBuilder != null) {
                 systemPrompt = reasoningPromptBuilder.enhanceSingleDimensionSystemPrompt(
                         systemPrompt, getRoleDescription());
@@ -110,8 +118,7 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
             int jsonEnd = response.lastIndexOf('}');
             if (jsonStart >= 0 && jsonEnd > jsonStart) {
                 String json = response.substring(jsonStart, jsonEnd + 1);
-                com.fasterxml.jackson.databind.JsonNode node =
-                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(json);
 
                 String a = node.path("analysis").asText("");
                 if (!a.isEmpty()) analysis = a;
@@ -147,4 +154,12 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
 
     /** 角色描述（如 "技术面" / "基本面" / "风控"） */
     protected abstract String getRoleDescription();
+
+    /**
+     * 解析系统 Prompt — 优先使用 PromptManager 外部化模板，fallback 到子类硬编码
+     */
+    private String resolveSystemPrompt() {
+        if (promptManager == null) return getSystemPrompt();
+        return promptManager.getTemplateOrDefault(getName() + "_system", getSystemPrompt());
+    }
 }

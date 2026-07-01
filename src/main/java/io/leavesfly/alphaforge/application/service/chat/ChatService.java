@@ -3,7 +3,7 @@ package io.leavesfly.alphaforge.application.service.chat;
 import io.leavesfly.alphaforge.application.agent.LlmToolAdapter;
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
-import io.leavesfly.alphaforge.infrastructure.persistence.chat.ChatRepository;
+import io.leavesfly.alphaforge.domain.repository.chat.ChatRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

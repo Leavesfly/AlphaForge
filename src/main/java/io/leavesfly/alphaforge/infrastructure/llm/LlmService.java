@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.infrastructure.llm;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.LlmConfig;
+import io.leavesfly.alphaforge.domain.service.exception.LlmException;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,8 +15,9 @@ import org.springframework.stereotype.Service;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * LLM服务 - 统一调用多提供商大语言模型
@@ -28,7 +30,7 @@ public class LlmService implements LlmPort {
 
     private static final Logger log = LoggerFactory.getLogger(LlmService.class);
 
-    private final AppConfig config;
+    private final LlmConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final LlmUsageTracker usageTracker;
@@ -36,6 +38,7 @@ public class LlmService implements LlmPort {
     private final LlmTokenEstimator tokenEstimator;
     private final LlmResponseParser responseParser;
     private final LlmChannelManager channelManager;
+    private final LlmRequestBuilder requestBuilder;
 
     /** 可选依赖：监控指标埋点 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -45,31 +48,17 @@ public class LlmService implements LlmPort {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private LlmResponseCache responseCache;
 
-    public LlmService(AppConfig config, LlmUsageTracker usageTracker) {
+    public LlmService(LlmConfig config, LlmUsageTracker usageTracker,
+                       OkHttpClient httpClient, ObjectMapper objectMapper) {
         this.config = config;
         this.usageTracker = usageTracker;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = objectMapper;
+        this.httpClient = httpClient;
         this.retryExecutor = new LlmRetryExecutor();
         this.tokenEstimator = new LlmTokenEstimator();
         this.responseParser = new LlmResponseParser(objectMapper, tokenEstimator);
         this.channelManager = new LlmChannelManager(config.getLlmChannels());
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(config.getLlmTimeout(), TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
-                .build();
-    }
-
-    /**
-     * 调用LLM进行股票分析
-     *
-     * @param context 分析上下文(股票数据、技术指标、新闻等)
-     * @return LLM分析结果文本
-     */
-    public String analyzeStock(Map<String, Object> context) {
-        String systemPrompt = buildSystemPrompt();
-        String userPrompt = buildAnalysisPrompt(context);
-        return chat(systemPrompt, userPrompt);
+        this.requestBuilder = new LlmRequestBuilder(objectMapper);
     }
 
     /**
@@ -93,7 +82,7 @@ public class LlmService implements LlmPort {
      * @return LLM回复
      */
     public String chatWithMessages(List<Map<String, String>> messages) {
-        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        List<LlmConfig.LlmChannelConfig> channels = config.getLlmChannels();
         if (channels.isEmpty()) {
             throw new LlmException.LlmUnavailableException("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
         }
@@ -109,130 +98,58 @@ public class LlmService implements LlmPort {
             }
         }
 
-        // 尝试所有渠道(带故障切换)，每个渠道内部带重试
-        Exception lastException = null;
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = channelManager.getChannelIndex(attempt);
-            AppConfig.LlmChannelConfig channel = channels.get(idx);
-
-            try {
-                String result = retryExecutor.executeWithRetry(
+        final String finalCacheKey = cacheKey;
+        String result = executeWithChannelFailover(
+                channel -> retryExecutor.executeWithRetry(
                         () -> executeApiCall(() -> callLlmApi(channel, messages), channel.getModel()),
-                        "chatWithMessages:" + channel.getModel());
-                if (result != null && !result.isEmpty()) {
-                    channelManager.markSuccess(idx); // 记住成功的渠道
-                    // 写入缓存
-                    if (responseCache != null && cacheKey != null) {
-                        responseCache.put(cacheKey, result);
-                    }
-                    return result;
-                }
-            } catch (LlmException e) {
-                log.warn("LLM渠道 {} ({}) 调用失败(含重试): {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-                // 不可重试的异常（认证/解析）直接跳出，不切换渠道
-                if (e instanceof LlmException.LlmAuthException) break;
-            } catch (Exception e) {
-                log.warn("LLM渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-            }
-        }
+                        "chatWithMessages:" + channel.getModel()),
+                r -> r != null && !r.isEmpty(),
+                "chatWithMessages",
+                "所有LLM渠道均失败");
 
-        throw new LlmException.LlmUnavailableException(
-                "所有LLM渠道均失败", lastException);
+        // 写入缓存
+        if (responseCache != null && finalCacheKey != null) {
+            responseCache.put(finalCacheKey, result);
+        }
+        return result;
     }
 
     /**
      * 调用单个LLM API
      */
-    private String callLlmApi(AppConfig.LlmChannelConfig channel, List<Map<String, String>> messages) throws Exception {
-        String apiUrl = resolveApiUrl(channel);
-        
-        // 构建请求体 (OpenAI兼容格式)
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", channel.getModel());
-        requestBody.put("temperature", channel.getTemperature());
-        requestBody.put("max_tokens", channel.getMaxTokens());
+    private String callLlmApi(LlmConfig.LlmChannelConfig channel, List<Map<String, String>> messages) throws Exception {
+        ObjectNode requestBody = requestBuilder.buildBaseRequest(channel);
+        requestBuilder.addStringMessages(requestBody, messages);
 
-        ArrayNode messagesArray = requestBody.putArray("messages");
-        for (Map<String, String> msg : messages) {
-            ObjectNode msgNode = messagesArray.addObject();
-            msgNode.put("role", msg.get("role"));
-            msgNode.put("content", msg.get("content"));
+        log.debug("调用LLM: model={}", channel.getModel());
+        CallResult cr = executeHttpRequest(channel, requestBody);
+
+        // OpenAI格式
+        JsonNode choices = cr.root().path("choices");
+        if (choices.isArray() && !choices.isEmpty()) {
+            String content = choices.get(0).path("message").path("content").asText("");
+            recordUsageFromResponse(cr.root(), channel, cr.durationMs(),
+                    estimateTokens(messages), estimateTokens(content));
+            recordMetrics(channel.getModel(), "chatWithMessages", true, cr.durationMs(),
+                    cr.root().path("usage").path("prompt_tokens").asInt(),
+                    cr.root().path("usage").path("completion_tokens").asInt());
+            return content;
         }
 
-        RequestBody body = RequestBody.create(
-                objectMapper.writeValueAsString(requestBody),
-                MediaType.get("application/json"));
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + channel.getApiKey())
-                .header("Content-Type", "application/json")
-                .post(body)
-                .build();
-
-        log.debug("调用LLM: model={}, url={}", channel.getModel(), apiUrl);
-        long startTime = System.currentTimeMillis();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw buildHttpException(response, channel.getModel());
-            }
-
-            String responseBody = response.body().string();
-            JsonNode root = objectMapper.readTree(responseBody);
-            long durationMs = System.currentTimeMillis() - startTime;
-            
-            // 解析响应 (OpenAI格式)
-            JsonNode choices = root.path("choices");
-            if (choices.isArray() && !choices.isEmpty()) {
-                String content = choices.get(0).path("message").path("content").asText("");
-                
-                // 记录token使用量
-                JsonNode usage = root.path("usage");
-                int promptTokens, completionTokens;
-                if (!usage.isMissingNode()) {
-                    promptTokens = usage.path("prompt_tokens").asInt();
-                    completionTokens = usage.path("completion_tokens").asInt();
-                    log.info("Token使用: prompt={}, completion={}, total={}",
-                            promptTokens, completionTokens,
-                            usage.path("total_tokens").asInt());
-                } else {
-                    // 部分供应商不返回usage，粗略估算
-                    promptTokens = estimateTokens(messages);
-                    completionTokens = estimateTokens(content);
-                    log.debug("Token估算(供应商未返回usage): prompt~={}, completion~={}", promptTokens, completionTokens);
-                }
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        promptTokens, completionTokens, durationMs);
-                recordMetrics(channel.getModel(), "chatWithMessages", true, durationMs,
-                        promptTokens, completionTokens);
-                return content;
-            }
-            
-            // Gemini格式兼容
-            JsonNode candidates = root.path("candidates");
-            if (candidates.isArray() && !candidates.isEmpty()) {
-                String content = candidates.get(0).path("content").path("parts").get(0).path("text").asText("");
-                JsonNode usage = root.path("usage_metadata");
-                int promptTokens, completionTokens;
-                if (!usage.isMissingNode()) {
-                    promptTokens = usage.path("prompt_token_count").asInt();
-                    completionTokens = usage.path("candidates_token_count").asInt();
-                } else {
-                    promptTokens = estimateTokens(messages);
-                    completionTokens = estimateTokens(content);
-                }
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        promptTokens, completionTokens, durationMs);
-                return content;
-            }
-
-            throw new LlmException.LlmParseException(
-                    "无法解析LLM响应: " + responseBody.substring(0, Math.min(200, responseBody.length())),
-                    channel.getModel());
+        // Gemini格式兼容
+        JsonNode candidates = cr.root().path("candidates");
+        if (candidates.isArray() && !candidates.isEmpty()) {
+            String content = candidates.get(0).path("content").path("parts").get(0).path("text").asText("");
+            JsonNode usageMeta = cr.root().path("usage_metadata");
+            int p = !usageMeta.isMissingNode() ? usageMeta.path("prompt_token_count").asInt() : estimateTokens(messages);
+            int c = !usageMeta.isMissingNode() ? usageMeta.path("candidates_token_count").asInt() : estimateTokens(content);
+            usageTracker.recordUsage(channel.getModel(), channel.getProvider(), p, c, cr.durationMs());
+            return content;
         }
+
+        throw new LlmException.LlmParseException(
+                "无法解析LLM响应: " + cr.root().toString().substring(0, Math.min(200, cr.root().toString().length())),
+                channel.getModel());
     }
 
     // ==================== 新增：原生 Function Calling ====================
@@ -246,147 +163,68 @@ public class LlmService implements LlmPort {
     @Override
     public LlmPort.LlmResponse chatWithFunctionCalling(List<Map<String, Object>> messages,
                                                         List<Map<String, Object>> tools) {
-        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
-        if (channels.isEmpty()) {
-            throw new LlmException.LlmUnavailableException("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
-        }
-
-        Exception lastException = null;
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = channelManager.getChannelIndex(attempt);
-            AppConfig.LlmChannelConfig channel = channels.get(idx);
-            try {
-                LlmPort.LlmResponse result = retryExecutor.executeWithRetry(
+        return executeWithChannelFailover(
+                channel -> retryExecutor.executeWithRetry(
                         () -> executeApiCall(() -> callLlmApiWithTools(channel, messages, tools), channel.getModel()),
-                        "chatWithFunctionCalling:" + channel.getModel());
-                if (result != null && (result.hasToolCalls()
-                        || (result.getContent() != null && !result.getContent().isEmpty()))) {
-                    channelManager.markSuccess(idx);
-                    return result;
-                }
-            } catch (LlmException e) {
-                log.warn("LLM渠道 {} ({}) Function Calling失败(含重试): {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-                if (e instanceof LlmException.LlmAuthException) break;
-            } catch (Exception e) {
-                log.warn("LLM渠道 {} ({}) Function Calling失败: {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-            }
-        }
-
-        throw new LlmException.LlmUnavailableException(
-                "所有LLM渠道均失败(Function Calling)", lastException);
+                        "chatWithFunctionCalling:" + channel.getModel()),
+                r -> r != null && (r.hasToolCalls()
+                        || (r.getContent() != null && !r.getContent().isEmpty())),
+                "Function Calling",
+                "所有LLM渠道均失败(Function Calling)");
     }
 
     /**
      * 调用 LLM API（带工具定义）
      */
-    private LlmPort.LlmResponse callLlmApiWithTools(AppConfig.LlmChannelConfig channel,
+    private LlmPort.LlmResponse callLlmApiWithTools(LlmConfig.LlmChannelConfig channel,
                                                      List<Map<String, Object>> messages,
                                                      List<Map<String, Object>> tools) throws Exception {
-        String apiUrl = resolveApiUrl(channel);
-
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", channel.getModel());
         requestBody.put("temperature", channel.getTemperature());
         requestBody.put("max_tokens", channel.getMaxTokens());
+        addObjectMessages(requestBody, messages);
 
-        // 消息（Object 类型以支持 tool role 和 assistant.tool_calls）
-        ArrayNode messagesArray = requestBody.putArray("messages");
-        for (Map<String, Object> msg : messages) {
-            ObjectNode msgNode = messagesArray.addObject();
-            for (Map.Entry<String, Object> entry : msg.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (value == null) {
-                    msgNode.putNull(key);
-                } else if (value instanceof String s) {
-                    msgNode.put(key, s);
-                } else if (value instanceof Number) {
-                    msgNode.set(key, objectMapper.valueToTree(value));
-                } else if (value instanceof Boolean b) {
-                    msgNode.put(key, b.booleanValue());
-                } else {
-                    msgNode.set(key, objectMapper.valueToTree(value));
-                }
-            }
-        }
-
-        // 工具定义（OpenAI Function Calling 格式）
         if (tools != null && !tools.isEmpty()) {
             requestBody.set("tools", objectMapper.valueToTree(tools));
             requestBody.put("tool_choice", "auto");
         }
 
-        RequestBody body = RequestBody.create(
-                objectMapper.writeValueAsString(requestBody),
-                MediaType.get("application/json"));
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + channel.getApiKey())
-                .header("Content-Type", "application/json")
-                .post(body)
-                .build();
-
-        log.debug("调用LLM(FC): model={}, url={}, tools={}", channel.getModel(), apiUrl,
+        log.debug("调用LLM(FC): model={}, tools={}", channel.getModel(),
                 tools != null ? tools.size() : 0);
-        long startTime = System.currentTimeMillis();
+        CallResult cr = executeHttpRequest(channel, requestBody);
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw buildHttpException(response, channel.getModel());
-            }
+        JsonNode choices = cr.root().path("choices");
+        if (choices.isArray() && !choices.isEmpty()) {
+            JsonNode message = choices.get(0).path("message");
+            String content = message.path("content").asText("");
 
-            String responseBody = response.body().string();
-            JsonNode root = objectMapper.readTree(responseBody);
-            long durationMs = System.currentTimeMillis() - startTime;
-
-            JsonNode choices = root.path("choices");
-            if (choices.isArray() && !choices.isEmpty()) {
-                JsonNode message = choices.get(0).path("message");
-                String content = message.path("content").asText("");
-
-                // 解析原生 tool_calls
-                List<LlmPort.FunctionCall> functionCalls = new ArrayList<>();
-                JsonNode toolCallsNode = message.path("tool_calls");
-                if (toolCallsNode.isArray()) {
-                    for (JsonNode tc : toolCallsNode) {
-                        String id = tc.path("id").asText("");
-                        JsonNode fn = tc.path("function");
-                        String name = fn.path("name").asText("");
-                        String args = fn.path("arguments").asText("{}");
-                        if (!name.isEmpty()) {
-                            functionCalls.add(new LlmPort.FunctionCall(id, name, args));
-                        }
+            // 解析原生 tool_calls
+            List<LlmPort.FunctionCall> functionCalls = new ArrayList<>();
+            JsonNode toolCallsNode = message.path("tool_calls");
+            if (toolCallsNode.isArray()) {
+                for (JsonNode tc : toolCallsNode) {
+                    String id = tc.path("id").asText("");
+                    JsonNode fn = tc.path("function");
+                    String name = fn.path("name").asText("");
+                    String args = fn.path("arguments").asText("{}");
+                    if (!name.isEmpty()) {
+                        functionCalls.add(new LlmPort.FunctionCall(id, name, args));
                     }
                 }
-
-                // 记录 Token 使用量
-                JsonNode usage = root.path("usage");
-                int promptTokens, completionTokens;
-                if (!usage.isMissingNode()) {
-                    promptTokens = usage.path("prompt_tokens").asInt();
-                    completionTokens = usage.path("completion_tokens").asInt();
-                    log.info("Token使用(FC): prompt={}, completion={}", promptTokens, completionTokens);
-                } else {
-                    promptTokens = estimateMessagesTokens(messages);
-                    completionTokens = estimateTokens(content);
-                }
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        promptTokens, completionTokens, durationMs);
-
-                log.debug("LLM(FC)响应: content_len={}, tool_calls={}",
-                        content.length(), functionCalls.size());
-                return new LlmPort.LlmResponse(content,
-                        functionCalls.isEmpty() ? null : functionCalls);
             }
 
-            throw new LlmException.LlmParseException(
-                    "无法解析LLM响应: " +
-                    responseBody.substring(0, Math.min(200, responseBody.length())),
-                    channel.getModel());
+            recordUsageFromResponse(cr.root(), channel, cr.durationMs(),
+                    estimateMessagesTokens(messages), estimateTokens(content));
+            log.debug("LLM(FC)响应: content_len={}, tool_calls={}",
+                    content.length(), functionCalls.size());
+            return new LlmPort.LlmResponse(content,
+                    functionCalls.isEmpty() ? null : functionCalls);
         }
+
+        throw new LlmException.LlmParseException(
+                "无法解析LLM响应: " + cr.root().toString().substring(0, Math.min(200, cr.root().toString().length())),
+                channel.getModel());
     }
 
     // ==================== 新增：结构化输出 ====================
@@ -400,129 +238,54 @@ public class LlmService implements LlmPort {
     @Override
     public String chatForStructuredOutput(List<Map<String, Object>> messages,
                                            Map<String, Object> jsonSchema) {
-        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
-        if (channels.isEmpty()) {
-            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
-        }
-
-        Exception lastException = null;
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = channelManager.getChannelIndex(attempt);
-            AppConfig.LlmChannelConfig channel = channels.get(idx);
-            try {
-                String result = retryExecutor.executeWithRetry(
+        return executeWithChannelFailover(
+                channel -> retryExecutor.executeWithRetry(
                         () -> executeApiCall(() -> callLlmApiForJson(channel, messages, jsonSchema), channel.getModel()),
-                        "chatForStructuredOutput:" + channel.getModel());
-                if (result != null && !result.isEmpty() && !"{}".equals(result)) {
-                    channelManager.markSuccess(idx);
-                    return result;
-                }
-            } catch (LlmException e) {
-                log.warn("LLM渠道 {} 结构化输出失败(含重试): {}", idx, e.getMessage());
-                lastException = e;
-                if (e instanceof LlmException.LlmAuthException) break;
-            } catch (Exception e) {
-                log.warn("LLM渠道 {} 结构化输出失败: {}", idx, e.getMessage());
-                lastException = e;
-            }
-        }
-
-        throw new LlmException.LlmUnavailableException(
-                "所有LLM渠道均失败(结构化输出)", lastException);
+                        "chatForStructuredOutput:" + channel.getModel()),
+                r -> r != null && !r.isEmpty() && !"{}".equals(r),
+                "结构化输出",
+                "所有LLM渠道均失败(结构化输出)");
     }
 
     /**
      * 调用 LLM API（结构化输出模式）
      */
-    private String callLlmApiForJson(AppConfig.LlmChannelConfig channel,
+    private String callLlmApiForJson(LlmConfig.LlmChannelConfig channel,
                                      List<Map<String, Object>> messages,
                                      Map<String, Object> jsonSchema) throws Exception {
-        String apiUrl = resolveApiUrl(channel);
-
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", channel.getModel());
-        requestBody.put("temperature", 0.3); // 结构化输出用低温度
+        requestBody.put("temperature", 0.3);
         requestBody.put("max_tokens", channel.getMaxTokens());
+        addObjectMessages(requestBody, messages);
 
-        // 消息
-        ArrayNode messagesArray = requestBody.putArray("messages");
-        for (Map<String, Object> msg : messages) {
-            ObjectNode msgNode = messagesArray.addObject();
-            for (Map.Entry<String, Object> entry : msg.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (value == null) {
-                    msgNode.putNull(key);
-                } else if (value instanceof String s) {
-                    msgNode.put(key, s);
-                } else {
-                    msgNode.set(key, objectMapper.valueToTree(value));
-                }
-            }
-        }
-
-        // response_format: 强制 JSON 输出（兼容大多数 OpenAI 兼容 API）
-        ObjectNode responseFormat = requestBody.putObject("response_format");
-        responseFormat.put("type", "json_object");
-
-        RequestBody body = RequestBody.create(
-                objectMapper.writeValueAsString(requestBody),
-                MediaType.get("application/json"));
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + channel.getApiKey())
-                .header("Content-Type", "application/json")
-                .post(body)
-                .build();
+        requestBody.putObject("response_format").put("type", "json_object");
 
         log.debug("调用LLM(JSON): model={}", channel.getModel());
-        long startTime = System.currentTimeMillis();
+        CallResult cr = executeHttpRequest(channel, requestBody);
 
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw buildHttpException(response, channel.getModel());
-            }
+        JsonNode choices = cr.root().path("choices");
+        if (choices.isArray() && !choices.isEmpty()) {
+            String content = choices.get(0).path("message").path("content").asText("");
+            recordUsageFromResponse(cr.root(), channel, cr.durationMs(),
+                    estimateMessagesTokens(messages), estimateTokens(content));
 
-            String responseBody = response.body().string();
-            JsonNode root = objectMapper.readTree(responseBody);
-            long durationMs = System.currentTimeMillis() - startTime;
-
-            JsonNode choices = root.path("choices");
-            if (choices.isArray() && !choices.isEmpty()) {
-                String content = choices.get(0).path("message").path("content").asText("");
-
-                // 记录 Token 使用量
-                JsonNode usage = root.path("usage");
-                int promptTokens, completionTokens;
-                if (!usage.isMissingNode()) {
-                    promptTokens = usage.path("prompt_tokens").asInt();
-                    completionTokens = usage.path("completion_tokens").asInt();
-                } else {
-                    promptTokens = estimateMessagesTokens(messages);
-                    completionTokens = estimateTokens(content);
+            // 验证返回的是有效 JSON
+            try {
+                objectMapper.readTree(content);
+                return content;
+            } catch (Exception e) {
+                String extracted = extractJsonFromText(content);
+                if (!"{}".equals(extracted)) {
+                    return extracted;
                 }
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        promptTokens, completionTokens, durationMs);
-
-                // 验证返回的是有效 JSON
-                try {
-                    objectMapper.readTree(content);
-                    return content;
-                } catch (Exception e) {
-                    // 尝试从文本中提取 JSON（LLM 可能包裹 markdown 代码块）
-                    String extracted = extractJsonFromText(content);
-                    if (!"{}".equals(extracted)) {
-                        return extracted;
-                    }
-                    throw new LlmException.LlmParseException(
-                            "LLM 未返回有效 JSON: " +
-                            content.substring(0, Math.min(200, content.length())),
-                            channel.getModel());
-                }
+                throw new LlmException.LlmParseException(
+                        "LLM 未返回有效 JSON: " +
+                        content.substring(0, Math.min(200, content.length())),
+                        channel.getModel());
             }
-            return "{}";
         }
+        return "{}";
     }
 
     /** 从文本中提取 JSON（处理 LLM 可能包裹 markdown 代码块的情况） */
@@ -545,75 +308,6 @@ public class LlmService implements LlmPort {
     }
 
     /**
-     * Vision API调用 - 支持图片输入
-     * 通过OpenAI兼容格式的多模态接口识别图片内容
-     *
-     * @param prompt 文本提示
-     * @param base64Image Base64编码的图片
-     * @param mimeType 图片MIME类型
-     * @return LLM回复
-     */
-    public String chatWithVision(String prompt, String base64Image, String mimeType) {
-        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
-        if (channels.isEmpty()) {
-            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
-        }
-
-        AppConfig.LlmChannelConfig channel = channelManager.getCurrentChannel();
-        String apiUrl = resolveApiUrl(channel);
-
-        try {
-            // 构建多模态请求体 (OpenAI Vision兼容格式)
-            ObjectNode requestBody = objectMapper.createObjectNode();
-            requestBody.put("model", channel.getModel());
-            requestBody.put("max_tokens", 2000);
-
-            ArrayNode messagesArray = requestBody.putArray("messages");
-            ObjectNode userMsg = messagesArray.addObject();
-            userMsg.put("role", "user");
-
-            ArrayNode contentArray = userMsg.putArray("content");
-            // 文本部分
-            ObjectNode textPart = contentArray.addObject();
-            textPart.put("type", "text");
-            textPart.put("text", prompt);
-            // 图片部分
-            ObjectNode imagePart = contentArray.addObject();
-            imagePart.put("type", "image_url");
-            ObjectNode imageUrl = imagePart.putObject("image_url");
-            imageUrl.put("url", "data:" + mimeType + ";base64," + base64Image);
-
-            RequestBody body = RequestBody.create(
-                    objectMapper.writeValueAsString(requestBody),
-                    MediaType.get("application/json"));
-
-            Request request = new Request.Builder()
-                    .url(apiUrl)
-                    .header("Authorization", "Bearer " + channel.getApiKey())
-                    .header("Content-Type", "application/json")
-                    .post(body)
-                    .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw buildHttpException(response, channel.getModel());
-                }
-                String responseBody = response.body().string();
-                JsonNode root = objectMapper.readTree(responseBody);
-                JsonNode choices = root.path("choices");
-                if (choices.isArray() && !choices.isEmpty()) {
-                    return choices.get(0).path("message").path("content").asText("");
-                }
-                return "[]";
-            }
-        } catch (LlmException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new LlmException("Vision API调用失败: " + e.getMessage(), null, e);
-        }
-    }
-
-    /**
      * 流式对话接口 - 支持SSE逐字输出
      *
      * @param messages 消息列表
@@ -621,73 +315,29 @@ public class LlmService implements LlmPort {
      * @return 完整回复文本
      */
     public String streamChatWithMessages(List<Map<String, String>> messages, Consumer<String> onChunk) {
-        List<AppConfig.LlmChannelConfig> channels = config.getLlmChannels();
-        if (channels.isEmpty()) {
-            throw new LlmException.LlmUnavailableException("未配置LLM渠道");
-        }
-
-        Exception lastException = null;
-        for (int attempt = 0; attempt < channels.size(); attempt++) {
-            int idx = channelManager.getChannelIndex(attempt);
-            AppConfig.LlmChannelConfig channel = channels.get(idx);
-            try {
-                String result = executeApiCall(
-                        () -> callLlmStreamApi(channel, messages, onChunk), channel.getModel());
-                if (result != null && !result.isEmpty()) {
-                    channelManager.markSuccess(idx);
-                    return result;
-                }
-            } catch (LlmException e) {
-                log.warn("LLM流式渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-                if (e instanceof LlmException.LlmAuthException) break;
-            } catch (Exception e) {
-                log.warn("LLM流式渠道 {} ({}) 调用失败: {}", idx, channel.getModel(), e.getMessage());
-                lastException = e;
-            }
-        }
-
-        throw new LlmException.LlmUnavailableException(
-                "所有LLM流式渠道均失败", lastException);
+        return executeWithChannelFailover(
+                channel -> executeApiCall(
+                        () -> callLlmStreamApi(channel, messages, onChunk), channel.getModel()),
+                r -> r != null && !r.isEmpty(),
+                "流式",
+                "所有LLM流式渠道均失败");
     }
 
     /**
      * 调用单个LLM API (流式)
      */
-    private String callLlmStreamApi(AppConfig.LlmChannelConfig channel,
+    private String callLlmStreamApi(LlmConfig.LlmChannelConfig channel,
                                     List<Map<String, String>> messages,
                                     Consumer<String> onChunk) throws Exception {
-        String apiUrl = resolveApiUrl(channel);
+        // 复用 LlmRequestBuilder 统一构建请求体
+        ObjectNode requestBody = requestBuilder.buildBaseRequest(channel);
+        requestBuilder.addStringMessages(requestBody, messages);
+        requestBuilder.enableStream(requestBody);
 
-        // 构建请求体 - 开启stream
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", channel.getModel());
-        requestBody.put("temperature", channel.getTemperature());
-        requestBody.put("max_tokens", channel.getMaxTokens());
-        requestBody.put("stream", true);
-        // 请求在最后一个chunk中返回usage信息
-        ObjectNode streamOptions = requestBody.putObject("stream_options");
-        streamOptions.put("include_usage", true);
+        Request request = requestBuilder.buildRequest(
+                resolveApiUrl(channel), channel.getApiKey(), requestBody);
 
-        ArrayNode messagesArray = requestBody.putArray("messages");
-        for (Map<String, String> msg : messages) {
-            ObjectNode msgNode = messagesArray.addObject();
-            msgNode.put("role", msg.get("role"));
-            msgNode.put("content", msg.get("content"));
-        }
-
-        RequestBody body = RequestBody.create(
-                objectMapper.writeValueAsString(requestBody),
-                MediaType.get("application/json"));
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + channel.getApiKey())
-                .header("Content-Type", "application/json")
-                .post(body)
-                .build();
-
-        log.debug("流式调用LLM: model={}, url={}", channel.getModel(), apiUrl);
+        log.debug("流式调用LLM: model={}", channel.getModel());
         long startTime = System.currentTimeMillis();
 
         try (Response response = httpClient.newCall(request).execute()) {
@@ -742,6 +392,62 @@ public class LlmService implements LlmPort {
             }
             return fullContent.toString();
         }
+    }
+
+    // ==================== 渠道故障切换模板 ====================
+
+    /**
+     * 函数式接口：按渠道执行 LLM 调用
+     */
+    @FunctionalInterface
+    private interface ChannelExecutor<T> {
+        T execute(LlmConfig.LlmChannelConfig channel) throws Exception;
+    }
+
+    /**
+     * 渠道故障切换模板方法 — 遍历所有渠道，带重试和故障切换
+     *
+     * 统一封装 chatWithMessages / chatWithFunctionCalling / chatForStructuredOutput / streamChatWithMessages
+     * 中重复的渠道遍历 + 故障切换 + 异常处理逻辑。
+     *
+     * @param executor      每个渠道的执行逻辑（含重试）
+     * @param isSuccess     结果有效性判断
+     * @param operationName  操作名称（用于日志）
+     * @param errorMessage   全部失败时的异常消息
+     * @return 第一个成功渠道的结果
+     */
+    private <T> T executeWithChannelFailover(
+            ChannelExecutor<T> executor,
+            Predicate<T> isSuccess,
+            String operationName,
+            String errorMessage) {
+
+        List<LlmConfig.LlmChannelConfig> channels = config.getLlmChannels();
+        if (channels.isEmpty()) {
+            throw new LlmException.LlmUnavailableException("未配置LLM渠道，请设置 LLM_API 和 LLM_API_KEY");
+        }
+
+        Exception lastException = null;
+        for (int attempt = 0; attempt < channels.size(); attempt++) {
+            int idx = channelManager.getChannelIndex(attempt);
+            LlmConfig.LlmChannelConfig channel = channels.get(idx);
+            try {
+                T result = executor.execute(channel);
+                if (isSuccess.test(result)) {
+                    channelManager.markSuccess(idx);
+                    return result;
+                }
+            } catch (LlmException e) {
+                log.warn("LLM渠道 {} ({}) {}失败(含重试): {}", idx, channel.getModel(), operationName, e.getMessage());
+                lastException = e;
+                if (e instanceof LlmException.LlmAuthException) break;
+            } catch (Exception e) {
+                log.warn("LLM渠道 {} ({}) {}失败: {}", idx, channel.getModel(), operationName, e.getMessage());
+                lastException = e;
+            }
+        }
+
+        throw new LlmException.LlmUnavailableException(errorMessage, lastException);
     }
 
     // ==================== 监控指标辅助方法 ====================
@@ -834,10 +540,84 @@ public class LlmService implements LlmPort {
         }
     }
 
+    // ==================== 公共调用辅助方法 ====================
+
+    /** HTTP 调用结果 */
+    private record CallResult(JsonNode root, long durationMs) {}
+
+    /**
+     * 构建 HTTP 请求并执行，返回解析后的 JSON 响应
+     * 统一 3 种调用模式中重复的 HTTP 请求构建 + 执行 + 响应解析逻辑
+     */
+    private CallResult executeHttpRequest(LlmConfig.LlmChannelConfig channel,
+                                            ObjectNode requestBody) throws Exception {
+        String apiUrl = resolveApiUrl(channel);
+        RequestBody body = RequestBody.create(
+                objectMapper.writeValueAsString(requestBody),
+                MediaType.get("application/json"));
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + channel.getApiKey())
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        long startTime = System.currentTimeMillis();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw buildHttpException(response, channel.getModel());
+            }
+            String responseBody = response.body().string();
+            JsonNode root = objectMapper.readTree(responseBody);
+            return new CallResult(root, System.currentTimeMillis() - startTime);
+        }
+    }
+
+    /**
+     * 从响应中记录 Token 使用量（供应商未返回 usage 时使用估算值）
+     */
+    private void recordUsageFromResponse(JsonNode root, LlmConfig.LlmChannelConfig channel,
+                                          long durationMs, int estPromptTokens, int estCompletionTokens) {
+        JsonNode usage = root.path("usage");
+        int promptTokens, completionTokens;
+        if (!usage.isMissingNode()) {
+            promptTokens = usage.path("prompt_tokens").asInt();
+            completionTokens = usage.path("completion_tokens").asInt();
+        } else {
+            promptTokens = estPromptTokens;
+            completionTokens = estCompletionTokens;
+        }
+        usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                promptTokens, completionTokens, durationMs);
+    }
+
+    /**
+     * 将 Object 类型消息列表添加到请求体中
+     */
+    private void addObjectMessages(ObjectNode requestBody, List<Map<String, Object>> messages) {
+        ArrayNode messagesArray = requestBody.putArray("messages");
+        for (Map<String, Object> msg : messages) {
+            ObjectNode msgNode = messagesArray.addObject();
+            for (Map.Entry<String, Object> entry : msg.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                if (value == null) {
+                    msgNode.putNull(key);
+                } else if (value instanceof String s) {
+                    msgNode.put(key, s);
+                } else if (value instanceof Boolean b) {
+                    msgNode.put(key, b.booleanValue());
+                } else {
+                    msgNode.set(key, objectMapper.valueToTree(value));
+                }
+            }
+        }
+    }
+
     /**
      * 解析API URL
      */
-    private String resolveApiUrl(AppConfig.LlmChannelConfig channel) {
+    private String resolveApiUrl(LlmConfig.LlmChannelConfig channel) {
         String api = channel.getApi();
         if (api == null || api.isEmpty()) {
             // 默认OpenAI
@@ -852,71 +632,4 @@ public class LlmService implements LlmPort {
         return api;
     }
 
-    /**
-     * 构建系统提示
-     */
-    private String buildSystemPrompt() {
-        return """
-                你是一位专业的股票分析师，拥有丰富的技术分析和基本面分析经验。
-                请根据提供的股票数据进行全面分析，包括：
-                1. 技术面分析：趋势判断、关键技术指标解读、形态识别
-                2. 基本面评估：估值水平、行业地位
-                3. 消息面影响：重要新闻对股价的潜在影响
-                4. 综合评分和交易信号
-                5. 风险评估和操作建议
-                
-                请给出明确的交易信号(strong_buy/buy/neutral/sell/strong_sell)和评分(0-100)。
-                分析要客观、专业，注重数据支撑。
-                """;
-    }
-
-    /**
-     * 构建分析提示
-     */
-    private String buildAnalysisPrompt(Map<String, Object> context) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("请分析以下股票:\n\n");
-        prompt.append("## 基本信息\n");
-        prompt.append("- 股票代码: ").append(context.get("stock_code")).append("\n");
-        prompt.append("- 股票名称: ").append(context.get("stock_name")).append("\n");
-        prompt.append("- 市场: ").append(context.get("market")).append("\n");
-        prompt.append("- 分析日期: ").append(context.get("analysis_date")).append("\n\n");
-
-        prompt.append("## 历史行情数据\n");
-        prompt.append(context.get("history_data")).append("\n");
-
-        // 实时行情
-        Object quote = context.get("realtime_quote");
-        if (quote instanceof Map && !((Map<?, ?>) quote).isEmpty()) {
-            prompt.append("## 实时行情\n");
-            ((Map<?, ?>) quote).forEach((k, v) -> 
-                    prompt.append("- ").append(k).append(": ").append(v).append("\n"));
-            prompt.append("\n");
-        }
-
-        // 技术分析
-        Object tech = context.get("technical_analysis");
-        if (tech instanceof Map && !((Map<?, ?>) tech).isEmpty()) {
-            prompt.append("## 技术指标\n");
-            ((Map<?, ?>) tech).forEach((k, v) -> 
-                    prompt.append("- ").append(k).append(": ").append(v).append("\n"));
-            prompt.append("\n");
-        }
-
-        // 新闻
-        Object news = context.get("news");
-        if (news instanceof List && !((List<?>) news).isEmpty()) {
-            prompt.append("## 相关新闻\n");
-            for (Object item : (List<?>) news) {
-                if (item instanceof Map) {
-                    Map<?, ?> newsItem = (Map<?, ?>) item;
-                    prompt.append("- ").append(newsItem.get("title")).append("\n");
-                }
-            }
-            prompt.append("\n");
-        }
-
-        prompt.append("请给出完整的分析报告，包括综合评分、交易信号和操作建议。");
-        return prompt.toString();
-    }
 }

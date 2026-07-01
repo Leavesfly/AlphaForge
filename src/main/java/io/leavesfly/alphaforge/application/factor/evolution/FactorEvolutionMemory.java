@@ -3,100 +3,203 @@ package io.leavesfly.alphaforge.application.factor.evolution;
 import io.leavesfly.alphaforge.application.factor.evolution.model.FactorEvolutionRecord;
 import io.leavesfly.alphaforge.application.factor.evolution.model.FailurePattern;
 import io.leavesfly.alphaforge.application.factor.evolution.model.FactorGenerationContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
 /**
  * 因子进化记忆存储 — 跨代因子进化经验的持久化与检索
  *
- * 对应论文：
- * - FactorMiner: "Skills and Experience Memory"
- *   → 记录因子生命周期全链路，供 LLM 参考历史成功/失败经验
- * - AlphaAgentEvo: "Self-Evolving Memory"
- *   → 从失败因子中提取模式，驱动反向变异
- *
- * 与现有 ExperienceMemory 的关系：
- * - ExperienceMemory 记录信号级经验（技术指标快照 → 信号 → 效果）
- * - FactorEvolutionMemory 记录因子级经验（因子表达式 → IC/IR → 通过/淘汰）
- * - 两者通过 FactorExperienceBridge 统一注入 LLM prompt（见整合设计）
+ * 采用内存存储策略（ConcurrentHashMap），
+ * 后续可通过 Repository + MyBatis 持久化到 SQLite（已建表）。
  */
-public interface FactorEvolutionMemory {
+@Service
+public class FactorEvolutionMemory {
 
-    /**
-     * 记录一次因子进化事件（生成/评估/提升/淘汰）
-     *
-     * @param record 因子进化记录
-     */
-    void recordEvolution(FactorEvolutionRecord record);
+    private static final Logger log = LoggerFactory.getLogger(FactorEvolutionMemory.class);
 
-    /**
-     * 获取指定因子的完整进化谱系
-     *
-     * @param factorId 因子 ID
-     * @return 进化记录列表（按代数排序）
-     */
-    List<FactorEvolutionRecord> getEvolutionHistory(String factorId);
+    private static final int MAX_RECORDS = 2000;
+    private static final int MAX_TOP_PERFORMERS = 50;
 
-    /**
-     * 获取全局 Top 表现因子（供变异参考）
-     *
-     * @param limit 返回数量
-     * @return 按评估得分降序排列的因子记录
-     */
-    List<FactorEvolutionRecord> getTopPerformers(int limit);
+    /** 全局进化记录（按时间排序） */
+    private final CopyOnWriteArrayList<FactorEvolutionRecord> allRecords = new CopyOnWriteArrayList<>();
 
-    /**
-     * 获取指定市场条件下的 Top 因子
-     *
-     * @param marketCondition 市场条件（如 "bull_trend", "high_volatility"）
-     * @param limit           返回数量
-     * @return 因子记录列表
-     */
-    List<FactorEvolutionRecord> getTopPerformersByCondition(String marketCondition, int limit);
+    /** 因子 ID → 进化记录列表（谱系树） */
+    private final Map<String, CopyOnWriteArrayList<FactorEvolutionRecord>> factorHistory = new ConcurrentHashMap<>();
 
-    /**
-     * 获取失败模式统计 — 从历史淘汰因子中提取共性特征
-     *
-     * @return 失败模式列表（按出现频率降序）
-     */
-    List<FailurePattern> getFailurePatterns();
+    /** 失败模式缓存 */
+    private volatile List<FailurePattern> cachedFailurePatterns = null;
 
-    /**
-     * 获取指定分类下的失败因子列表
-     *
-     * @param category 因子分类（momentum / mean_reversion 等）
-     * @return 失败因子记录列表
-     */
-    List<FactorEvolutionRecord> getFailedFactorsByCategory(String category);
+    /** 当前进化代数 */
+    private volatile int currentGeneration = 0;
 
-    /**
-     * 构建进化记忆提示文本（注入到 LLM 因子生成 prompt 中）
-     *
-     * 参考 FactorMiner 的 "Experience Injection"：
-     * 将历史成功因子的特征、失败因子的模式、当前市场条件下的最优因子
-     * 格式化为 LLM 可读的提示文本。
-     *
-     * @param context 生成上下文
-     * @return 进化记忆提示文本（无历史数据时返回空字符串）
-     */
-    String buildEvolutionHint(FactorGenerationContext context);
+    /** 每代的最佳 IC 记录（用于收敛判断） */
+    private final List<Double> bestICPerGeneration = new CopyOnWriteArrayList<>();
 
-    /**
-     * 获取当前进化代数
-     */
-    int getCurrentGeneration();
+    public void recordEvolution(FactorEvolutionRecord record) {
+        if (record == null) return;
 
-    /**
-     * 检查收敛条件 — 连续 N 代无显著提升
-     *
-     * @param minGenerations 最小进化代数（避免过早收敛）
-     * @param threshold      提升阈值（IC 提升幅度）
-     * @return 是否已收敛
-     */
-    boolean isConverged(int minGenerations, double threshold);
+        allRecords.add(record);
+        while (allRecords.size() > MAX_RECORDS) {
+            allRecords.remove(0);
+        }
 
-    /**
-     * 获取已提升到生产库的因子列表
-     */
-    List<FactorEvolutionRecord> getPromotedFactors();
+        factorHistory.computeIfAbsent(record.getFactorId(), k -> new CopyOnWriteArrayList<>())
+                .add(record);
+
+        if (record.getGenerationRound() > currentGeneration) {
+            currentGeneration = record.getGenerationRound();
+        }
+
+        // 记录每代最优 IC
+        if (record.isSuccessful()) {
+            while (bestICPerGeneration.size() <= record.getGenerationRound()) {
+                bestICPerGeneration.add(0.0);
+            }
+            if (record.getIc() > bestICPerGeneration.get(record.getGenerationRound())) {
+                bestICPerGeneration.set(record.getGenerationRound(), record.getIc());
+            }
+        }
+
+        // 失效缓存
+        cachedFailurePatterns = null;
+
+        log.debug("记录因子进化: {} gen={} status={} ic={:.4f}",
+                record.getFactorName(), record.getGenerationRound(),
+                record.getStatus(), record.getIc());
+    }
+
+    public List<FactorEvolutionRecord> getEvolutionHistory(String factorId) {
+        CopyOnWriteArrayList<FactorEvolutionRecord> list = factorHistory.get(factorId);
+        return list != null ? new ArrayList<>(list) : Collections.emptyList();
+    }
+
+    public List<FactorEvolutionRecord> getTopPerformers(int limit) {
+        return allRecords.stream()
+                .filter(FactorEvolutionRecord::isSuccessful)
+                .sorted(Comparator.comparingDouble(FactorEvolutionRecord::getEvaluationScore).reversed())
+                .limit(Math.min(limit, MAX_TOP_PERFORMERS))
+                .collect(Collectors.toList());
+    }
+
+    public List<FactorEvolutionRecord> getTopPerformersByCondition(String marketCondition, int limit) {
+        return allRecords.stream()
+                .filter(r -> r.isSuccessful() && marketCondition.equals(r.getMarketCondition()))
+                .sorted(Comparator.comparingDouble(FactorEvolutionRecord::getEvaluationScore).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    public List<FailurePattern> getFailurePatterns() {
+        if (cachedFailurePatterns != null) return cachedFailurePatterns;
+
+        // 从淘汰因子中提取模式
+        Map<String, List<FactorEvolutionRecord>> patternsByCategory = allRecords.stream()
+                .filter(FactorEvolutionRecord::isFailed)
+                .collect(Collectors.groupingBy(r ->
+                        r.getCategory() + "|" + r.getMarketCondition()));
+
+        List<FailurePattern> patterns = new ArrayList<>();
+        for (Map.Entry<String, List<FactorEvolutionRecord>> entry : patternsByCategory.entrySet()) {
+            List<FactorEvolutionRecord> failed = entry.getValue();
+            if (failed.size() < 2) continue;
+
+            String[] parts = entry.getKey().split("\\|", 2);
+            String category = parts[0];
+            String condition = parts.length > 1 ? parts[1] : "any";
+
+            double avgIC = failed.stream().mapToDouble(FactorEvolutionRecord::getIc).average().orElse(0);
+            double avgScore = failed.stream().mapToDouble(FactorEvolutionRecord::getEvaluationScore).average().orElse(0);
+
+            String description = String.format("在 %s 市况下，%s 类因子平均 IC=%.4f，失败 %d 次",
+                    condition, category, avgIC, failed.size());
+
+            patterns.add(new FailurePattern(
+                    entry.getKey(),
+                    failed.size(),
+                    avgIC,
+                    avgScore,
+                    description,
+                    category
+            ));
+        }
+
+        patterns.sort(Comparator.comparingInt(FailurePattern::getOccurrenceCount).reversed());
+        cachedFailurePatterns = patterns;
+        return patterns;
+    }
+
+    public List<FactorEvolutionRecord> getFailedFactorsByCategory(String category) {
+        return allRecords.stream()
+                .filter(r -> r.isFailed() && category.equals(r.getCategory()))
+                .collect(Collectors.toList());
+    }
+
+    public String buildEvolutionHint(FactorGenerationContext context) {
+        if (allRecords.isEmpty()) return "";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n## 因子进化经验记忆\n");
+
+        // 成功因子 Top 3
+        List<FactorEvolutionRecord> top = getTopPerformers(3);
+        if (!top.isEmpty()) {
+            sb.append("### 历史最优因子（供变异参考）\n");
+            for (FactorEvolutionRecord r : top) {
+                sb.append(String.format("- %s: expr=%s IC=%.4f IR=%.4f Sharpe=%.2f 代数=%d\n",
+                        r.getFactorName(), r.getFactorExpression(),
+                        r.getIc(), r.getIr(), r.getSharpeRatio(), r.getGenerationRound()));
+            }
+        }
+
+        // 失败模式 Top 3
+        List<FailurePattern> failures = getFailurePatterns();
+        if (!failures.isEmpty()) {
+            sb.append("\n### 失败模式（需避免）\n");
+            failures.stream().limit(3).forEach(f ->
+                    sb.append(String.format("- %s（出现%d次）\n", f.getFailureDescription(), f.getOccurrenceCount())));
+        }
+
+        // 按市场条件推荐
+        if (context.getMarketPhase() != null) {
+            List<FactorEvolutionRecord> condTop = getTopPerformersByCondition(context.getMarketPhase(), 3);
+            if (!condTop.isEmpty()) {
+                sb.append(String.format("\n### 在 %s 市况下表现最优的因子\n", context.getMarketPhase()));
+                for (FactorEvolutionRecord r : condTop) {
+                    sb.append(String.format("- %s: IC=%.4f Score=%.1f\n", r.getFactorName(), r.getIc(), r.getEvaluationScore()));
+                }
+            }
+        }
+
+        return sb.toString();
+    }
+
+    public int getCurrentGeneration() {
+        return currentGeneration;
+    }
+
+    public boolean isConverged(int minGenerations, double threshold) {
+        if (bestICPerGeneration.size() < minGenerations + 1) return false;
+
+        // 检查最近 minGenerations 代的 IC 提升是否都小于阈值
+        int start = bestICPerGeneration.size() - minGenerations;
+        for (int i = start; i < bestICPerGeneration.size(); i++) {
+            double prev = bestICPerGeneration.get(i - 1);
+            double curr = bestICPerGeneration.get(i);
+            if (curr - prev > threshold) return false; // 有显著提升，未收敛
+        }
+        return true;
+    }
+
+    public List<FactorEvolutionRecord> getPromotedFactors() {
+        return allRecords.stream()
+                .filter(r -> r.getStatus() == io.leavesfly.alphaforge.application.factor.evolution.model.FactorStatus.PROMOTED)
+                .collect(Collectors.toList());
+    }
 }
+

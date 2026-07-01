@@ -3,6 +3,7 @@ package io.leavesfly.alphaforge.application.service.screening;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.leavesfly.alphaforge.application.backtest.BacktestVisualizationService;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
@@ -12,7 +13,7 @@ import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.backtest.BacktestRecord;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.alphaforge.infrastructure.persistence.backtest.BacktestRepository;
+import io.leavesfly.alphaforge.domain.repository.backtest.BacktestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,7 @@ class BacktestVisualizationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new BacktestVisualizationService(backtestRepo, dataFetcher);
+        service = new BacktestVisualizationService(backtestRepo, dataFetcher, objectMapper);
     }
 
     @Test

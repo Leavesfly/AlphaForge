@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.presentation.scheduler;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.alphaforge.application.service.signal.SignalOutcomeEvaluator;
 import io.leavesfly.alphaforge.application.service.loop.LoopStateManager;
@@ -30,18 +30,18 @@ import java.util.Map;
 public class AnalysisScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisScheduler.class);
-    private final AppConfig config;
+    private final SchedulerAuthConfig schedulerAuthConfig;
     private final StockAnalysisPipeline pipeline;
     private final TradingCalendar tradingCalendar;
     private final SignalOutcomeEvaluator outcomeEvaluator;
     private final LoopStateManager loopState;
     private volatile boolean running = false;
 
-    public AnalysisScheduler(AppConfig config, StockAnalysisPipeline pipeline,
+    public AnalysisScheduler(SchedulerAuthConfig schedulerAuthConfig, StockAnalysisPipeline pipeline,
                              TradingCalendar tradingCalendar,
                              SignalOutcomeEvaluator outcomeEvaluator,
                              LoopStateManager loopState) {
-        this.config = config;
+        this.schedulerAuthConfig = schedulerAuthConfig;
         this.pipeline = pipeline;
         this.tradingCalendar = tradingCalendar;
         this.outcomeEvaluator = outcomeEvaluator;
@@ -53,7 +53,7 @@ public class AnalysisScheduler {
      */
     public void start() {
         running = true;
-        log.info("调度器已启动 | cron: {}", config.getScheduleCron());
+        log.info("调度器已启动 | cron: {}", schedulerAuthConfig.getScheduleCron());
     }
 
     /**
@@ -109,7 +109,7 @@ public class AnalysisScheduler {
         log.info("========== [Loop4-信号评估] 触发 | {} ==========", LocalDateTime.now());
         try {
             SignalOutcomeEvaluator.EvaluationSummary summary = outcomeEvaluator.evaluatePendingSignals();
-            loopState.refreshAccuracy();
+            outcomeEvaluator.refreshAndSyncAccuracy();
             log.info("[Loop4] 信号评估完成: {}", summary);
         } catch (Exception e) {
             log.error("[Loop4] 信号评估失败: {}", e.getMessage(), e);

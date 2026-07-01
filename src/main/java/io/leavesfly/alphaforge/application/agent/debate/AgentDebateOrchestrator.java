@@ -40,10 +40,11 @@ public class AgentDebateOrchestrator {
     /** 风控 Agent 角色名（其反对意见有"一票否决权"） */
     private static final String RISK_ROLE = "risk";
 
-    public AgentDebateOrchestrator(LlmPort llmPort, MultiAgentOrchestrator orchestrator) {
+    public AgentDebateOrchestrator(LlmPort llmPort, MultiAgentOrchestrator orchestrator,
+                                  ObjectMapper objectMapper) {
         this.llmPort = llmPort;
         this.orchestrator = orchestrator;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -135,7 +136,7 @@ public class AgentDebateOrchestrator {
                     r.agentName, r.role, r.confidence));
             if (r.signal != null) userPrompt.append("信号: ").append(r.signal).append("\n");
             if (r.score != null) userPrompt.append("评分: ").append(r.score).append("\n");
-            userPrompt.append("分析: ").append(truncate(r.analysis, 500)).append("\n");
+            userPrompt.append("分析: ").append(io.leavesfly.alphaforge.util.CommonUtils.truncate(r.analysis, 500)).append("\n");
             if (!r.keyFindings.isEmpty()) {
                 userPrompt.append("关键发现:\n");
                 for (String f : r.keyFindings) userPrompt.append("- ").append(f).append("\n");
@@ -143,7 +144,7 @@ public class AgentDebateOrchestrator {
             userPrompt.append("\n");
         }
 
-        userPrompt.append("## 原始综合结论\n").append(truncate(originalSynthesis, 500)).append("\n\n");
+        userPrompt.append("## 原始综合结论\n").append(io.leavesfly.alphaforge.util.CommonUtils.truncate(originalSynthesis, 500)).append("\n\n");
         userPrompt.append("请让每个 Agent 进行交叉质询，返回 JSON。");
 
         try {
@@ -360,10 +361,7 @@ public class AgentDebateOrchestrator {
         return 50;
     }
 
-    private String truncate(String text, int maxLen) {
-        if (text == null) return "";
-        return text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
-    }
+    // truncate 方法已移除，直接使用 CommonUtils.truncate
 
     private String buildArgumentsSummary(List<DebateArgument> arguments) {
         if (arguments.isEmpty()) return "无辩论论点";
@@ -371,7 +369,7 @@ public class AgentDebateOrchestrator {
         for (DebateArgument a : arguments) {
             sb.append(String.format("- %s(%s): %s — %s\n",
                     a.getAgentName(), a.getStance(),
-                    truncate(a.getArgument(), 100),
+                    io.leavesfly.alphaforge.util.CommonUtils.truncate(a.getArgument(), 100),
                     a.getTargetAgent() != null ? "→ " + a.getTargetAgent() : ""));
         }
         return sb.toString();

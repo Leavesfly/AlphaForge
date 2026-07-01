@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.service.report;
 
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
-import io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisReportRepository;
+import io.leavesfly.alphaforge.domain.repository.analysis.AnalysisReportRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

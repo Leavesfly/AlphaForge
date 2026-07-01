@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 现金流水账 Mapper：管理账户资金的出入账记录，记录每笔资金的流向、金额及币种 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.CashLedgerRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.portfolio.CashLedgerRepository">
 
     <!-- 结果映射：数据库字段 ↔ CashLedgerEntry 实体属性 -->
     <resultMap id="cashMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.CashLedgerEntry">

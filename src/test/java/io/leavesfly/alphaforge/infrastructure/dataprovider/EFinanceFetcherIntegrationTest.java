@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher;
 import org.junit.jupiter.api.BeforeAll;
@@ -35,8 +35,7 @@ class EFinanceFetcherIntegrationTest {
 
     @BeforeAll
     void setUp() {
-        AppConfig mockConfig = mock(AppConfig.class);
-        fetcher = new EFinanceFetcher(mockConfig);
+        fetcher = new EFinanceFetcher(new okhttp3.OkHttpClient(), new com.fasterxml.jackson.databind.ObjectMapper());
     }
 
     // ========== 行情层 ==========

@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.llm;
 
+import io.leavesfly.alphaforge.domain.service.exception.LlmException;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
+import io.leavesfly.alphaforge.util.CommonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -69,7 +71,7 @@ public class LlmResponseParser {
                                                String model) {
         JsonNode choices = root.path("choices");
         if (!choices.isArray() || choices.isEmpty()) {
-            throw new LlmException.LlmParseException("无法解析LLM响应: " + truncate(root.toString(), 200), model);
+            throw new LlmException.LlmParseException("无法解析LLM响应: " + CommonUtils.truncate(root.toString(), 200), model);
         }
 
         JsonNode message = choices.get(0).path("message");
@@ -160,29 +162,8 @@ public class LlmResponseParser {
      * @return 提取的 JSON 字符串，无法提取时返回 "{}"
      */
     public String extractJsonFromText(String text) {
-        if (text == null || text.isEmpty()) return "{}";
-        String trimmed = text.trim();
-
-        // 去除 markdown 代码块
-        if (trimmed.startsWith("```")) {
-            int firstNewline = trimmed.indexOf('\n');
-            if (firstNewline > 0) {
-                trimmed = trimmed.substring(firstNewline + 1);
-            }
-            int lastFence = trimmed.lastIndexOf("```");
-            if (lastFence > 0) {
-                trimmed = trimmed.substring(0, lastFence);
-            }
-            trimmed = trimmed.trim();
-        }
-
-        // 尝试找到 JSON 起始和结束
-        int start = trimmed.indexOf('{');
-        int end = trimmed.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return trimmed.substring(start, end + 1);
-        }
-        return "{}";
+        String extracted = CommonUtils.extractJsonFromText(text);
+        return extracted != null ? extracted : "{}";
     }
 
     /** 验证字符串是否为有效 JSON */
@@ -209,9 +190,5 @@ public class LlmResponseParser {
             }
         }
         return Math.max(1, total / 4);
-    }
-
-    private String truncate(String s, int max) {
-        return s != null && s.length() > max ? s.substring(0, max) + "..." : s;
     }
 }

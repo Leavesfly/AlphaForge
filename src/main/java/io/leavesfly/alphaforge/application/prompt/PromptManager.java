@@ -1,10 +1,10 @@
 package io.leavesfly.alphaforge.application.prompt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -34,8 +34,12 @@ public class PromptManager {
     private static final Logger log = LoggerFactory.getLogger(PromptManager.class);
     private static final String PROMPTS_DIR = "prompts/";
 
-    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper yamlMapper;
     private final Map<String, PromptTemplate> templates = new HashMap<>();
+
+    public PromptManager(@Qualifier("yamlObjectMapper") ObjectMapper yamlMapper) {
+        this.yamlMapper = yamlMapper;
+    }
 
     @PostConstruct
     public void init() {
@@ -54,6 +58,7 @@ public class PromptManager {
                     "technical_agent_system",
                     "fundamental_agent_system",
                     "risk_agent_system",
+                    "intelligence_system",
                     "synthesis_system",
                     "synthesis_user"
             };
@@ -124,6 +129,15 @@ public class PromptManager {
     /** 检查模板是否存在 */
     public boolean hasTemplate(String name) {
         return templates.containsKey(name);
+    }
+
+    /**
+     * 获取模板，未找到时返回默认值
+     * 消除调用方重复的 hasTemplate + getTemplate + fallback 模式
+     */
+    public String getTemplateOrDefault(String name, String defaultValue) {
+        String template = getTemplate(name);
+        return (template != null && !template.isEmpty()) ? template : defaultValue;
     }
 
     /** 列出所有已加载的模板名 */

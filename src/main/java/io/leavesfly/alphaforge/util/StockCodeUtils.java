@@ -72,6 +72,56 @@ public class StockCodeUtils {
         }
     }
 
+    // ========== 各数据源代码格式转换 ==========
+
+    /**
+     * 转为 Tushare 代码格式 (600519.SH / 000001.SZ)
+     */
+    public static String toTsCode(String stockCode) {
+        String code = normalize(stockCode);
+        if (code.startsWith("6") || code.startsWith("9")) return code + ".SH";
+        return code + ".SZ";
+    }
+
+    /**
+     * 转为东方财富 secId 格式 (1.600519 / 0.000001)
+     * 沪市: 1.code, 深市/北交所: 0.code
+     */
+    public static String toSecId(String stockCode) {
+        String code = normalize(stockCode);
+        if (code.startsWith("6") || code.startsWith("9")
+                || code.startsWith("11") || code.startsWith("13")) {
+            return "1." + code;
+        }
+        return "0." + code;
+    }
+
+    /**
+     * 转为新浪/腾讯带前缀格式 (sh600519 / sz000001)
+     */
+    public static String toPrefixedSymbol(String stockCode) {
+        String code = normalize(stockCode);
+        if (code.startsWith("6") || code.startsWith("9")) return "sh" + code;
+        return "sz" + code;
+    }
+
+    /**
+     * 判断是否为沪市代码 (6/9开头)
+     */
+    public static boolean isSSE(String code) {
+        String normalized = normalize(code);
+        return !normalized.isEmpty() && (normalized.startsWith("6") || normalized.startsWith("9"));
+    }
+
+    /**
+     * 判断是否为深市代码 (0/3/2开头)
+     */
+    public static boolean isSZSE(String code) {
+        String normalized = normalize(code);
+        return !normalized.isEmpty() &&
+                (normalized.startsWith("0") || normalized.startsWith("3") || normalized.startsWith("2"));
+    }
+
     /**
      * 格式化显示价格
      */

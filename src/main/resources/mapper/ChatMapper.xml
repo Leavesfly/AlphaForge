@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 聊天会话 Mapper：管理用户对话会话与消息记录的增删改查 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.chat.ChatRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.chat.ChatRepository">
 
     <!-- 插入会话 -->
     <insert id="insertSession">

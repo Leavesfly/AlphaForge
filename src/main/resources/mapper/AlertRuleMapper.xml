@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 告警规则 Mapper：管理股票监控告警规则的增删改查，包含阈值、条件表达式、通知渠道等配置 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.alert.AlertRuleRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.alert.AlertRuleRepository">
 
     <!-- 结果映射：数据库字段 ↔ AlertRule 实体属性 -->
     <resultMap id="alertRuleMap" type="io.leavesfly.alphaforge.domain.model.entity.alert.AlertRule">

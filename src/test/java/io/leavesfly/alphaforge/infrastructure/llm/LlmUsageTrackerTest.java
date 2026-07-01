@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.infrastructure.llm;
 
 import io.leavesfly.alphaforge.domain.model.entity.usage.LlmUsageDaily;
-import io.leavesfly.alphaforge.infrastructure.persistence.usage.LlmUsageDailyRepository;
+import io.leavesfly.alphaforge.domain.repository.usage.LlmUsageDailyRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

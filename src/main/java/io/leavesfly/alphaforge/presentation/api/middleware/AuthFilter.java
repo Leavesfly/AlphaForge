@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.presentation.api.dto.ApiResponse;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -36,17 +36,17 @@ public class AuthFilter extends OncePerRequestFilter {
             "/"
     );
 
-    private final AppConfig appConfig;
+    private final SchedulerAuthConfig schedulerAuthConfig;
     private final ObjectMapper objectMapper;
 
-    public AuthFilter(AppConfig appConfig, ObjectMapper objectMapper) {
-        this.appConfig = appConfig;
+    public AuthFilter(SchedulerAuthConfig schedulerAuthConfig, ObjectMapper objectMapper) {
+        this.schedulerAuthConfig = schedulerAuthConfig;
         this.objectMapper = objectMapper;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        if (!appConfig.isAuthEnabled()) {
+        if (!schedulerAuthConfig.isAuthEnabled()) {
             return true;
         }
         String path = request.getRequestURI();
@@ -72,7 +72,7 @@ public class AuthFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
         try {
             SecretKey key = Keys.hmacShaKeyFor(
-                    appConfig.getAuthSecret().getBytes(StandardCharsets.UTF_8));
+                    schedulerAuthConfig.getAuthSecret().getBytes(StandardCharsets.UTF_8));
             Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
             filterChain.doFilter(request, response);
         } catch (Exception e) {

@@ -1,5 +1,6 @@
 package io.leavesfly.alphaforge.infrastructure.llm;
 
+import io.leavesfly.alphaforge.domain.service.exception.LlmException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 

@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.presentation.api;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.EnvVarProvider;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,11 +18,12 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        AppConfig config = new AppConfig();
-        config.setAuthPasswordRuntime("test123");
-        config.setAuthSecretRuntime("test-secret-key-for-jwt-signing-min-32-chars");
-        config.setAuthEnabledRuntime(true);
-        controller = new AuthController(config);
+        EnvVarProvider envVarProvider = new EnvVarProvider();
+        SchedulerAuthConfig schedulerAuthConfig = new SchedulerAuthConfig(envVarProvider);
+        schedulerAuthConfig.setAuthPasswordRuntime("test123");
+        schedulerAuthConfig.setAuthSecretRuntime("test-secret-key-for-jwt-signing-min-32-chars");
+        schedulerAuthConfig.setAuthEnabledRuntime(true);
+        controller = new AuthController(schedulerAuthConfig);
     }
 
     @Test

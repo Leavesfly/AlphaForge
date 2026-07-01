@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 交易记录 Mapper：管理投资组合中的买卖交易记录，包含交易方向、数量、价格、手续费等 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.portfolio.TradeRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.portfolio.TradeRepository">
 
     <!-- 结果映射：数据库字段 ↔ PortfolioTrade 实体属性 -->
     <resultMap id="tradeMap" type="io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioTrade">

@@ -1,5 +1,6 @@
 package io.leavesfly.alphaforge.application.service.screening;
 
+import io.leavesfly.alphaforge.application.backtest.BacktestService;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
 import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
@@ -7,7 +8,7 @@ import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.alphaforge.domain.model.entity.backtest.BacktestRecord;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.DataFetcherManager;
-import io.leavesfly.alphaforge.infrastructure.persistence.backtest.BacktestRepository;
+import io.leavesfly.alphaforge.domain.repository.backtest.BacktestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,10 @@ class BacktestServiceTest {
     void setUp() {
         BacktestSignalEngine signalEngine = new BacktestSignalEngine(new BacktestConditionEvaluator());
         service = new BacktestService(dataFetcher, backtestRepo, StrategyTestData.loadCatalog(),
-                new BacktestSimulator(signalEngine), signalEngine);
+                new BacktestSimulator(signalEngine), signalEngine,
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                        .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS));
     }
 
     @Test

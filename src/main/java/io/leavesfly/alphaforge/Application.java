@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge;
 
 import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
+import io.leavesfly.alphaforge.application.service.market.MarketAnalysisService;
 import io.leavesfly.alphaforge.presentation.scheduler.AnalysisScheduler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +30,14 @@ public class Application implements CommandLineRunner {
     private final AppConfig appConfig;
     private final StockAnalysisPipeline pipeline;
     private final AnalysisScheduler scheduler;
+    private final MarketAnalysisService marketAnalysisService;
 
-    public Application(AppConfig appConfig, StockAnalysisPipeline pipeline, AnalysisScheduler scheduler) {
+    public Application(AppConfig appConfig, StockAnalysisPipeline pipeline, AnalysisScheduler scheduler,
+                        MarketAnalysisService marketAnalysisService) {
         this.appConfig = appConfig;
         this.pipeline = pipeline;
         this.scheduler = scheduler;
+        this.marketAnalysisService = marketAnalysisService;
     }
 
     public static void main(String[] args) {
@@ -66,11 +70,11 @@ public class Application implements CommandLineRunner {
                 break;
             case MARKET_REVIEW:
                 log.info("大盘复盘模式");
-                pipeline.runMarketReview();
+                var review = marketAnalysisService.marketReview();
+                log.info("大盘复盘完成: 情绪={}", review.get("market_sentiment"));
                 break;
             case BACKTEST:
-                log.info("回测模式");
-                pipeline.runBacktest(parsedArgs.getStocks(), parsedArgs.getBacktestDays());
+                log.info("回测模式请通过 Web API 使用: POST /api/backtest/run");
                 break;
             case SINGLE:
             default:

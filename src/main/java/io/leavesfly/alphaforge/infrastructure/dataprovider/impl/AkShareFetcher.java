@@ -1,8 +1,8 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider.impl;
 
-import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
+import io.leavesfly.alphaforge.util.StockCodeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.BaseDataFetcher;
@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 /**
  * AKShare数据源适配器(通过HTTP API调用)
@@ -29,17 +28,12 @@ public class AkShareFetcher implements BaseDataFetcher {
     private static final String EASTMONEY_HISTORY_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get";
     private static final String EASTMONEY_REALTIME_URL = "https://push2.eastmoney.com/api/qt/stock/get";
 
-    private final AppConfig config;
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    public AkShareFetcher(AppConfig config) {
-        this.config = config;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = new OkHttpClient.Builder()
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build();
+    public AkShareFetcher(OkHttpClient httpClient, ObjectMapper objectMapper) {
+        this.httpClient = httpClient;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -256,16 +250,7 @@ public class AkShareFetcher implements BaseDataFetcher {
      * 沪市: 1.代码, 深市: 0.代码
      */
     private String convertToSecId(String stockCode) {
-        // 去除前缀
-        String code = stockCode.replaceAll("^(sh|sz|SH|SZ)", "");
-        if (code.startsWith("6") || code.startsWith("9")) {
-            return "1." + code; // 沪市
-        } else if (code.startsWith("0") || code.startsWith("3") || code.startsWith("2")) {
-            return "0." + code; // 深市
-        } else if (code.startsWith("4") || code.startsWith("8")) {
-            return "0." + code; // 北交所
-        }
-        return "1." + code;
+        return StockCodeUtils.toSecId(stockCode);
     }
 
     private Double parseDouble(String value) {

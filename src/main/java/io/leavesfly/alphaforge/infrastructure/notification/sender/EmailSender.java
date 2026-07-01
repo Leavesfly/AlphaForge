@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.infrastructure.notification.sender;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+import io.leavesfly.alphaforge.config.NotificationConfig;
 import io.leavesfly.alphaforge.domain.model.enums.NotificationChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +17,9 @@ import java.util.Properties;
 public class EmailSender implements BaseNotificationSender {
 
     private static final Logger log = LoggerFactory.getLogger(EmailSender.class);
-    private final AppConfig config;
+    private final NotificationConfig config;
 
-    public EmailSender(AppConfig config) {
+    public EmailSender(NotificationConfig config) {
         this.config = config;
     }
 

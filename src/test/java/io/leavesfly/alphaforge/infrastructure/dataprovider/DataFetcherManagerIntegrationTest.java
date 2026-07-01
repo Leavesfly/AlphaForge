@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.infrastructure.dataprovider;
 
-import io.leavesfly.alphaforge.config.AppConfig;
+
+import io.leavesfly.alphaforge.config.DataProviderConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher;
@@ -33,15 +34,15 @@ class DataFetcherManagerIntegrationTest {
 
     @BeforeAll
     void setUp() {
-        AppConfig mockConfig = mock(AppConfig.class);
-        when(mockConfig.getDataProvider()).thenReturn("auto");
+        DataProviderConfig mockDataProviderConfig = mock(DataProviderConfig.class);
+        when(mockDataProviderConfig.getDataProvider()).thenReturn("auto");
 
-        EFinanceFetcher fetcher = new EFinanceFetcher(mockConfig);
+        EFinanceFetcher fetcher = new EFinanceFetcher(new okhttp3.OkHttpClient(), new com.fasterxml.jackson.databind.ObjectMapper());
         TradingCalendar calendar = new TradingCalendar();
         DataQualityValidator validator = new DataQualityValidator(calendar);
 
         manager = new DataFetcherManager(
-                mockConfig,
+                mockDataProviderConfig,
                 List.of(fetcher),
                 null,       // 无 SQLite 缓存，直连 API
                 calendar,

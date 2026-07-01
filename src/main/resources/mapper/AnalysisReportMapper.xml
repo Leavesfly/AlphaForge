@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 分析报告 Mapper：管理股票智能分析报告的存储与查询，包含评分、信号、技术面/基本面/新闻分析等 -->
-<mapper namespace="io.leavesfly.alphaforge.infrastructure.persistence.analysis.AnalysisReportRepository">
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.analysis.AnalysisReportRepository">
 
     <!-- 结果映射：数据库字段 ↔ AnalysisReport 实体属性 -->
     <resultMap id="analysisReportMap" type="io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport">
