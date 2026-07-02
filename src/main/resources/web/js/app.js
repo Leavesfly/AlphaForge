@@ -1407,13 +1407,16 @@ function loadStrategyCatalog() {
     const tbody = document.getElementById('strategy-catalog-body');
     if (!tbody) return;
     const items = resp.strategies || [];
-    if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无数据</td></tr>'; return; }
+    const countEl = document.getElementById('sc-catalog-count');
+    if (countEl) countEl.textContent = `（共 ${items.length} 个）`;
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无数据</td></tr>'; return; }
     const catLabels = resp.categories || {};
     tbody.innerHTML = items.map(s => {
       const capBadges = (s.capabilities || []).map(c => `<span class="badge badge-info" style="margin-right:4px">${c}</span>`).join('');
-      const tags = (s.tags || []).map(t => `<span class="badge" style="margin-right:2px;background:var(--bg-3)">${t}</span>`).join('') || '-';
+      const tags = (s.tags || []).map(t => `<span class="badge" style="margin-right:2px">${t}</span>`).join('') || '-';
       const markets = (s.applicable_market || []).join(', ') || 'all';
       const riskColors = { low: 'badge-success', medium: 'badge-warning', high: 'badge-danger' };
+      const source = s.is_custom ? '<span class="badge badge-primary">自定义</span>' : '<span class="badge badge-neutral">内置</span>';
       return `<tr>
         <td><strong>${s.id}</strong></td>
         <td>${s.label || s.id}</td>
@@ -1423,9 +1426,377 @@ function loadStrategyCatalog() {
         <td>${markets}</td>
         <td style="font-size:12px">${tags}</td>
         <td>${s.available ? '<span class="badge badge-success">可用</span>' : '<span class="badge badge-danger">不可用</span>'}</td>
+        <td>${source}</td>
       </tr>`;
     }).join('');
   }).catch(() => {});
+}
+
+// ===== 自定义策略列表 =====
+function loadCustomStrategies() {
+  fetch('/api/v1/strategies/custom').then(r => r.json()).then(resp => {
+    const tbody = document.getElementById('custom-strategy-list');
+    if (!tbody) return;
+    const items = resp.strategies || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:24px">暂无自定义策略，点击「创建策略」开始</td></tr>'; return; }
+    tbody.innerHTML = items.map(s => {
+      const stateLabels = { DRAFT: '草稿', TESTING: '测试中', PUBLISHED: '已发布', DEPRECATED: '已废弃', ARCHIVED: '已归档' };
+      const stateClass = (s.lifecycle_state || 'DRAFT').toLowerCase();
+      const valClass = (s.validation_status || 'pending').toLowerCase();
+      const caps = (s.capabilities || '').split(',').filter(Boolean).map(c => `<span class="badge badge-info" style="margin-right:2px">${c}</span>`).join('') || '-';
+      const created = s.created_at ? new Date(s.created_at).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+      return `<tr>
+        <td><strong>${s.strategy_id}</strong></td>
+        <td>${s.label || '-'}</td>
+        <td>${s.category || '-'}</td>
+        <td><span class="badge badge-${stateClass}">${stateLabels[s.lifecycle_state] || s.lifecycle_state}</span></td>
+        <td><span class="badge badge-${valClass}">${s.validation_status || 'pending'}</span></td>
+        <td>v${s.version || 1}</td>
+        <td>${caps}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${s.created_by || '-'}</td>
+        <td style="font-size:11px;color:var(--text-dim)">${created}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-outline" onclick="editCustomStrategy('${s.strategy_id}')">编辑</button>
+          <button class="btn btn-sm btn-ghost" onclick="cloneStrategy('${s.strategy_id}')" title="克隆">📋</button>
+          <button class="btn btn-sm btn-ghost" onclick="showTransitionMenu('${s.strategy_id}','${s.lifecycle_state}')" title="状态转换" style="color:var(--primary)">🔄</button>
+          <button class="btn btn-sm btn-ghost" onclick="deleteCustomStrategy('${s.strategy_id}')" style="color:var(--danger)" title="删除">🗑</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
+// ===== 策略模板 =====
+function loadStrategyTemplates() {
+  fetch('/api/v1/strategies/templates').then(r => r.json()).then(resp => {
+    const container = document.getElementById('sc-template-list');
+    if (!container) return;
+    const items = resp.templates || [];
+    if (!items.length) { container.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:24px">暂无模板</div>'; return; }
+    const catLabels = { technical: '技术面', fundamental: '基本面', sentiment: '情绪面', event: '事件驱动' };
+    container.innerHTML = items.map(t => `
+      <div class="template-card" onclick="useTemplate('${t.template_id}')">
+        <div class="tpl-label">${t.label}</div>
+        <div class="tpl-desc">${t.description || ''}</div>
+        <span class="tpl-cat">${catLabels[t.category] || t.category}</span>
+      </div>
+    `).join('');
+  }).catch(() => {});
+}
+
+function useTemplate(templateId) {
+  fetch('/api/v1/strategies/templates').then(r => r.json()).then(resp => {
+    const templates = resp.templates || [];
+    const tpl = templates.find(t => t.template_id === templateId);
+    if (!tpl) return;
+    const editor = document.getElementById('sc-yaml-editor');
+    const idField = document.getElementById('sc-strategy-id');
+    const labelField = document.getElementById('sc-strategy-label');
+    const catField = document.getElementById('sc-strategy-category');
+    const descField = document.getElementById('sc-strategy-desc');
+    const modeEl = document.getElementById('sc-edit-mode');
+    // 生成默认 ID
+    const defaultId = 'my_' + templateId.replace('tpl_', '');
+    const timestamp = Date.now().toString(36).slice(-4);
+    idField.value = defaultId + '_' + timestamp;
+    labelField.value = tpl.label.replace('模板', '');
+    catField.value = tpl.category;
+    descField.value = tpl.description || '';
+    // 从模板生成 YAML
+    fetch('/api/v1/strategies/from-template', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ template_id: templateId, strategy_id: idField.value, label: labelField.value })
+    }).then(r => {
+      if (!r.ok) return r.json().then(e => { throw new Error(e.error || '创建失败'); });
+      return r.json();
+    }).then(strategy => {
+      // 加载刚创建的策略 YAML
+      fetch('/api/v1/strategies/custom/' + idField.value).then(r2 => r2.json()).then(detail => {
+        editor.value = detail.yaml_content || '';
+        modeEl.textContent = '编辑中（已从模板创建）';
+        showToast('已从模板创建策略草稿', 'success');
+        loadCustomStrategies();
+      });
+    }).catch(e => showToast(e.message, 'error'));
+  });
+}
+
+// ===== 策略 CRUD =====
+let editingStrategyId = null;
+
+// ===== AI 策略生成 =====
+function generateStrategyAI(autoSave = true) {
+  const desc = document.getElementById('sc-ai-desc').value.trim();
+  if (!desc) { showToast('请输入策略描述', 'warning'); return; }
+  const category = document.getElementById('sc-ai-category').value;
+  const market = document.getElementById('sc-ai-market').value;
+  const resultDiv = document.getElementById('sc-ai-result');
+  const btn = document.getElementById('sc-ai-btn');
+  btn.disabled = true;
+  btn.textContent = '生成中...';
+  resultDiv.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim)"><span class="spinner"></span> AI 正在生成策略...</div>';
+  fetch('/api/v1/strategies/generate', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ description: desc, category, market_phase: market, auto_save: autoSave })
+  }).then(r => r.json()).then(data => {
+    btn.disabled = false;
+    btn.textContent = '生成策略';
+    if (data.success === false) {
+      resultDiv.innerHTML = `<div class="alert alert-danger">${data.error || '生成失败'}</div>`;
+      showToast(data.error || '生成失败', 'error');
+      return;
+    }
+    // 显示生成结果
+    const valid = data.valid;
+    const saved = data.saved;
+    let html = `<div class="alert ${valid ? 'alert-success' : 'alert-warning'}">`;
+    html += valid ? '✓ 策略生成并校验通过' : '⚠ 策略已生成但校验未通过';
+    if (saved) html += '，已保存为草稿';
+    html += '</div>';
+    html += `<div style="font-size:12px;margin-top:6px"><strong>ID:</strong> ${data.strategy_id} | <strong>名称:</strong> ${data.label} | <strong>分类:</strong> ${data.category}</div>`;
+    if (data.reasoning) html += `<div style="font-size:11px;color:var(--text-dim);margin-top:4px">${data.reasoning}</div>`;
+    if (data.validation_errors) html += `<div style="font-size:11px;color:var(--danger);margin-top:4px">校验错误: ${data.validation_errors}</div>`;
+    html += `<div style="margin-top:8px"><button class="btn btn-sm btn-outline" onclick="loadGeneratedToEditor('${data.strategy_id}', \`${(data.yaml_content || '').replace(/`/g, '\\`')}\`)">填入编辑器</button></div>`;
+    resultDiv.innerHTML = html;
+    showToast(valid ? `策略已生成${saved ? '并保存' : ''}` : '策略已生成但校验失败', valid ? 'success' : 'warning');
+    if (saved) loadCustomStrategies();
+  }).catch(e => {
+    btn.disabled = false;
+    btn.textContent = '生成策略';
+    resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${e.message}</div>`;
+    showToast('生成失败: ' + e.message, 'error');
+  });
+}
+
+function loadGeneratedToEditor(strategyId, yamlContent) {
+  document.getElementById('sc-strategy-id').value = strategyId;
+  document.getElementById('sc-yaml-editor').value = yamlContent;
+  document.getElementById('sc-edit-mode').textContent = 'AI 生成（未保存）';
+  editingStrategyId = null;
+  showToast('已填入编辑器，可修改后保存', 'info');
+}
+
+function saveStrategy() {
+  const strategyId = document.getElementById('sc-strategy-id').value.trim();
+  const label = document.getElementById('sc-strategy-label').value.trim();
+  const category = document.getElementById('sc-strategy-category').value;
+  const description = document.getElementById('sc-strategy-desc').value;
+  const yamlContent = document.getElementById('sc-yaml-editor').value;
+  if (!strategyId) { showToast('请输入策略 ID', 'warning'); return; }
+  if (!yamlContent.trim()) { showToast('请输入 YAML 内容', 'warning'); return; }
+  if (editingStrategyId && editingStrategyId === strategyId) {
+    // 更新已有策略
+    fetch('/api/v1/strategies/' + strategyId, {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ yaml_content: yamlContent, label, description, change_note: 'Web 编辑器更新' })
+    }).then(r => r.json()).then(data => {
+      if (data.error) { showToast(data.error, 'error'); return; }
+      showToast('策略已更新', 'success');
+      loadCustomStrategies();
+    }).catch(e => showToast('更新失败: ' + e.message, 'error'));
+  } else {
+    // 创建新策略
+    fetch('/api/v1/strategies/create', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ strategy_id: strategyId, label, description, category, yaml_content: yamlContent })
+    }).then(r => {
+      if (!r.ok) return r.json().then(e => { throw new Error(e.error || '创建失败'); });
+      return r.json();
+    }).then(data => {
+      showToast('策略已创建', 'success');
+      editingStrategyId = strategyId;
+      document.getElementById('sc-edit-mode').textContent = '编辑中: ' + strategyId;
+      loadCustomStrategies();
+    }).catch(e => showToast(e.message, 'error'));
+  }
+}
+
+function editCustomStrategy(strategyId) {
+  fetch('/api/v1/strategies/custom/' + strategyId).then(r => r.json()).then(data => {
+    if (!data || data.error) { showToast(data?.error || '加载失败', 'error'); return; }
+    document.querySelector('[data-tab=\'sc-create\']').click();
+    document.getElementById('sc-strategy-id').value = data.strategy_id;
+    document.getElementById('sc-strategy-label').value = data.label || '';
+    document.getElementById('sc-strategy-category').value = data.category || 'technical';
+    document.getElementById('sc-strategy-desc').value = data.description || '';
+    document.getElementById('sc-yaml-editor').value = data.yaml_content || '';
+    document.getElementById('sc-edit-mode').textContent = '编辑中: ' + data.strategy_id + ' (v' + data.version + ')';
+    editingStrategyId = data.strategy_id;
+  }).catch(e => showToast('加载失败: ' + e.message, 'error'));
+}
+
+function cloneStrategy(strategyId) {
+  const newId = prompt('请输入新策略 ID:', strategyId + '_copy');
+  if (!newId) return;
+  const newLabel = prompt('请输入新策略名称:', (document.querySelector(`#custom-strategy-list tr td strong`)?.textContent || 'Copy'));
+  fetch('/api/v1/strategies/' + strategyId + '/clone', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ new_strategy_id: newId, new_label: newLabel || newId })
+  }).then(r => {
+    if (!r.ok) return r.json().then(e => { throw new Error(e.error || '克隆失败'); });
+    return r.json();
+  }).then(data => {
+    showToast('策略已克隆: ' + newId, 'success');
+    loadCustomStrategies();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function deleteCustomStrategy(strategyId) {
+  if (!confirm('确定删除策略「' + strategyId + '」？此操作不可恢复。')) return;
+  fetch('/api/v1/strategies/' + strategyId, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(data => { showToast('策略已删除', 'success'); loadCustomStrategies(); })
+    .catch(e => showToast('删除失败: ' + e.message, 'error'));
+}
+
+function showTransitionMenu(strategyId, currentState) {
+  const transitions = {
+    DRAFT: ['TESTING', 'ARCHIVED'],
+    TESTING: ['PUBLISHED', 'DRAFT', 'ARCHIVED'],
+    PUBLISHED: ['DEPRECATED', 'TESTING'],
+    DEPRECATED: ['PUBLISHED', 'ARCHIVED']
+  };
+  const labels = { DRAFT: '草稿', TESTING: '测试中', PUBLISHED: '已发布', DEPRECATED: '已废弃', ARCHIVED: '已归档' };
+  const options = transitions[currentState] || [];
+  if (!options.length) { showToast('当前状态不可转换', 'warning'); return; }
+  const choice = prompt(`选择目标状态:\n${options.map((s,i) => `${i+1}. ${labels[s]}`).join('\n')}\n\n输入序号:`);
+  if (!choice) return;
+  const target = options[parseInt(choice) - 1];
+  if (!target) return;
+  fetch('/api/v1/strategies/' + strategyId + '/transition', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ target_state: target })
+  }).then(r => {
+    if (!r.ok) return r.json().then(e => { throw new Error(e.error || '状态转换失败'); });
+    return r.json();
+  }).then(data => {
+    showToast(`策略已转换到: ${labels[target]}`, 'success');
+    loadCustomStrategies();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+// ===== 策略校验 =====
+function validateStrategyYaml() {
+  const yamlContent = document.getElementById('sc-yaml-editor').value;
+  if (!yamlContent.trim()) { showToast('请输入 YAML 内容', 'warning'); return; }
+  const resultDiv = document.getElementById('sc-validation-result');
+  resultDiv.innerHTML = '<span style="color:var(--text-dim)">校验中...</span>';
+  fetch('/api/v1/strategies/validate', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ yaml_content: yamlContent })
+  }).then(r => r.json()).then(data => {
+    if (data.valid) {
+      const warnings = data.warnings || [];
+      resultDiv.innerHTML = `<div class="alert alert-success">✓ 校验通过${warnings.length ? '，' + warnings.length + ' 条警告' : ''}</div>${warnings.length ? '<div style="font-size:12px;color:var(--warning);margin-top:4px">' + warnings.map(w => '⚠ ' + w).join('<br>') + '</div>' : ''}`;
+    } else {
+      resultDiv.innerHTML = `<div class="alert alert-danger">✗ 校验失败</div><div style="font-size:12px;color:var(--danger);margin-top:4px">${(data.errors || []).map(e => '• ' + e).join('<br>')}</div>`;
+    }
+  }).catch(e => {
+    resultDiv.innerHTML = `<div class="alert alert-danger">校验请求失败: ${e.message}</div>`;
+  });
+}
+
+function resetStrategyEditor() {
+  document.getElementById('sc-strategy-id').value = '';
+  document.getElementById('sc-strategy-label').value = '';
+  document.getElementById('sc-strategy-desc').value = '';
+  document.getElementById('sc-yaml-editor').value = '';
+  document.getElementById('sc-validation-result').innerHTML = '';
+  document.getElementById('sc-edit-mode').textContent = '';
+  editingStrategyId = null;
+}
+
+// ===== 策略调试 =====
+function initDebugStrategySelect() {
+  const select = document.getElementById('sc-debug-strategy');
+  if (!select) return;
+  fetch('/api/v1/strategies').then(r => r.json()).then(resp => {
+    const items = (resp.strategies || []).filter(s => s.available && (s.capabilities || []).includes('backtest'));
+    select.innerHTML = '<option value="">-- 选择策略 --</option>' + items.map(s => `<option value="${s.id}">${s.label || s.id} (${s.id})</option>`).join('');
+    // 也添加自定义策略
+    fetch('/api/v1/strategies/custom').then(r => r.json()).then(resp2 => {
+      const customItems = (resp2.strategies || []).filter(s => (s.capabilities || '').includes('backtest'));
+      if (customItems.length) {
+        select.innerHTML += '<optgroup label="自定义策略">' + customItems.map(s => `<option value="${s.strategy_id}">${s.label || s.strategy_id} (${s.strategy_id})</option>`).join('') + '</optgroup>';
+      }
+    }).catch(() => {});
+  }).catch(() => {});
+}
+
+function onDebugStrategyChange() {
+  // 可选：预加载策略信息
+}
+
+function runDebugTrace() {
+  const strategyId = document.getElementById('sc-debug-strategy').value;
+  const stockCode = document.getElementById('sc-debug-code').value.trim();
+  const days = parseInt(document.getElementById('sc-debug-days').value) || 120;
+  if (!strategyId) { showToast('请选择策略', 'warning'); return; }
+  if (!stockCode) { showToast('请输入股票代码', 'warning'); return; }
+  const resultDiv = document.getElementById('sc-debug-result');
+  resultDiv.style.display = '';
+  resultDiv.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)"><span class="spinner"></span> 调试运行中...</div>';
+  fetch('/api/v1/strategies/' + strategyId + '/debug', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stock_code: stockCode, days: days })
+  }).then(r => {
+    if (!r.ok) return r.json().then(e => { throw new Error(e.error || '调试失败'); });
+    return r.json();
+  }).then(data => {
+    renderDebugResult(data);
+    showToast('调试完成: ' + data.buy_signals + ' 次买入, ' + data.sell_signals + ' 次卖出', 'success');
+  }).catch(e => {
+    resultDiv.innerHTML = `<div class="alert alert-danger">调试失败: ${e.message}</div>`;
+    showToast(e.message, 'error');
+  });
+}
+
+function renderDebugResult(data) {
+  const resultDiv = document.getElementById('sc-debug-result');
+  resultDiv.innerHTML = `
+    <div class="grid grid-4" style="margin-bottom:16px">
+      <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:20px">${data.total_days}</div><div class="stat-label">总K线数</div></div>
+      <div class="card stat-card accent-success"><div class="stat-value" style="font-size:20px">${data.buy_signals}</div><div class="stat-label">买入信号</div></div>
+      <div class="card stat-card accent-danger"><div class="stat-value" style="font-size:20px">${data.sell_signals}</div><div class="stat-label">卖出信号</div></div>
+      <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:20px">${data.warmup_days}</div><div class="stat-label">预热天数</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">条件追踪明细 <span style="font-size:12px;color:var(--text-dim);font-weight:400">仅显示信号触发日及前后1天</span></div>
+      <div class="table-container" style="max-height:500px;overflow-y:auto"><table>
+        <thead><tr><th>日期</th><th>收盘价</th><th>成交量</th><th>持仓</th><th>信号</th><th>入场价</th><th>入场条件</th><th>出场条件</th></tr></thead>
+        <tbody>${renderDebugSteps(data.steps || [])}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+function renderDebugSteps(steps) {
+  // 筛选：信号触发日 + 前后1天
+  const signalIndexes = steps.map((s, i) => s.signal !== 0 ? i : -1).filter(i => i >= 0);
+  const showIndexes = new Set();
+  signalIndexes.forEach(i => { showIndexes.add(i); if (i > 0) showIndexes.add(i - 1); if (i < steps.length - 1) showIndexes.add(i + 1); });
+  // 如果没有信号，显示最后 20 天
+  if (showIndexes.size === 0) {
+    steps.slice(-20).forEach((_, i) => showIndexes.add(steps.length - 20 + i));
+  }
+  const filtered = steps.filter((_, i) => showIndexes.has(i));
+  if (!filtered.length) return '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">无调试数据</td></tr>';
+  return filtered.map(s => {
+    const signalHtml = s.signal === 1 ? '<span class="signal-buy">买入</span>' : s.signal === -1 ? '<span class="signal-sell">卖出</span>' : '<span class="signal-none">-</span>';
+    const holdingHtml = s.holding ? '<span class="badge badge-success">持仓</span>' : '<span class="badge badge-neutral">空仓</span>';
+    const entryHtml = (s.entry_conditions || []).map(c => `<div class="${c.matched ? 'cond-matched' : 'cond-unmatched'}">${c.matched ? '✓' : '✗'} ${c.type}: ${c.detail || ''}</div>`).join('') || '<span class="signal-none">-</span>';
+    const exitHtml = (s.exit_conditions || []).map(c => `<div class="${c.matched ? 'cond-matched' : 'cond-unmatched'}">${c.matched ? '✓' : '✗'} ${c.type}: ${c.detail || ''}</div>`).join('') || '<span class="signal-none">-</span>';
+    return `<tr>
+      <td>${s.date || '-'}</td>
+      <td>${s.close_price ? s.close_price.toFixed(2) : '-'}</td>
+      <td>${s.volume ? s.volume.toLocaleString() : '-'}</td>
+      <td>${holdingHtml}</td>
+      <td>${signalHtml}</td>
+      <td>${s.entry_price ? s.entry_price.toFixed(2) : '-'}</td>
+      <td style="font-size:11px">${entryHtml}</td>
+      <td style="font-size:11px">${exitHtml}</td>
+    </tr>`;
+  }).join('');
 }
 
 function loadPaperTrading() {
@@ -1653,7 +2024,7 @@ navigateTo = function(page) {
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
     case 'backtest': initBacktestPage(); break;
-    case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); break;
+    case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); loadCustomStrategies(); loadStrategyTemplates(); initDebugStrategySelect(); break;
     case 'loop-monitor': loadLoopStatus(); break;
     case 'factor-evolution': loadEvolutionStatus(); break;
     case 'benchmark': initBenchmarkPage(); break;

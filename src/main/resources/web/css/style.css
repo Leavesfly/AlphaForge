@@ -550,3 +550,27 @@ tbody tr:last-child td { border-bottom: none; }
 .alert-danger { background: var(--danger-light); color: var(--danger); border: 1px solid var(--danger); }
 .alert-warning { background: var(--warning-light); color: var(--warning); border: 1px solid var(--warning); }
 .alert-info { background: var(--info-light); color: var(--info); border: 1px solid var(--info); }
+
+/* ===== Strategy Template Cards ===== */
+.template-card { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition); background: var(--bg); }
+.template-card:hover { border-color: var(--primary); background: var(--bg-card-hover); transform: translateX(2px); }
+.template-card .tpl-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+.template-card .tpl-desc { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+.template-card .tpl-cat { display: inline-block; font-size: 10px; padding: 1px 8px; border-radius: 10px; margin-top: 6px; background: var(--info-light); color: var(--info); }
+
+/* ===== Strategy Lifecycle Badges ===== */
+.badge-draft { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+.badge-testing { background: var(--warning-light); color: var(--warning); }
+.badge-published { background: var(--success-light); color: var(--success); }
+.badge-deprecated { background: var(--danger-light); color: var(--danger); }
+.badge-archived { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+.badge-valid { background: var(--success-light); color: var(--success); }
+.badge-invalid { background: var(--danger-light); color: var(--danger); }
+.badge-pending { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+
+/* ===== Debug Trace Signal Badges ===== */
+.signal-buy { background: var(--success-light); color: var(--success); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.signal-sell { background: var(--danger-light); color: var(--danger); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.signal-none { color: var(--text-dim); font-size: 11px; }
+.cond-matched { color: var(--success); font-size: 11px; }
+.cond-unmatched { color: var(--text-dim); font-size: 11px; }

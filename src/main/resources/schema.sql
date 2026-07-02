@@ -526,3 +526,42 @@ CREATE TABLE IF NOT EXISTS evolved_factor_registry (
     deactivated_at TIMESTAMP,                       -- 淘汰时间
     FOREIGN KEY (factor_id) REFERENCES factor_candidates(factor_id)
 );
+
+-- ========== 自定义策略系统 ==========
+-- 用户通过 API 创建/编辑的策略定义，与内置 YAML 策略共存
+-- 生命周期：DRAFT → TESTING → PUBLISHED → DEPRECATED
+
+-- 自定义策略表：存储用户创建的策略 YAML 内容及生命周期
+CREATE TABLE IF NOT EXISTS custom_strategies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_id VARCHAR(100) NOT NULL UNIQUE,      -- 策略唯一标识（如 my_ma_cross）
+    label VARCHAR(100),                             -- 中文展示名
+    description TEXT,                               -- 策略描述
+    category VARCHAR(30) NOT NULL,                  -- 分类: technical/fundamental/sentiment/event
+    yaml_content TEXT NOT NULL,                     -- 完整策略 YAML 内容
+    lifecycle_state VARCHAR(20) DEFAULT 'DRAFT',    -- 生命周期: DRAFT/TESTING/PUBLISHED/DEPRECATED
+    version INTEGER DEFAULT 1,                      -- 版本号，每次更新递增
+    capabilities TEXT,                              -- 能力列表（JSON 数组: backtest/scoring/screening）
+    source_strategy_id VARCHAR(100),               -- 克隆来源策略 ID（NULL 表示原创）
+    validation_status VARCHAR(20) DEFAULT 'pending',-- 校验状态: pending/valid/invalid
+    validation_errors TEXT,                          -- 校验错误信息（JSON 数组）
+    last_validated_at TIMESTAMP,                     -- 最近校验时间
+    created_by VARCHAR(50) DEFAULT 'api',            -- 创建来源: api/bot/clone
+    note TEXT,                                      -- 备注
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- 策略版本历史表：记录每次策略修改的历史快照，支持回滚
+CREATE TABLE IF NOT EXISTS custom_strategy_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy_id VARCHAR(100) NOT NULL,              -- 关联的策略 ID
+    version INTEGER NOT NULL,                       -- 版本号
+    yaml_content TEXT NOT NULL,                     -- 该版本的 YAML 快照
+    label VARCHAR(100),                             -- 该版本的标签
+    description TEXT,                               -- 该版本的描述
+    change_note TEXT,                               -- 变更说明
+    created_at TIMESTAMP,
+    UNIQUE(strategy_id, version),
+    FOREIGN KEY (strategy_id) REFERENCES custom_strategies(strategy_id)
+);

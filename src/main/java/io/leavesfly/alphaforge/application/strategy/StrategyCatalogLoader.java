@@ -30,14 +30,17 @@ public class StrategyCatalogLoader {
     private final StrategyCatalog catalog;
     private final BacktestConditionEvaluator backtestConditionEvaluator;
     private final ObjectMapper yamlMapper;
+    private final io.leavesfly.alphaforge.domain.repository.strategy.CustomStrategyRepository customStrategyRepository;
 
     public StrategyCatalogLoader(StrategyCatalog catalog,
                                  BacktestConditionEvaluator backtestConditionEvaluator,
                                  @org.springframework.beans.factory.annotation.Qualifier("yamlObjectMapper")
-                                 ObjectMapper yamlMapper) {
+                                 ObjectMapper yamlMapper,
+                                 io.leavesfly.alphaforge.domain.repository.strategy.CustomStrategyRepository customStrategyRepository) {
         this.catalog = catalog;
         this.backtestConditionEvaluator = backtestConditionEvaluator;
         this.yamlMapper = yamlMapper;
+        this.customStrategyRepository = customStrategyRepository;
     }
 
     /** 测试用：无 Spring 上下文时加载 catalog */
@@ -45,7 +48,7 @@ public class StrategyCatalogLoader {
         StrategyCatalog catalog = new StrategyCatalog();
         BacktestConditionEvaluator evaluator = new BacktestConditionEvaluator();
         ObjectMapper yamlMapper = new ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-        StrategyCatalogLoader loader = new StrategyCatalogLoader(catalog, evaluator, yamlMapper);
+        StrategyCatalogLoader loader = new StrategyCatalogLoader(catalog, evaluator, yamlMapper, null);
         loader.load();
         return loader;
     }
@@ -88,6 +91,75 @@ public class StrategyCatalogLoader {
         } catch (Exception e) {
             throw new IllegalStateException("加载策略目录失败", e);
         }
+
+        // 加载用户自定义策略（PUBLISHED 状态）
+        loadCustomStrategies();
+    }
+
+    /** 加载已发布的自定义策略到策略目录 */
+    private void loadCustomStrategies() {
+        if (customStrategyRepository == null) {
+            return; // 测试模式跳过
+        }
+        try {
+            java.util.List<io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy> published =
+                    customStrategyRepository.findByLifecycleState("PUBLISHED");
+            int loaded = 0;
+            for (var cs : published) {
+                try {
+                    StrategyDefinition definition = parseYamlContent(cs.getYamlContent());
+                    if (definition != null) {
+                        validateAndMarkAvailability(definition);
+                        catalog.put(definition);
+                        loaded++;
+                    }
+                } catch (Exception e) {
+                    log.warn("加载自定义策略失败: id={}, error={}", cs.getStrategyId(), e.getMessage());
+                }
+            }
+            if (loaded > 0) {
+                log.info("已加载 {} 个自定义策略到策略目录", loaded);
+            }
+        } catch (Exception e) {
+            log.warn("加载自定义策略目录失败: {}", e.getMessage());
+        }
+    }
+
+    /** 从 YAML 字符串解析策略定义 */
+    private StrategyDefinition parseYamlContent(String yamlContent) throws Exception {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> raw = yamlMapper.readValue(yamlContent, Map.class);
+        StrategyDefinition definition = new StrategyDefinition();
+        definition.setId(stringVal(raw.get("id"), ""));
+        definition.setSchemaVersion(intVal(raw.get("schema_version"), 1));
+        definition.setLabel(stringVal(raw.get("label"), definition.getId()));
+        definition.setDescription(stringVal(raw.get("description"), ""));
+        definition.setCategory(stringVal(raw.get("category"), ""));
+        definition.setRiskLevel(stringVal(raw.get("risk_level"), "medium"));
+
+        if (raw.get("backtest") instanceof Map<?, ?> backtestRaw) {
+            definition.setBacktest(mapBacktest((Map<String, Object>) backtestRaw));
+        }
+        if (raw.get("screening") instanceof Map<?, ?> screeningRaw) {
+            definition.setScreening(mapScreening((Map<String, Object>) screeningRaw));
+        }
+        if (raw.get("scoring") instanceof Map<?, ?> scoringRaw) {
+            definition.setScoring(mapScoring((Map<String, Object>) scoringRaw));
+        }
+
+        // 自动检测能力
+        java.util.List<String> caps = new java.util.ArrayList<>();
+        if (definition.getBacktest() != null) caps.add("backtest");
+        if (definition.getScreening() != null) caps.add("screening");
+        if (definition.getScoring() != null) caps.add("scoring");
+        definition.setCapabilities(caps);
+        definition.setRuntime("implemented");
+
+        definition.setApplicableMarket(parseStringList(raw.get("applicable_market")));
+        definition.setApplicableCap(parseStringList(raw.get("applicable_cap")));
+        definition.setTags(parseStringList(raw.get("tags")));
+
+        return definition;
     }
 
     /** 热更新策略目录（admin API 调用） */

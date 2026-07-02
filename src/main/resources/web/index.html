@@ -411,26 +411,132 @@
 
 <!-- ===== Strategy Center ===== -->
 <div class="page" id="page-strategy-center">
-  <div class="page-header"><div class="page-header-left"><h2>策略中心</h2><p>策略目录 · 复盘报告 · 命中率与衰减监控</p></div><div><button class="btn btn-outline btn-sm" onclick="loadStrategyReview();showToast('已刷新', 'success')">刷新数据</button></div></div>
-  <div class="grid grid-4" style="margin-bottom:20px">
-    <div class="card stat-card accent-primary"><div class="stat-value" id="sc-total" style="font-size:20px">-</div><div class="stat-label">Scoring 策略总数</div></div>
-    <div class="card stat-card accent-success"><div class="stat-value" id="sc-healthy" style="font-size:20px">-</div><div class="stat-label">健康策略</div></div>
-    <div class="card stat-card accent-danger"><div class="stat-value" id="sc-stale" style="font-size:20px">-</div><div class="stat-label">过时策略</div></div>
-    <div class="card stat-card accent-warning"><div class="stat-value" id="sc-lowdisc" style="font-size:20px">-</div><div class="stat-label">低区分度</div></div>
+  <div class="page-header"><div class="page-header-left"><h2>策略中心</h2><p>策略开发全流程 · 创建 / 校验 / 调试 / 发布 / 复盘</p></div><div><button class="btn btn-outline btn-sm" onclick="loadStrategyReview();loadStrategyCatalog();loadCustomStrategies();loadStrategyTemplates();showToast('数据已刷新', 'success')">刷新数据</button></div></div>
+  <div class="tabs-wrapper"><div class="tabs" data-tab-group="strategy-center">
+    <div class="tab active" data-tab="sc-catalog">策略目录</div>
+    <div class="tab" data-tab="sc-custom">我的策略</div>
+    <div class="tab" data-tab="sc-create">创建策略</div>
+    <div class="tab" data-tab="sc-debug">策略调试</div>
+    <div class="tab" data-tab="sc-review">复盘报告</div>
+  </div></div>
+
+  <!-- Tab: 策略目录 -->
+  <div class="tab-panel active" data-panel="sc-catalog" data-group="strategy-center">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">全部策略目录 <span style="font-size:12px;color:var(--text-dim);font-weight:400" id="sc-catalog-count"></span></div>
+      <div class="table-container"><table>
+        <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>能力</th><th>风险</th><th>适用市场</th><th>标签</th><th>状态</th><th>来源</th></tr></thead>
+        <tbody id="strategy-catalog-body"><tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+      </table></div>
+    </div>
   </div>
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">策略复盘报告</div>
-    <div class="table-container"><table>
-      <thead><tr><th>策略</th><th>原始权重</th><th>有效权重</th><th>命中率</th><th>自动衰减</th><th>状态</th></tr></thead>
-      <tbody id="strategy-review-body"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div>
+
+  <!-- Tab: 我的策略 -->
+  <div class="tab-panel" data-panel="sc-custom" data-group="strategy-center">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">自定义策略列表 <button class="btn btn-sm btn-primary" onclick="document.querySelector('[data-tab=\'sc-create\']').click()">+ 创建策略</button></div>
+      <div class="table-container"><table>
+        <thead><tr><th>策略ID</th><th>名称</th><th>分类</th><th>状态</th><th>校验</th><th>版本</th><th>能力</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead>
+        <tbody id="custom-strategy-list"><tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+      </table></div>
+    </div>
   </div>
-  <div class="card">
-    <div class="card-title">策略目录</div>
-    <div class="table-container"><table>
-      <thead><tr><th>ID</th><th>名称</th><th>分类</th><th>能力</th><th>风险</th><th>适用市场</th><th>标签</th><th>状态</th></tr></thead>
-      <tbody id="strategy-catalog-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div>
+
+  <!-- Tab: 创建策略 -->
+  <div class="tab-panel" data-panel="sc-create" data-group="strategy-center">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <!-- 左侧：表单 + YAML 编辑器 -->
+      <div class="card" style="flex:1;min-width:480px">
+        <div class="card-title">策略 YAML 编辑器 <span id="sc-edit-mode" style="font-size:12px;color:var(--text-dim);font-weight:400"></span></div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group" style="margin-bottom:0"><label>策略 ID</label><input class="form-input" id="sc-strategy-id" placeholder="my_strategy" /></div>
+          <div class="form-group" style="margin-bottom:0"><label>名称</label><input class="form-input" id="sc-strategy-label" placeholder="我的策略" /></div>
+        </div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group" style="margin-bottom:0"><label>分类</label><select class="form-select" id="sc-strategy-category"><option value="technical">技术面</option><option value="fundamental">基本面</option><option value="sentiment">情绪面</option><option value="event">事件驱动</option></select></div>
+          <div class="form-group" style="margin-bottom:0"><label>描述</label><input class="form-input" id="sc-strategy-desc" placeholder="策略描述..." /></div>
+        </div>
+        <div class="form-group"><label>YAML 内容</label><textarea class="form-textarea" id="sc-yaml-editor" style="min-height:320px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.6;tab-size:2" placeholder="在此输入策略 YAML..." spellcheck="false"></textarea></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveStrategy()">保存策略</button>
+          <button class="btn btn-outline btn-sm" onclick="validateStrategyYaml()">校验 YAML</button>
+          <button class="btn btn-outline btn-sm" onclick="resetStrategyEditor()">清空</button>
+        </div>
+        <div id="sc-validation-result" style="min-height:30px"></div>
+      </div>
+      <!-- 右侧：策略模板 + AI 生成 -->
+      <div style="display:flex;flex-direction:column;gap:16px;width:340px">
+        <!-- AI 策略生成 -->
+        <div class="card">
+          <div class="card-title">AI 策略生成</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>自然语言描述策略</label>
+            <textarea class="form-textarea" id="sc-ai-desc" style="min-height:100px;font-size:12px" placeholder="用自然语言描述你想要的策略，如：&#10;“均线金叉策略，5日均线上穿20日均线买入，死叉卖出，止损8%”"></textarea>
+          </div>
+          <div class="form-row" style="margin-bottom:8px">
+            <div class="form-group" style="margin-bottom:0"><label>分类</label><select class="form-select" id="sc-ai-category"><option value="technical">技术面</option><option value="fundamental">基本面</option><option value="sentiment">情绪面</option><option value="event">事件驱动</option></select></div>
+            <div class="form-group" style="margin-bottom:0"><label>市场阶段</label><select class="form-select" id="sc-ai-market"><option value="">不指定</option><option value="bull">牛市</option><option value="bear">熊市</option><option value="range">震荡</option><option value="recovery">复苏</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" style="flex:1" onclick="generateStrategyAI()" id="sc-ai-btn">生成策略</button>
+            <button class="btn btn-outline btn-sm" onclick="generateStrategyAI(false)" title="仅生成不保存">仅生成</button>
+          </div>
+          <div id="sc-ai-result" style="margin-top:8px;min-height:20px"></div>
+        </div>
+        <!-- 策略模板 -->
+        <div class="card">
+          <div class="card-title">策略模板</div>
+          <div id="sc-template-list" style="display:flex;flex-direction:column;gap:8px">
+            <div style="text-align:center;color:var(--text-dim);padding:24px">加载中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: 策略调试 -->
+  <div class="tab-panel" data-panel="sc-debug" data-group="strategy-center">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">策略调试器 · 逐 K 线条件追踪</div>
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:200px"><label>策略 ID</label><select class="form-select" id="sc-debug-strategy" onchange="onDebugStrategyChange()"></select></div>
+        <div class="form-group" style="margin-bottom:0;width:160px"><label>股票代码</label><input class="form-input" id="sc-debug-code" placeholder="600519" /></div>
+        <div class="form-group" style="margin-bottom:0;width:120px"><label>K线天数</label><input class="form-input" type="number" id="sc-debug-days" value="120" /></div>
+        <button class="btn btn-primary" style="height:38px" onclick="runDebugTrace()">开始调试</button>
+      </div>
+    </div>
+    <div id="sc-debug-result" style="display:none">
+      <div class="grid grid-4" style="margin-bottom:16px">
+        <div class="card stat-card accent-primary"><div class="stat-value" id="sc-debug-total-days" style="font-size:20px">-</div><div class="stat-label">总K线数</div></div>
+        <div class="card stat-card accent-success"><div class="stat-value" id="sc-debug-buy" style="font-size:20px">-</div><div class="stat-label">买入信号</div></div>
+        <div class="card stat-card accent-danger"><div class="stat-value" id="sc-debug-sell" style="font-size:20px">-</div><div class="stat-label">卖出信号</div></div>
+        <div class="card stat-card accent-warning"><div class="stat-value" id="sc-debug-warmup" style="font-size:20px">-</div><div class="stat-label">预热天数</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">条件追踪明细 <span style="font-size:12px;color:var(--text-dim);font-weight:400">仅显示信号触发日及前后1天</span></div>
+        <div class="table-container" style="max-height:500px;overflow-y:auto"><table>
+          <thead><tr><th>日期</th><th>收盘价</th><th>成交量</th><th>持仓</th><th>信号</th><th>入场价</th><th>入场条件</th><th>出场条件</th></tr></thead>
+          <tbody id="sc-debug-steps"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行调试后显示追踪明细</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: 复盘报告 -->
+  <div class="tab-panel" data-panel="sc-review" data-group="strategy-center">
+    <div class="grid grid-4" style="margin-bottom:20px">
+      <div class="card stat-card accent-primary"><div class="stat-value" id="sc-total" style="font-size:20px">-</div><div class="stat-label">Scoring 策略总数</div></div>
+      <div class="card stat-card accent-success"><div class="stat-value" id="sc-healthy" style="font-size:20px">-</div><div class="stat-label">健康策略</div></div>
+      <div class="card stat-card accent-danger"><div class="stat-value" id="sc-stale" style="font-size:20px">-</div><div class="stat-label">过时策略</div></div>
+      <div class="card stat-card accent-warning"><div class="stat-value" id="sc-lowdisc" style="font-size:20px">-</div><div class="stat-label">低区分度</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">策略复盘报告</div>
+      <div class="table-container"><table>
+        <thead><tr><th>策略</th><th>原始权重</th><th>有效权重</th><th>命中率</th><th>自动衰减</th><th>状态</th></tr></thead>
+        <tbody id="strategy-review-body"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+      </table></div>
+    </div>
   </div>
 </div>
 

@@ -31,7 +31,7 @@ public class DataProviderConfig {
     private String alphavantageApiKey = "";
     private String finnhubApiKey = "";
     private String tickflowApiKey = "";
-    private String tickflowBaseUrl = "https://api.tickflow.io";
+    private String tickflowBaseUrl = "https://api.tickflow.org";
 
     public DataProviderConfig(EnvVarProvider envVarProvider) {
         this.envVarProvider = envVarProvider;
@@ -47,7 +47,7 @@ public class DataProviderConfig {
         alphavantageApiKey   = envVarProvider.get("ALPHAVANTAGE_API_KEY",    "");
         finnhubApiKey        = envVarProvider.get("FINNHUB_API_KEY",         "");
         tickflowApiKey       = envVarProvider.get("TICKFLOW_API_KEY",        "");
-        tickflowBaseUrl      = envVarProvider.get("TICKFLOW_BASE_URL",       "https://api.tickflow.io");
+        tickflowBaseUrl      = envVarProvider.get("TICKFLOW_BASE_URL",       "https://api.tickflow.org");
         log.info("数据源配置加载完成: provider={}, tushare={}, longbridge={}, tickflow={}",
                 dataProvider,
                 tushareToken.isEmpty() ? "未配置" : "已配置",

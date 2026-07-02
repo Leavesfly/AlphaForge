@@ -2,11 +2,20 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalogLoader;
+import io.leavesfly.alphaforge.application.strategy.debug.StrategyDebugService;
+import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
+import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.engine.StrategyPerformanceTracker;
+import io.leavesfly.alphaforge.application.strategy.lifecycle.StrategyLifecycleService;
+import io.leavesfly.alphaforge.application.strategy.template.StrategyTemplateService;
+import io.leavesfly.alphaforge.application.strategy.validator.StrategyValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -23,7 +32,14 @@ class StrategyControllerTest {
     void setUp() {
         var loader = StrategyCatalogLoader.createAndLoad();
         catalog = loader.getCatalog();
-        controller = new StrategyController(catalog, loader, new StrategyPerformanceTracker());
+        ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+        StrategyValidator validator = new StrategyValidator(yamlMapper);
+        StrategyDebugService debugService = new StrategyDebugService(
+                new BacktestSignalEngine(new BacktestConditionEvaluator()),
+                new BacktestConditionEvaluator());
+        StrategyTemplateService templateService = new StrategyTemplateService();
+        controller = new StrategyController(catalog, loader, new StrategyPerformanceTracker(),
+                null, validator, debugService, templateService, null, null);
     }
 
     @Test

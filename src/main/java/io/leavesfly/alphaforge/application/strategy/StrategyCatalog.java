@@ -35,6 +35,16 @@ public class StrategyCatalog {
         strategies.clear();
     }
 
+    /** 从目录中移除策略 */
+    public void remove(String id) {
+        strategies.remove(id);
+    }
+
+    /** 判断策略是否已注册 */
+    public boolean contains(String id) {
+        return strategies.containsKey(id);
+    }
+
     /** 按策略 id 查找，如 ma_golden_cross */
     public Optional<StrategyDefinition> find(String id) {
         if (id == null || id.isBlank()) {

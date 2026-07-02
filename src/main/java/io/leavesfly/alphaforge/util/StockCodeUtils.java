@@ -123,6 +123,44 @@ public class StockCodeUtils {
     }
 
     /**
+     * 转为 TickFlow 代码格式 (600000.SH / 000001.SZ / AAPL.US / 00700.HK)
+     * TickFlow 统一使用 代码.市场后缀 格式
+     */
+    public static String toTickFlowSymbol(String stockCode) {
+        if (stockCode == null || stockCode.isEmpty()) return "";
+        String code = stockCode.trim();
+
+        // 已含市场后缀，直接返回
+        if (code.contains(".")) return code.toUpperCase();
+
+        // 港股前缀 hk / HK
+        if (code.toLowerCase().startsWith("hk")) {
+            String num = code.substring(2);
+            return num + ".HK";
+        }
+
+        // 美股（纯字母）
+        if (code.matches("^[A-Za-z]{1,5}$")) {
+            return code.toUpperCase() + ".US";
+        }
+
+        // A股（6位数字）
+        String normalized = normalize(code);
+        if (normalized.matches("^\\d{6}$")) {
+            if (normalized.startsWith("6") || normalized.startsWith("9")) return normalized + ".SH";
+            if (normalized.startsWith("4") || normalized.startsWith("8")) return normalized + ".BJ";
+            return normalized + ".SZ";
+        }
+
+        // 港股数字代码（4-5位）
+        if (normalized.matches("^\\d{4,5}$")) {
+            return normalized + ".HK";
+        }
+
+        return code;
+    }
+
+    /**
      * 格式化显示价格
      */
     public static String formatPrice(Double price) {

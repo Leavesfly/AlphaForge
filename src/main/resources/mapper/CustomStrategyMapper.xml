@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 自定义策略 Mapper：管理用户通过 API 创建的策略定义，支持完整 CRUD 与版本历史 -->
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.strategy.CustomStrategyRepository">
+
+    <!-- 结果映射：数据库字段 ↔ CustomStrategy 实体属性 -->
+    <resultMap id="customStrategyMap" type="io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy">
+        <id property="id" column="id"/>
+        <result property="strategyId" column="strategy_id"/>
+        <result property="label" column="label"/>
+        <result property="description" column="description"/>
+        <result property="category" column="category"/>
+        <result property="yamlContent" column="yaml_content"/>
+        <result property="lifecycleState" column="lifecycle_state"/>
+        <result property="version" column="version"/>
+        <result property="capabilities" column="capabilities"/>
+        <result property="sourceStrategyId" column="source_strategy_id"/>
+        <result property="validationStatus" column="validation_status"/>
+        <result property="validationErrors" column="validation_errors"/>
+        <result property="lastValidatedAt" column="last_validated_at"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="note" column="note"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 插入自定义策略 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO custom_strategies
+            (strategy_id, label, description, category, yaml_content, lifecycle_state,
+             version, capabilities, source_strategy_id, validation_status,
+             validation_errors, created_by, note, created_at, updated_at)
+        VALUES
+            (#{strategyId}, #{label}, #{description}, #{category}, #{yamlContent}, #{lifecycleState},
+             #{version}, #{capabilities}, #{sourceStrategyId}, #{validationStatus},
+             #{validationErrors}, #{createdBy}, #{note}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <!-- 更新自定义策略 -->
+    <update id="update">
+        UPDATE custom_strategies SET
+            label = #{label},
+            description = #{description},
+            category = #{category},
+            yaml_content = #{yamlContent},
+            lifecycle_state = #{lifecycleState},
+            version = #{version},
+            capabilities = #{capabilities},
+            validation_status = #{validationStatus},
+            validation_errors = #{validationErrors},
+            last_validated_at = #{lastValidatedAt},
+            note = #{note},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE strategy_id = #{strategyId}
+    </update>
+
+    <!-- 根据策略 ID 删除 -->
+    <delete id="deleteByStrategyId">
+        DELETE FROM custom_strategies WHERE strategy_id = #{strategyId}
+    </delete>
+
+    <!-- 根据策略 ID 查询 -->
+    <select id="findByStrategyId" resultMap="customStrategyMap">
+        SELECT * FROM custom_strategies WHERE strategy_id = #{strategyId}
+    </select>
+
+    <!-- 查询全部自定义策略 -->
+    <select id="findAll" resultMap="customStrategyMap">
+        SELECT * FROM custom_strategies ORDER BY updated_at DESC
+    </select>
+
+    <!-- 按生命周期状态查询 -->
+    <select id="findByLifecycleState" resultMap="customStrategyMap">
+        SELECT * FROM custom_strategies WHERE lifecycle_state = #{lifecycleState} ORDER BY updated_at DESC
+    </select>
+
+    <!-- 判断策略 ID 是否已存在 -->
+    <select id="existsByStrategyId" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM custom_strategies WHERE strategy_id = #{strategyId}
+    </select>
+
+    <!-- 统计自定义策略总数 -->
+    <select id="count" resultType="int">
+        SELECT COUNT(*) FROM custom_strategies
+    </select>
+
+    <!-- 插入版本历史快照 -->
+    <insert id="insertVersion">
+        INSERT INTO custom_strategy_versions
+            (strategy_id, version, yaml_content, label, description, change_note, created_at)
+        VALUES
+            (#{strategyId}, #{version}, #{yamlContent}, #{label}, #{description}, #{changeNote}, CURRENT_TIMESTAMP)
+    </insert>
+
+    <!-- 查询策略的版本历史 -->
+    <select id="findVersions" resultType="io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy">
+        SELECT strategy_id AS strategyId, version, yaml_content AS yamlContent,
+               label, description, created_at AS createdAt
+        FROM custom_strategy_versions
+        WHERE strategy_id = #{strategyId}
+        ORDER BY version DESC
+    </select>
+
+</mapper>
