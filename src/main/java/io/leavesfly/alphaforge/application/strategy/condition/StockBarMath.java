@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.application.strategy.condition;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.service.TechnicalIndicatorCalculator;
 
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,23 @@ import java.util.Map;
 public final class StockBarMath {
 
     private StockBarMath() {
+    }
+
+    /**
+     * 截面 RSI —— 计算 {@code data} 在 {@code index} 处、周期为 {@code period} 的 RSI。
+     *
+     * <p>统一委托 {@link TechnicalIndicatorCalculator#rsiFromCloses(double[], int)}，
+     * 基于收盘价差，确保回测/分析/告警链路 RSI 口径一致。</p>
+     *
+     * @return RSI 值 [0,100]，数据不足返回中性值 50
+     */
+    public static double rsi(List<StockDailyData> data, int index, int period) {
+        if (index < period) return 50.0;
+        double[] closes = new double[index + 1];
+        for (int i = 0; i <= index; i++) {
+            closes[i] = data.get(i).getClosePrice();
+        }
+        return TechnicalIndicatorCalculator.rsiFromCloses(closes, period);
     }
 
     public static double avgClose(List<StockDailyData> data, int end, int period) {

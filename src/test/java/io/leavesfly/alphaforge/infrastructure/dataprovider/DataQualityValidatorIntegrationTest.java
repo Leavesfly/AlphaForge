@@ -36,7 +36,10 @@ class DataQualityValidatorIntegrationTest {
     void setUp() {
         TradingCalendar calendar = new TradingCalendar();
         validator = new DataQualityValidator(calendar);
-        fetcher = new EFinanceFetcher(new okhttp3.OkHttpClient(), new com.fasterxml.jackson.databind.ObjectMapper());
+        okhttp3.OkHttpClient http = new okhttp3.OkHttpClient();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        fetcher = new EFinanceFetcher(http, mapper,
+                new io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient(http, mapper));
     }
 
     @Test

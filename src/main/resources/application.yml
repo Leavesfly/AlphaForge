@@ -63,7 +63,7 @@ mybatis:
 logging:
   level:
     root: INFO
-    com.stock: INFO
+    io.leavesfly.alphaforge: INFO
     org.springframework.jdbc: WARN
   pattern:
     console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

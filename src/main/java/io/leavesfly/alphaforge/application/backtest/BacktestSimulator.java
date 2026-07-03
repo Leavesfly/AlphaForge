@@ -4,6 +4,8 @@ import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.service.performance.PerformanceAnalytics;
+import io.leavesfly.alphaforge.domain.service.performance.PerformanceMetrics;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -14,6 +16,9 @@ import java.util.List;
  */
 @Component
 public class BacktestSimulator {
+
+    /** 统一绩效分析器（纯算法、无状态，复用领域实现避免口径分叉） */
+    private static final PerformanceAnalytics PERF = new PerformanceAnalytics();
 
     private final BacktestSignalEngine signalEngine;
 
@@ -290,9 +295,13 @@ public class BacktestSimulator {
         result.setAnnualReturnPct(days > 0 ? result.getTotalReturnPct() * 252.0 / days : 0);
 
         if (!dailyReturns.isEmpty()) {
-            double avgReturn = dailyReturns.stream().mapToDouble(r -> r).average().orElse(0);
-            double stdReturn = Math.sqrt(dailyReturns.stream().mapToDouble(r -> Math.pow(r - avgReturn, 2)).average().orElse(0));
-            result.setSharpeRatio(stdReturn > 0 ? (avgReturn * 252 - 0.03) / (stdReturn * Math.sqrt(252)) : 0);
+            PerformanceMetrics metrics = PERF.analyze(dailyReturns);
+            result.setSharpeRatio(metrics.sharpeRatio());
+            // 扩展绩效指标统一入 diagnostics，便于前端/评估层消费
+            result.getDiagnostics().put("sortino_ratio", metrics.sortinoRatio());
+            result.getDiagnostics().put("calmar_ratio", metrics.calmarRatio());
+            result.getDiagnostics().put("annualized_volatility_pct", metrics.annualizedVolatility() * 100);
+            result.getDiagnostics().put("daily_win_rate_pct", metrics.winRate() * 100);
         }
 
         result.getDiagnostics().put("execution_mode", config.getExecutionMode().name());

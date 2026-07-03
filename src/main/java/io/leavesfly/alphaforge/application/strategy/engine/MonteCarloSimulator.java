@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.application.strategy.engine;
 
 import io.leavesfly.alphaforge.application.backtest.BacktestDailySnapshot;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.domain.service.performance.PerformanceAnalytics;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -27,6 +28,9 @@ import java.util.Random;
 public class MonteCarloSimulator {
 
     private static final int DEFAULT_ITERATIONS = 1000;
+
+    /** 统一绩效分析器（复用领域实现，累计收益/最大回撤口径一致） */
+    private static final PerformanceAnalytics PERF = new PerformanceAnalytics();
 
     /**
      * 执行蒙特卡洛模拟。
@@ -102,31 +106,14 @@ public class MonteCarloSimulator {
         return returns;
     }
 
-    /** 计算重排后的累计收益率（%） */
+    /** 计算重排后的累计收益率（%）—— 委托统一绩效分析器 */
     private double computeCumulativeReturn(List<Double> dailyReturns) {
-        double cumulative = 1.0;
-        for (double r : dailyReturns) {
-            cumulative *= (1 + r);
-        }
-        return (cumulative - 1) * 100;
+        return PERF.cumulativeReturn(dailyReturns) * 100;
     }
 
-    /** 计算重排后的最大回撤（%） */
+    /** 计算重排后的最大回撤（%）—— 委托统一绩效分析器 */
     private double computeMaxDrawdown(List<Double> dailyReturns) {
-        double peak = 1.0;
-        double value = 1.0;
-        double maxDrawdown = 0;
-        for (double r : dailyReturns) {
-            value *= (1 + r);
-            if (value > peak) {
-                peak = value;
-            }
-            double drawdown = (peak - value) / peak * 100;
-            if (drawdown > maxDrawdown) {
-                maxDrawdown = drawdown;
-            }
-        }
-        return maxDrawdown;
+        return PERF.maxDrawdown(dailyReturns) * 100;
     }
 
     /** 计算排序后列表的指定分位数 */

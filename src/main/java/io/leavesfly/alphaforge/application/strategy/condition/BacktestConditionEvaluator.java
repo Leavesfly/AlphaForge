@@ -439,28 +439,13 @@ public class BacktestConditionEvaluator {
 
     // ==================== 辅助计算方法 ====================
 
-    /** 计算 RSI 指标（Relative Strength Index） */
+    /**
+     * 计算 RSI 指标（Relative Strength Index）。
+     *
+     * <p>统一委托 {@link StockBarMath#rsi(List, int, int)}（基于收盘价差），
+     * 与技术分析/告警链路口径保持一致。</p>
+     */
     private double calculateRsi(List<StockDailyData> data, int index, int period) {
-        if (index < period) {
-            return 50.0; // 数据不足时返回中性值
-        }
-        double avgGain = 0;
-        double avgLoss = 0;
-        for (int i = index - period + 1; i <= index; i++) {
-            Double change = data.get(i).getChangePct();
-            if (change == null) continue;
-            if (change > 0) {
-                avgGain += change;
-            } else {
-                avgLoss += Math.abs(change);
-            }
-        }
-        avgGain /= period;
-        avgLoss /= period;
-        if (avgLoss == 0) {
-            return 100.0;
-        }
-        double rs = avgGain / avgLoss;
-        return 100.0 - 100.0 / (1.0 + rs);
+        return rsi(data, index, period);
     }
 }

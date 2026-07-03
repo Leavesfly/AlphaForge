@@ -6,6 +6,7 @@ import io.leavesfly.alphaforge.application.service.task.TaskService;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisTask;
+import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -95,5 +96,12 @@ public class AnalysisController {
         result.put("overview", marketService.getMarketOverview());
         result.put("light", marketService.getMarketLight());
         return ResponseEntity.ok(result);
+    }
+
+    /** 行情简览（按市场类型：A/HK/US） */
+    @GetMapping("/market/briefing")
+    public ResponseEntity<Map<String, Object>> marketBriefing(@RequestParam(defaultValue = "A") String market) {
+        MarketType marketType = MarketType.fromCode(market.toUpperCase());
+        return ResponseEntity.ok(marketService.getMarketBriefing(marketType));
     }
 }

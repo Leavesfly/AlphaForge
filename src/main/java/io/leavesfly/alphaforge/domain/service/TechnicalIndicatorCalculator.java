@@ -38,6 +38,20 @@ public class TechnicalIndicatorCalculator {
      * RSI 指标（取最后 period 个计算）
      */
     public double rsi(double[] closes, int period) {
+        return rsiFromCloses(closes, period);
+    }
+
+    /**
+     * RSI 指标核心算法（基于收盘价差，全局唯一实现）。
+     *
+     * <p>供实例方法 {@link #rsi(double[], int)} 与需要静态调用的场景（如
+     * 回测条件求值、策略引擎）统一复用，避免 RSI 口径分叉。</p>
+     *
+     * @param closes 收盘价序列（按时间升序），使用最后 {@code period} 个区间
+     * @param period 周期
+     * @return RSI 值 [0,100]，数据不足返回中性值 50
+     */
+    public static double rsiFromCloses(double[] closes, int period) {
         int len = closes.length;
         if (len <= period) return 50;
         double gainSum = 0, lossSum = 0;

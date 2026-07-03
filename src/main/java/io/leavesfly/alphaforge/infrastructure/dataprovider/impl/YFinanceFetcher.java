@@ -205,12 +205,15 @@ public class YFinanceFetcher implements BaseDataFetcher {
         // 已经是Yahoo格式
         if (code.contains(".")) return code;
         
-        // 港股
+        // 港股: hk00700 -> 0700.HK, hk09988 -> 9988.HK (Yahoo 要求4位数字)
         if (code.toLowerCase().startsWith("hk")) {
             String num = code.substring(2);
-            // 去除前导0
-            num = num.replaceFirst("^0+", "");
-            return num + ".HK";
+            try {
+                int n = Integer.parseInt(num);
+                return String.format("%04d", n) + ".HK";
+            } catch (NumberFormatException e) {
+                return num + ".HK";
+            }
         }
         
         // 美股(全字母)

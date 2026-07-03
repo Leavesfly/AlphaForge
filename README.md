@@ -148,7 +148,7 @@ LLM_API_KEY=sk-your-api-key
 mvn clean package -DskipTests
 
 # 启动 Web 服务（默认模式）
-java -jar target/daily-stock-analysis-1.0.0.jar --serve
+java -jar target/alphaforge-1.0.0.jar --serve
 
 # 访问 Web UI
 open http://localhost:8000

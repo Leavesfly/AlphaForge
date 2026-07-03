@@ -32,7 +32,22 @@ function navigateTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
   const pageEl = document.getElementById('page-' + page);
-  if (navItem) navItem.classList.add('active');
+  if (navItem) {
+    navItem.classList.add('active');
+    // 自动展开所在的折叠分组
+    const parentSection = navItem.closest('.nav-section');
+    if (parentSection && parentSection.classList.contains('collapsed')) {
+      parentSection.classList.remove('collapsed');
+      const groupName = parentSection.dataset.navGroup;
+      if (groupName) {
+        try {
+          const collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}');
+          delete collapsed[groupName];
+          localStorage.setItem('alphaforge-nav-collapsed', JSON.stringify(collapsed));
+        } catch(e) {}
+      }
+    }
+  }
   if (pageEl) pageEl.classList.add('active');
   // 同步 URL hash，刷新后保持当前页面
   if (location.hash !== '#' + page) {
@@ -44,6 +59,31 @@ function navigateTo(page) {
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
+
+// ===== Nav Section Collapse =====
+function toggleNavSection(titleEl) {
+  const section = titleEl.closest('.nav-section');
+  if (!section) return;
+  section.classList.toggle('collapsed');
+  const groupName = section.dataset.navGroup;
+  if (groupName) {
+    try {
+      const collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}');
+      collapsed[groupName] = section.classList.contains('collapsed');
+      localStorage.setItem('alphaforge-nav-collapsed', JSON.stringify(collapsed));
+    } catch(e) {}
+  }
+}
+
+// 页面加载时恢复折叠状态
+(function restoreNavCollapse() {
+  let collapsed = {};
+  try { collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}'); } catch(e) {}
+  document.querySelectorAll('.nav-section[data-nav-group]').forEach(section => {
+    const name = section.dataset.navGroup;
+    if (collapsed[name]) section.classList.add('collapsed');
+  });
+})();
 
 // 监听浏览器前进/后退，同步页面切换
 window.addEventListener('hashchange', () => {
@@ -1120,6 +1160,289 @@ function loadMarketOverview() {
   }).catch(() => {});
 }
 
+// ===== 行情简览 =====
+let currentBriefingMarket = 'A';
+const briefingLoaded = {};
+
+function switchBriefingMarket(market) {
+  currentBriefingMarket = market;
+  // 切换 tab
+  document.querySelectorAll('.tabs[data-tab-group="briefing"] .tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="briefing-${market.toLowerCase()}"]`)?.classList.add('active');
+  document.querySelectorAll('.tab-panel[data-group="briefing"]').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab-panel[data-panel="briefing-${market.toLowerCase()}"]`)?.classList.add('active');
+  // 加载数据（有缓存则不重复请求）
+  if (!briefingLoaded[market]) {
+    loadMarketBriefing(market);
+  }
+}
+
+function loadMarketBriefing(market) {
+  const container = document.getElementById(`briefing-content-${market.toLowerCase()}`);
+  if (!container) return;
+  // 骨架屏
+  container.innerHTML = renderBriefingSkeleton();
+  fetch(`/api/v1/market/briefing?market=${market}`)
+    .then(r => r.json())
+    .then(data => {
+      renderMarketBriefing(container, data, market);
+      briefingLoaded[market] = true;
+    })
+    .catch(e => {
+      container.innerHTML = `<div style="text-align:center;color:var(--danger);padding:40px">加载失败: ${e.message}</div>`;
+    });
+}
+
+function renderBriefingSkeleton() {
+  let html = '<div class="grid grid-4" style="margin-bottom:20px">';
+  for (let i = 0; i < 4; i++) html += '<div class="skeleton skeleton-card"></div>';
+  html += '</div><div class="grid grid-2"><div class="card"><div class="skeleton skeleton-text" style="width:30%"></div><div class="skeleton" style="height:120px"></div></div><div class="card"><div class="skeleton skeleton-text" style="width:30%"></div><div class="skeleton" style="height:120px"></div></div></div>';
+  return html;
+}
+
+function renderMarketBriefing(container, data, market) {
+  const indices = data.indices || [];
+  const hotStocks = data.hot_stocks || [];
+  const news = data.news || [];
+  const temperature = data.temperature || {};
+  const sectors = data.sectors || [];
+  const tempVal = temperature.value || 50;
+  const tempColor = tempVal >= 70 ? 'var(--success)' : tempVal >= 40 ? 'var(--warning)' : 'var(--danger)';
+
+  let html = '';
+
+  // === Row 1: 指数卡片（每个独占一格）===
+  html += '<div class="grid grid-4" style="margin-bottom:20px">';
+  for (const idx of indices) {
+    const changePct = parseFloat(idx.change_pct || 0);
+    const isUp = changePct >= 0;
+    const price = parseFloat(idx.current_price || 0).toFixed(2);
+    const prevClose = parseFloat(idx.previous_close || 0).toFixed(2);
+    const high = parseFloat(idx.high_price || 0).toFixed(2);
+    const low = parseFloat(idx.low_price || 0).toFixed(2);
+    const vol = idx.volume ? Number(idx.volume).toLocaleString() : '-';
+    const sparkId = `spark-idx-${market}-${idx.code || ''}`;
+    html += `<div class="idx-card ${isUp ? 'idx-up' : 'idx-down'}">
+      <div class="flow-bar"></div>
+      <div class="idx-header"><span class="idx-name">${idx.name || ''}</span><span class="idx-code">${idx.code || ''}</span></div>
+      <div class="idx-price">${price}</div>
+      <div class="idx-change ${isUp ? 'text-up' : 'text-down'}">${isUp ? '+' : ''}${changePct.toFixed(2)}%</div>
+      <div class="idx-spark" id="${sparkId}"></div>
+      <div class="idx-meta">
+        ${prevClose !== '0.00' ? `<span>昨收 ${prevClose}</span>` : ''}
+        ${high !== '0.00' ? `<span>高 ${high}</span>` : ''}
+        ${low !== '0.00' ? `<span>低 ${low}</span>` : ''}
+      </div>
+    </div>`;
+  }
+  // 市场温度卡片（凑齐第 4 格或独竗一格）
+  html += `<div class="idx-card" style="color:${tempColor};border-color:${tempColor}33">
+    <div class="flow-bar"></div>
+    <div class="idx-header"><span class="idx-name">市场温度</span></div>
+    <div class="temp-gauge" id="temp-gauge-${market}" style="height:60px;width:100%"></div>
+    <div class="idx-change" style="color:${tempColor};font-size:16px;margin-top:4px">${temperature.label || '中性'}</div>
+    <div class="idx-meta"><span>${temperature.up_count||0} 涨</span><span>${temperature.down_count||0} 跌</span></div>
+  </div>`;
+  html += '</div>';
+
+  // === Row 2: 热门股卡片网格 + 板块排行 ===
+  html += '<div class="grid grid-2" style="margin-bottom:20px;align-items:start">';
+
+  // 热门股
+  html += '<div class="card"><div class="card-title">热门股票 <span style="font-size:12px;color:var(--text-dim);font-weight:400">点击卡片可快速分析</span></div>';
+  if (hotStocks.length > 0) {
+    html += '<div class="stock-grid">';
+    for (const s of hotStocks) {
+      const changePct = parseFloat(s.change_pct || 0);
+      const isUp = changePct >= 0;
+      const price = parseFloat(s.current_price || 0).toFixed(2);
+      const prevClose = parseFloat(s.previous_close || 0).toFixed(2);
+      const high = parseFloat(s.high_price || 0).toFixed(2);
+      const low = parseFloat(s.low_price || 0).toFixed(2);
+      const vol = s.volume ? Number(s.volume).toLocaleString() : '-';
+      const turnRate = s.turnover_rate ? parseFloat(s.turnover_rate).toFixed(2) + '%' : '';
+      const pe = s.pe ? parseFloat(s.pe).toFixed(1) : '';
+      const sparkId = `spark-stock-${market}-${s.code || ''}`;
+      html += `<div class="stock-card" onclick="navigateTo('analysis');setTimeout(()=>{document.getElementById('analysis-input').value='${s.code||s.stock_code||''}'},100)">
+        <div class="stock-card-header">
+          <div>
+            <div class="stock-card-name">${s.name || s.stock_name || ''}</div>
+            <div class="stock-card-code">${s.code || s.stock_code || ''}</div>
+          </div>
+          <div class="stock-card-change ${isUp ? 'text-up' : 'text-down'}">${isUp ? '+' : ''}${changePct.toFixed(2)}%</div>
+        </div>
+        <div class="stock-card-body">
+          <div class="stock-card-price" style="color:${isUp?'var(--success)':'var(--danger)'}">${price}</div>
+          <div class="stock-card-spark" id="${sparkId}"></div>
+        </div>
+        <div class="stock-card-meta">
+          ${prevClose !== '0.00' ? `<span>昨收 ${prevClose}</span>` : ''}
+          ${high !== '0.00' ? `<span>高 ${high}</span>` : ''}
+          ${low !== '0.00' ? `<span>低 ${low}</span>` : ''}
+          ${vol !== '-' ? `<span>量 ${vol}</span>` : ''}
+          ${turnRate ? `<span>换手 ${turnRate}</span>` : ''}
+          ${pe ? `<span>PE ${pe}</span>` : ''}
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="text-align:center;color:var(--text-dim);padding:40px">暂无热门股数据</div>';
+  }
+  html += '</div>';
+
+  // 板块排行或市场概况
+  if (sectors.length > 0) {
+    html += '<div class="card"><div class="card-title">板块涨幅排行</div>';
+    const maxAbs = Math.max(...sectors.map(s => Math.abs(parseFloat(s.change_pct || s.changePct || 0))), 1);
+    for (const sec of sectors) {
+      const pct = parseFloat(sec.change_pct || sec.changePct || 0);
+      const isUp = pct >= 0;
+      const width = Math.max(Math.abs(pct) / maxAbs * 45, 8);
+      const name = sec.name || sec.sector_name || sec.board_name || '-';
+      html += `<div class="sector-bar-row">
+        <div class="sector-bar-label">${name}</div>
+        <div class="sector-bar-track">
+          <div class="sector-bar-fill" style="width:${width}%;background:${isUp?'var(--success)':'var(--danger)'};margin-left:${isUp?'50%':'auto'};margin-right:${isUp?'auto':'50%'}">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</div>
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    // 无板块数据时显示市场摘要
+    html += '<div class="card"><div class="card-title">市场摘要</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:14px">';
+    // 市场状态
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg-elevated)">
+      <span style="font-size:13px;color:var(--text-muted)">市场状态</span>
+      <span style="font-weight:600;color:${tempColor}">${temperature.label || '中性'}</span>
+    </div>`;
+    // 指数涨跌统计
+    const upCnt = temperature.up_count || 0;
+    const downCnt = temperature.down_count || 0;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg-elevated)">
+      <span style="font-size:13px;color:var(--text-muted)">指数涨跌</span>
+      <span><span class="text-up" style="font-weight:600">${upCnt} 涨</span> / <span class="text-down" style="font-weight:600">${downCnt} 跌</span></span>
+    </div>`;
+    // 热门股统计
+    const stockUp = hotStocks.filter(s => parseFloat(s.change_pct||0) >= 0).length;
+    const stockDown = hotStocks.length - stockUp;
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg-elevated)">
+      <span style="font-size:13px;color:var(--text-muted)">热门股涨跌</span>
+      <span><span class="text-up" style="font-weight:600">${stockUp} 涨</span> / <span class="text-down" style="font-weight:600">${stockDown} 跌</span></span>
+    </div>`;
+    // 最大涨幅
+    if (hotStocks.length > 0) {
+      const topGainer = [...hotStocks].sort((a,b) => parseFloat(b.change_pct||0) - parseFloat(a.change_pct||0))[0];
+      const topPct = parseFloat(topGainer.change_pct || 0);
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg-elevated)">
+        <span style="font-size:13px;color:var(--text-muted)">涨幅最大</span>
+        <span style="font-weight:600">${topGainer.name || topGainer.stock_name || ''} <span class="text-up">+${topPct.toFixed(2)}%</span></span>
+      </div>`;
+      const topLoser = [...hotStocks].sort((a,b) => parseFloat(a.change_pct||0) - parseFloat(b.change_pct||0))[0];
+      const losePct = parseFloat(topLoser.change_pct || 0);
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:var(--radius-sm);background:var(--bg-elevated)">
+        <span style="font-size:13px;color:var(--text-muted)">跌幅最大</span>
+        <span style="font-weight:600">${topLoser.name || topLoser.stock_name || ''} <span class="text-down">${losePct.toFixed(2)}%</span></span>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+
+  // === Row 3: 市场新闻 ===
+  html += '<div class="card"><div class="card-title">市场新闻</div>';
+  if (news.length > 0) {
+    html += '<div style="display:flex;flex-direction:column;gap:10px">';
+    for (const n of news) {
+      const title = n.title || '';
+      const source = n.source || '';
+      const url = n.url || '';
+      const date = n.published_date || '';
+      const content = n.content || '';
+      html += `<div style="padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);transition:var(--transition)" onmouseover="this.style.borderColor='var(--primary-light)';this.style.boxShadow='0 2px 12px var(--primary-glow)'" onmouseout="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+        <div style="flex:1">
+          ${url ? `<a href="${url}" target="_blank" style="color:var(--text);font-weight:600;text-decoration:none;font-size:14px">${title}</a>` : `<span style="font-weight:600;font-size:14px">${title}</span>`}
+          ${content ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${content}</div>` : ''}
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px">${source}${date ? ' · ' + date : ''}</div>
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="text-align:center;color:var(--text-dim);padding:30px">暂无市场新闻</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  // 渲染图表
+  setTimeout(() => {
+    indices.forEach(idx => {
+      const el = document.getElementById(`spark-idx-${market}-${idx.code||''}`);
+      if (el) renderSparkline(el, idx.sparkline || [], parseFloat(idx.change_pct||0) >= 0);
+    });
+    hotStocks.forEach(s => {
+      const el = document.getElementById(`spark-stock-${market}-${s.code||''}`);
+      if (el) renderSparkline(el, s.sparkline || [], parseFloat(s.change_pct||0) >= 0);
+    });
+    const gaugeEl = document.getElementById(`temp-gauge-${market}`);
+    if (gaugeEl) renderTempGauge(gaugeEl, tempVal, temperature.label || '中性');
+  }, 50);
+}
+
+/** 迷你走势图 (echarts mini line) */
+function renderSparkline(el, data, isUp) {
+  if (!el || !data || data.length < 2) return;
+  const chart = echarts.init(el, getChartTheme());
+  const upColor = '#ef4444';   // 涨=红色
+  const downColor = '#10b981'; // 跌=绿色
+  const c = isUp ? upColor : downColor;
+  const cRgba = isUp ? 'rgba(239,68,68,' : 'rgba(16,185,129,';
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { top: 2, right: 0, bottom: 2, left: 0 },
+    xAxis: { type: 'category', show: false, data: data.map((_, i) => i) },
+    yAxis: { type: 'value', show: false, scale: true },
+    series: [{ type: 'line', data: data, smooth: true, symbol: 'none',
+      lineStyle: { color: c, width: 1.5 },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [
+        { offset: 0, color: cRgba + '0.3)' },
+        { offset: 1, color: cRgba + '0)' }
+      ]}}
+    }],
+    tooltip: { show: false }
+  });
+}
+
+/** 市场温度仪表盘 (echarts gauge) */
+function renderTempGauge(el, value, label) {
+  if (!el) return;
+  const chart = echarts.init(el, getChartTheme());
+  // 涨=红 跌=绿，温度高(偏多)=红，温度低(偏空)=绿
+  const hotColor = '#ef4444';  // 偏多=红
+  const midColor = '#f59e0b';  // 中性=橙
+  const coldColor = '#10b981'; // 偏空=绿
+  const valColor = value >= 70 ? hotColor : value >= 40 ? midColor : coldColor;
+  chart.setOption({
+    backgroundColor: 'transparent',
+    series: [{
+      type: 'gauge', radius: '90%', startAngle: 200, endAngle: -20,
+      min: 0, max: 100, splitNumber: 5,
+      progress: { show: true, width: 10, roundCap: true,
+        itemStyle: { color: valColor }},
+      axisLine: { lineStyle: { width: 10, color: [[0.4, coldColor], [0.7, midColor], [1, hotColor]] }},
+      pointer: { show: false },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: { show: false },
+      detail: { valueAnimation: true, fontSize: 28, fontWeight: 700, offsetCenter: [0, '10%'],
+        formatter: '{value}', color: valColor },
+      data: [{ value: value }]
+    }]
+  });
+}
+
 // ===== Portfolio =====
 function loadPortfolio() {
   fetch('/api/v1/portfolio/summary').then(r => r.json()).then(data => {
@@ -2016,6 +2339,7 @@ navigateTo = function(page) {
   originalNavigateTo(page);
   switch(page) {
     case 'dashboard': loadDashboard(); break;
+        case 'market-briefing': loadMarketBriefing(currentBriefingMarket); break;
     case 'analysis': loadHistory(); break;
     case 'signals': loadSignals(); break;
     case 'portfolio': loadPortfolio(); break;

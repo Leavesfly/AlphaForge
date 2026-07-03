@@ -89,7 +89,7 @@ cp .env.example .env
 mvn clean package -DskipTests
 
 # 4. 启动服务
-java -jar target/daily-stock-analysis-1.0.0.jar
+java -jar target/alphaforge-1.0.0.jar
 
 # 或直接通过 Maven 启动
 mvn spring-boot:run

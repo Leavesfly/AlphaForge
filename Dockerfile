@@ -6,7 +6,7 @@ LABEL description="股票智能分析系统 - Java版"
 WORKDIR /app
 
 # 复制构建产物
-COPY target/daily-stock-analysis-1.0.0.jar app.jar
+COPY target/alphaforge-1.0.0.jar app.jar
 
 # 创建数据目录
 RUN mkdir -p /app/data /app/logs

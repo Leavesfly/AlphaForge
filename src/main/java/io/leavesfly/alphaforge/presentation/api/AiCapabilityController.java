@@ -4,6 +4,7 @@ import io.leavesfly.alphaforge.application.evaluation.BenchmarkComparison;
 import io.leavesfly.alphaforge.application.evaluation.BenchmarkReport;
 import io.leavesfly.alphaforge.application.evaluation.BenchmarkSuite;
 import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQuality;
+import io.leavesfly.alphaforge.application.factor.analysis.FactorAnalysisService;
 import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionConfig;
 import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionOrchestrator;
 import io.leavesfly.alphaforge.application.factor.evolution.model.EvolutionResult;
@@ -30,11 +31,14 @@ public class AiCapabilityController {
 
     private final FactorEvolutionOrchestrator evolutionOrchestrator;
     private final BenchmarkSuite benchmarkSuite;
+    private final FactorAnalysisService factorAnalysisService;
 
     public AiCapabilityController(FactorEvolutionOrchestrator evolutionOrchestrator,
-                                   BenchmarkSuite benchmarkSuite) {
+                                   BenchmarkSuite benchmarkSuite,
+                                   FactorAnalysisService factorAnalysisService) {
         this.evolutionOrchestrator = evolutionOrchestrator;
         this.benchmarkSuite = benchmarkSuite;
+        this.factorAnalysisService = factorAnalysisService;
     }
 
     // ===== 因子自进化 =====
@@ -128,6 +132,43 @@ public class AiCapabilityController {
     @GetMapping("/factor-evolution/status")
     public ResponseEntity<ApiResponse<String>> getEvolutionStatus() {
         return ResponseEntity.ok(ApiResponse.ok(evolutionOrchestrator.getEvolutionStatusSummary()));
+    }
+
+    // ===== 经典因子分析（去极值/标准化 + 分层回测 + IC） =====
+
+    /**
+     * 列出内置经典因子
+     * GET /api/v1/ai-capability/factor/library
+     */
+    @GetMapping("/factor/library")
+    public ResponseEntity<ApiResponse<List<String>>> factorLibrary() {
+        return ResponseEntity.ok(ApiResponse.ok(factorAnalysisService.availableFactors()));
+    }
+
+    /**
+     * 对股票池分析单个经典因子（分层回测 + IC-IR）
+     * POST /api/v1/ai-capability/factor/analyze
+     * body: {"codes":["600519",...],"factor":"momentum_20","lookbackDays":250,"forwardDays":5,"quantiles":5}
+     */
+    @PostMapping("/factor/analyze")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> analyzeFactor(@RequestBody Map<String, Object> body) {
+        Object codesObj = body.get("codes");
+        if (!(codesObj instanceof List<?> list) || list.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.error("codes 不能为空"));
+        }
+        List<String> codes = list.stream().map(String::valueOf).toList();
+        String factor = body.containsKey("factor") ? String.valueOf(body.get("factor")) : "momentum_20";
+        int lookbackDays = body.containsKey("lookbackDays") ? ((Number) body.get("lookbackDays")).intValue() : 250;
+        int forwardDays = body.containsKey("forwardDays") ? ((Number) body.get("forwardDays")).intValue() : 5;
+        int quantiles = body.containsKey("quantiles") ? ((Number) body.get("quantiles")).intValue() : 5;
+
+        try {
+            Map<String, Object> result = factorAnalysisService.analyze(codes, factor, lookbackDays, forwardDays, quantiles);
+            return ResponseEntity.ok(ApiResponse.ok(result, "因子分析完成"));
+        } catch (Exception e) {
+            log.error("因子分析失败", e);
+            return ResponseEntity.ok(ApiResponse.error(500, "因子分析失败: " + e.getMessage()));
+        }
     }
 
     // ===== 策略质量评分 =====

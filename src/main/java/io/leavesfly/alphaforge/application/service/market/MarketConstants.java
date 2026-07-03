@@ -1,5 +1,7 @@
 package io.leavesfly.alphaforge.application.service.market;
 
+import io.leavesfly.alphaforge.domain.model.enums.MarketType;
+
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +31,87 @@ public final class MarketConstants {
             "399006", "创业板指",
             "000300", "沪深300"
     );
+
+    // ==================== 行情简览：多市场指数定义 ====================
+
+    /** A股指数（代码 → 名称） */
+    public static final Map<String, String> A_SHARE_INDICES = Map.of(
+            "000001", "上证指数",
+            "399001", "深证成指",
+            "399006", "创业板指",
+            "000300", "沪深300"
+    );
+
+    /** 港股指数（Yahoo Finance 代码 → 名称） */
+    public static final Map<String, String> HK_INDICES = Map.of(
+            "^HSI", "恒生指数",
+            "^HSCE", "国企指数"
+    );
+
+    /** 美股指数（Yahoo Finance 代码 → 名称） */
+    public static final Map<String, String> US_INDICES = Map.of(
+            "^DJI", "道琼斯工业",
+            "^IXIC", "纳斯达克",
+            "^GSPC", "标普500"
+    );
+
+    /** 获取指定市场的指数列表 */
+    public static Map<String, String> getIndices(MarketType market) {
+        return switch (market) {
+            case A -> A_SHARE_INDICES;
+            case HK -> HK_INDICES;
+            case US -> US_INDICES;
+            default -> Map.of();
+        };
+    }
+
+    // ==================== 行情简览：热门股票定义 ====================
+
+    /** A股热门股票（代码 → 名称） */
+    public static final Map<String, String> A_SHARE_HOT_STOCKS = Map.of(
+            "600519", "贵州茅台",
+            "300750", "宁德时代",
+            "601318", "中国平安",
+            "002594", "比亚迪",
+            "000858", "五粮液"
+    );
+
+    /** 港股热门股票（代码 → 名称） */
+    public static final Map<String, String> HK_HOT_STOCKS = Map.of(
+            "hk00700", "腾讯控股",
+            "hk09988", "阿里巴巴",
+            "hk03690", "美团",
+            "hk01810", "小米集团"
+    );
+
+    /** 美股热门股票（代码 → 名称） */
+    public static final Map<String, String> US_HOT_STOCKS = Map.of(
+            "AAPL", "苹果",
+            "MSFT", "微软",
+            "NVDA", "英伟达",
+            "TSLA", "特斯拉",
+            "AMZN", "亚马逊"
+    );
+
+    /** 获取指定市场的热门股票列表 */
+    public static Map<String, String> getHotStocks(MarketType market) {
+        return switch (market) {
+            case A -> A_SHARE_HOT_STOCKS;
+            case HK -> HK_HOT_STOCKS;
+            case US -> US_HOT_STOCKS;
+            default -> Map.of();
+        };
+    }
+
+    /** 获取指定市场的新闻搜索关键词 */
+    public static String getNewsKeyword(MarketType market) {
+        return switch (market) {
+            case A -> "A股 市场";
+            case HK -> "港股 市场";
+            case US -> "美股 市场";
+            default -> "股票市场";
+        };
+    }
 
     /**
      * 评估市场情绪 — 基于上涨指数占比

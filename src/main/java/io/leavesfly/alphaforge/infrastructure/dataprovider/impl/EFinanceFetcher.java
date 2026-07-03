@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -30,22 +29,19 @@ import java.util.*;
 public class EFinanceFetcher implements BaseDataFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(EFinanceFetcher.class);
-    
-    /** 东方财富历史K线接口 */
-    private static final String KLINE_URL = "https://push2his.eastmoney.com/api/qt/stock/kline/get";
-    /** 东方财富实时行情接口 */
-    private static final String QUOTE_URL = "https://push2.eastmoney.com/api/qt/stock/get";
-    /** 板块列表接口 */
-    private static final String BOARD_URL = "https://push2.eastmoney.com/api/qt/clist/get";
+
     /** 个股所属板块接口 */
     private static final String BELONG_URL = "https://datacenter.eastmoney.com/securities/api/data/v1/get";
 
     private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient eastmoney;
 
-    public EFinanceFetcher(OkHttpClient httpClient, ObjectMapper objectMapper) {
+    public EFinanceFetcher(OkHttpClient httpClient, ObjectMapper objectMapper,
+                           io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient eastmoney) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
+        this.eastmoney = eastmoney;
     }
 
     @Override public String getName() { return "efinance"; }
@@ -71,135 +67,12 @@ public class EFinanceFetcher implements BaseDataFetcher {
     @Override
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
                                                   KLineFrequency frequency, AdjustType adjust) {
-        try {
-            String secId = toSecId(stockCode);
-            int klt = frequencyToKlt(frequency);
-            int fqt = adjustToFqt(adjust);
-            String url = KLINE_URL + "?" +
-                    "secid=" + secId +
-                    "&fields1=f1,f2,f3,f4,f5,f6" +
-                    "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61" +
-                    "&klt=" + klt +
-                    "&fqt=" + fqt +
-                    "&beg=" + startDate.format(DateTimeFormatter.BASIC_ISO_DATE) +
-                    "&end=" + endDate.format(DateTimeFormatter.BASIC_ISO_DATE) +
-                    "&lmt=1000" +
-                    "&_=" + System.currentTimeMillis();
-
-            Request request = new Request.Builder().url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Referer", "https://quote.eastmoney.com/")
-                    .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
-                String body = response.body().string();
-                JsonNode root = objectMapper.readTree(body);
-                JsonNode klines = root.path("data").path("klines");
-                String stockName = root.path("data").path("name").asText("");
-
-                if (!klines.isArray()) return Collections.emptyList();
-
-                List<StockDailyData> result = new ArrayList<>();
-                for (JsonNode line : klines) {
-                    String[] parts = line.asText().split(",");
-                    if (parts.length < 11) continue;
-                    StockDailyData d = new StockDailyData();
-                    d.setStockCode(stockCode);
-                    d.setStockName(stockName);
-                    d.setTradeDate(LocalDate.parse(parts[0]));
-                    d.setOpenPrice(Double.parseDouble(parts[1]));
-                    d.setClosePrice(Double.parseDouble(parts[2]));
-                    d.setHighPrice(Double.parseDouble(parts[3]));
-                    d.setLowPrice(Double.parseDouble(parts[4]));
-                    d.setVolume(Long.parseLong(parts[5]));
-                    d.setAmount(Double.parseDouble(parts[6]));
-                    d.setAmplitude(Double.parseDouble(parts[7]));
-                    d.setChangePct(Double.parseDouble(parts[8]));
-                    d.setChangeAmount(Double.parseDouble(parts[9]));
-                    d.setTurnoverRate(Double.parseDouble(parts[10]));
-                    d.setDataSource("efinance");
-                    result.add(d);
-                }
-                return result;
-            }
-        } catch (Exception e) {
-            log.error("EFinance获取历史数据失败: {} - {}", stockCode, e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    /** KLineFrequency → 东财 klt 参数 */
-    private int frequencyToKlt(KLineFrequency freq) {
-        return switch (freq) {
-            case MINUTE_1 -> 1;
-            case MINUTE_5 -> 5;
-            case MINUTE_15 -> 15;
-            case MINUTE_30 -> 30;
-            case MINUTE_60 -> 60;
-            case DAILY -> 101;
-            case WEEKLY -> 102;
-            case MONTHLY -> 103;
-        };
-    }
-
-    /** AdjustType → 东财 fqt 参数 */
-    private int adjustToFqt(AdjustType adjust) {
-        return switch (adjust) {
-            case NONE -> 0;
-            case FRONT -> 1;
-            case BACK -> 2;
-        };
+        return eastmoney.fetchHistory(stockCode, startDate, endDate, frequency, adjust, getName());
     }
 
     @Override
     public Map<String, Object> getRealtimeQuote(String stockCode) {
-        try {
-            String secId = toSecId(stockCode);
-            String url = QUOTE_URL + "?secid=" + secId +
-                    "&fields=f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60," +
-                    "f116,f117,f162,f167,f170,f171," +
-                    "f164,f163,f168,f169";
-
-            Request request = new Request.Builder().url(url)
-                    .header("User-Agent", "Mozilla/5.0").build();
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful() || response.body() == null) return Collections.emptyMap();
-                JsonNode data = objectMapper.readTree(response.body().string()).path("data");
-                if (data.isMissingNode()) return Collections.emptyMap();
-
-                int dec = data.path("f59").asInt(3);
-                double divisor = Math.pow(10, dec);
-
-                Map<String, Object> quote = new LinkedHashMap<>();
-                quote.put("stock_code", stockCode);
-                quote.put("stock_name", data.path("f58").asText(""));
-                quote.put("current_price", data.path("f43").asDouble() / divisor);
-                quote.put("open_price", data.path("f46").asDouble() / divisor);
-                quote.put("high_price", data.path("f44").asDouble() / divisor);
-                quote.put("low_price", data.path("f45").asDouble() / divisor);
-                quote.put("previous_close", data.path("f60").asDouble() / divisor);
-                quote.put("volume", data.path("f47").asLong());
-                quote.put("amount", data.path("f48").asDouble());
-                quote.put("change_pct", data.path("f170").asDouble() / 100.0);
-                quote.put("change_amount", data.path("f171").asDouble() / divisor);
-                quote.put("turnover_rate", data.path("f167").asDouble() / 100.0);
-                quote.put("pe", data.path("f162").asDouble() / 100.0);
-                quote.put("market_cap", data.path("f116").asDouble());
-                quote.put("circulating_cap", data.path("f117").asDouble());
-                // 扩展字段
-                quote.put("amplitude", data.path("f168").asDouble() / 100.0);  // 振幅%
-                quote.put("volume_ratio", data.path("f50").asDouble() / 100.0);  // 量比
-                quote.put("pe_static", data.path("f163").asDouble() / 100.0);  // 静态PE
-                quote.put("limit_up", data.path("f51").asDouble() / divisor);  // 涨停价
-                quote.put("limit_down", data.path("f52").asDouble() / divisor); // 跌停价
-                quote.put("float_market_cap", data.path("f117").asDouble());  // 流通市值(亿)
-                return quote;
-            }
-        } catch (Exception e) {
-            log.error("EFinance实时行情失败: {}", e.getMessage());
-            return Collections.emptyMap();
-        }
+        return eastmoney.fetchRealtimeQuote(stockCode, getName());
     }
 
     @Override
@@ -216,58 +89,7 @@ public class EFinanceFetcher implements BaseDataFetcher {
      */
     @Override
     public List<Map<String, Object>> getMinuteData(String stockCode, int period, int count) {
-        try {
-            String secId = toSecId(stockCode);
-            int klt = switch (period) {
-                case 1 -> 1;
-                case 5 -> 5;
-                case 15 -> 15;
-                case 30 -> 30;
-                case 60 -> 60;
-                default -> 5;
-            };
-            String url = KLINE_URL + "?" +
-                    "secid=" + secId +
-                    "&fields1=f1,f2,f3,f4,f5,f6" +
-                    "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61" +
-                    "&klt=" + klt +
-                    "&fqt=1" +
-                    "&lmt=" + count +
-                    "&end=20500101" +
-                    "&_=" + System.currentTimeMillis();
-
-            Request request = new Request.Builder().url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Referer", "https://quote.eastmoney.com/")
-                    .build();
-
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful() || response.body() == null) return Collections.emptyList();
-                String body = response.body().string();
-                JsonNode root = objectMapper.readTree(body);
-                JsonNode klines = root.path("data").path("klines");
-                if (!klines.isArray()) return Collections.emptyList();
-
-                List<Map<String, Object>> result = new ArrayList<>();
-                for (JsonNode line : klines) {
-                    String[] parts = line.asText().split(",");
-                    if (parts.length < 7) continue;
-                    Map<String, Object> bar = new LinkedHashMap<>();
-                    bar.put("time", parts[0]);
-                    bar.put("open", Double.parseDouble(parts[1]));
-                    bar.put("close", Double.parseDouble(parts[2]));
-                    bar.put("high", Double.parseDouble(parts[3]));
-                    bar.put("low", Double.parseDouble(parts[4]));
-                    bar.put("volume", Long.parseLong(parts[5]));
-                    bar.put("amount", Double.parseDouble(parts[6]));
-                    result.add(bar);
-                }
-                return result;
-            }
-        } catch (Exception e) {
-            log.error("EFinance获取分钟数据失败: {} - {}", stockCode, e.getMessage());
-            return Collections.emptyList();
-        }
+        return eastmoney.fetchMinuteData(stockCode, period, count, getName());
     }
 
     @Override

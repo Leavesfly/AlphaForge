@@ -86,9 +86,14 @@ public class StockCodeUtils {
     /**
      * 转为东方财富 secId 格式 (1.600519 / 0.000001)
      * 沪市: 1.code, 深市/北交所: 0.code
+     * 指数规则: 000xxx 开头为沪市指数(1.), 39xxxx 开头为深市指数(0.)
      */
     public static String toSecId(String stockCode) {
         String code = normalize(stockCode);
+        // 沪市指数: 000001(上证指数) 000300(沪深300) 000016(上证50) 000905(中证500)
+        if (code.startsWith("0000") || code.startsWith("0009")) {
+            return "1." + code;
+        }
         if (code.startsWith("6") || code.startsWith("9")
                 || code.startsWith("11") || code.startsWith("13")) {
             return "1." + code;

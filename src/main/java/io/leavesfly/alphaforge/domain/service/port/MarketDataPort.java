@@ -3,6 +3,7 @@ package io.leavesfly.alphaforge.domain.service.port;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
 import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
+import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -38,6 +39,17 @@ public interface MarketDataPort {
 
     /** 获取实时行情数据 */
     Map<String, Object> getRealtimeQuote(String stockCode);
+
+    /**
+     * 获取实时行情数据（显式指定市场类型，用于指数等无法自动检测市场的代码）
+     *
+     * @param stockCode  股票/指数代码
+     * @param marketType 市场类型（A/HK/US 等）
+     * @return 实时行情数据
+     */
+    default Map<String, Object> getRealtimeQuote(String stockCode, MarketType marketType) {
+        return getRealtimeQuote(stockCode);
+    }
 
     /** 获取股票基本信息(名称、行业、市值等) */
     Map<String, Object> getStockInfo(String stockCode);

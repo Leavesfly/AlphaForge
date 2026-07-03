@@ -37,7 +37,10 @@ class DataFetcherManagerIntegrationTest {
         DataProviderConfig mockDataProviderConfig = mock(DataProviderConfig.class);
         when(mockDataProviderConfig.getDataProvider()).thenReturn("auto");
 
-        EFinanceFetcher fetcher = new EFinanceFetcher(new okhttp3.OkHttpClient(), new com.fasterxml.jackson.databind.ObjectMapper());
+        okhttp3.OkHttpClient http = new okhttp3.OkHttpClient();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        EFinanceFetcher fetcher = new EFinanceFetcher(http, mapper,
+                new io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient(http, mapper));
         TradingCalendar calendar = new TradingCalendar();
         DataQualityValidator validator = new DataQualityValidator(calendar);
 

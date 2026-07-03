@@ -100,8 +100,8 @@ function renderBacktestVisualization(data) {
         { name: '策略净值', type: 'line', data: portfolio, smooth: true, yAxisIndex: 0, lineStyle: { color: '#6366f1', width: 2 }, itemStyle: { color: '#6366f1' }, symbol: 'none' },
         { name: '买入持有', type: 'line', data: benchmark, smooth: true, yAxisIndex: 0, lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' }, itemStyle: { color: '#94a3b8' }, symbol: 'none' },
         { name: '股价', type: 'line', data: closePrices, smooth: true, yAxisIndex: 1, lineStyle: { color: '#f59e0b', width: 1, opacity: 0.5 }, itemStyle: { color: '#f59e0b' }, symbol: 'none' },
-        { name: '买入', type: 'scatter', yAxisIndex: 1, data: buyPoints, symbol: 'triangle', symbolSize: 12, itemStyle: { color: '#10b981' } },
-        { name: '卖出', type: 'scatter', yAxisIndex: 1, data: sellPoints, symbol: 'triangle', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#ef4444' } }
+        { name: '买入', type: 'scatter', yAxisIndex: 1, data: buyPoints, symbol: 'triangle', symbolSize: 12, itemStyle: { color: '#ef4444' } },
+        { name: '卖出', type: 'scatter', yAxisIndex: 1, data: sellPoints, symbol: 'triangle', symbolRotate: 180, symbolSize: 12, itemStyle: { color: '#10b981' } }
       ]
     }, true);
   });
@@ -112,7 +112,7 @@ function renderBacktestVisualization(data) {
       tooltip: { trigger: 'axis', formatter: p => `${p[0].axisValue}<br/>回撤: -${Number(p[0].data).toFixed(2)}%` },
       xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
       yAxis: { type: 'value', axisLabel: { formatter: '-{value}%' } },
-      series: [{ type: 'line', data: drawdown.map(v => -Math.abs(v)), areaStyle: { opacity: 0.18, color: '#ef4444' }, lineStyle: { color: '#ef4444', width: 1.5 }, symbol: 'none' }]
+      series: [{ type: 'line', data: drawdown.map(v => -Math.abs(v)), areaStyle: { opacity: 0.18, color: '#10b981' }, lineStyle: { color: '#10b981', width: 1.5 }, symbol: 'none' }]
     }, true);
   });
 
@@ -124,7 +124,7 @@ function renderBacktestVisualization(data) {
       xAxis: { type: 'category', data: monthly.map(m => m.month), axisLabel: { fontSize: 10, rotate: monthly.length > 8 ? 35 : 0 } },
       yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
       series: [{ type: 'bar', data: monthly.map(m => Number(m.return_pct || 0).toFixed(2)),
-        itemStyle: { color: params => (params.data >= 0 ? '#10b981' : '#ef4444'), borderRadius: [4, 4, 0, 0] } }]
+        itemStyle: { color: params => (params.data >= 0 ? '#ef4444' : '#10b981'), borderRadius: [4, 4, 0, 0] } }]
     }, true);
   });
 

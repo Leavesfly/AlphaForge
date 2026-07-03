@@ -202,7 +202,7 @@
     </dependencies>
 
     <build>
-        <finalName>daily-stock-analysis-${project.version}</finalName>
+        <finalName>alphaforge-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

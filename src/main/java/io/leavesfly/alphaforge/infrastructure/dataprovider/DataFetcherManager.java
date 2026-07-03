@@ -182,7 +182,14 @@ public class DataFetcherManager implements MarketDataPort {
                                        java.util.function.Function<BaseDataFetcher, T> fetcherCall,
                                        java.util.function.Predicate<T> isEmpty,
                                        T emptyDefault) {
-        MarketType market = MarketType.detectFromCode(stockCode);
+        return executeWithFailover(MarketType.detectFromCode(stockCode), fetcherCall, isEmpty, emptyDefault);
+    }
+
+    /** 通用数据获取模板（显式指定市场类型） */
+    private <T> T executeWithFailover(MarketType market,
+                                       java.util.function.Function<BaseDataFetcher, T> fetcherCall,
+                                       java.util.function.Predicate<T> isEmpty,
+                                       T emptyDefault) {
         List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
@@ -229,8 +236,18 @@ public class DataFetcherManager implements MarketDataPort {
     // ==================== 行情数据 ====================
 
     /** 获取实时行情 */
+    @Override
     public Map<String, Object> getRealtimeQuote(String stockCode) {
         return executeWithFailover(stockCode,
+                f -> f.getRealtimeQuote(stockCode),
+                r -> r == null || r.isEmpty(),
+                Collections.emptyMap());
+    }
+
+    /** 获取实时行情（显式指定市场类型，用于指数等无法自动检测的代码） */
+    @Override
+    public Map<String, Object> getRealtimeQuote(String stockCode, MarketType marketType) {
+        return executeWithFailover(marketType,
                 f -> f.getRealtimeQuote(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());

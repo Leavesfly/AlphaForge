@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.portfolio.CsvImportService;
 import io.leavesfly.alphaforge.application.service.portfolio.PortfolioExtService;
+import io.leavesfly.alphaforge.application.service.portfolio.PortfolioOptimizationService;
 import io.leavesfly.alphaforge.application.service.portfolio.PortfolioRiskService;
 import io.leavesfly.alphaforge.application.service.portfolio.PortfolioService;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.*;
@@ -24,15 +25,18 @@ public class PortfolioController {
     private final PortfolioExtService portfolioExtService;
     private final PortfolioRiskService riskService;
     private final CsvImportService csvImportService;
+    private final PortfolioOptimizationService optimizationService;
 
     public PortfolioController(PortfolioService portfolioService,
                               PortfolioExtService portfolioExtService,
                               PortfolioRiskService riskService,
-                              CsvImportService csvImportService) {
+                              CsvImportService csvImportService,
+                              PortfolioOptimizationService optimizationService) {
         this.portfolioService = portfolioService;
         this.portfolioExtService = portfolioExtService;
         this.riskService = riskService;
         this.csvImportService = csvImportService;
+        this.optimizationService = optimizationService;
     }
 
     // ==================== 持仓 ====================
@@ -153,6 +157,35 @@ public class PortfolioController {
     @GetMapping("/risk")
     public ResponseEntity<Map<String, Object>> risk() {
         return ResponseEntity.ok(riskService.assessRisk());
+    }
+
+    // ==================== 组合优化 ====================
+
+    /**
+     * 组合权重优化。
+     *
+     * <p>请求体示例：
+     * {@code {"codes":["600519","000858"],"objective":"max_sharpe","lookbackDays":180,
+     * "capital":100000,"riskAversion":3.0,"riskFreeRate":0.02}}。
+     * codes 为空时对当前持仓做优化。objective 支持
+     * equal_weight/inverse_volatility/risk_parity/min_variance/max_sharpe/mean_variance。</p>
+     */
+    @PostMapping("/optimize")
+    public ResponseEntity<Map<String, Object>> optimize(@RequestBody(required = false) OptimizeRequest req) {
+        OptimizeRequest r = req != null ? req : new OptimizeRequest();
+        Map<String, Object> result = optimizationService.optimize(
+                r.codes, r.objective, r.lookbackDays, r.capital, r.riskAversion, r.riskFreeRate);
+        return ResponseEntity.ok(result);
+    }
+
+    /** 组合优化请求体 */
+    public static class OptimizeRequest {
+        public List<String> codes;
+        public String objective = "max_sharpe";
+        public int lookbackDays = 180;
+        public double capital = 0;
+        public double riskAversion = 3.0;
+        public double riskFreeRate = 0.02;
     }
 
     // ==================== CSV导入 ====================
