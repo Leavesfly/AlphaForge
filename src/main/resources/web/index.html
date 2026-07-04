@@ -42,7 +42,7 @@
     </button>
     <!-- Settings -->
     <button class="header-btn" onclick="showToast('设置面板（开发中）','info')" title="设置">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15 1.65 1.65 0 003 14.08V14a2 2 0 014 0v.09c0 .66.38 1.26 1 1.51z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
     <div class="header-divider"></div>
     <!-- User -->
@@ -114,11 +114,7 @@
       </div>
       <div class="nav-item" data-page="backtest">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        策略回测
-      </div>
-      <div class="nav-item" data-page="benchmark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-        策略评估
+        策略回测与评估
       </div>
       <div class="nav-item" data-page="factor-evolution">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
@@ -132,10 +128,6 @@
       交易与持仓
     </div>
     <div class="nav-section-items">
-      <div class="nav-item" data-page="portfolio">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
-        投资组合
-      </div>
       <div class="nav-item" data-page="paper-trading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
         模拟交易
@@ -157,13 +149,13 @@
         告警中心
         <span class="nav-badge">3</span>
       </div>
-      <div class="nav-item" data-page="usage">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
-        用量监控
-      </div>
       <div class="nav-item" data-page="loop-monitor">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
         Loop 监控
+      </div>
+      <div class="nav-item" data-page="usage">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+        用量监控
       </div>
     </div>
   </div>
@@ -208,7 +200,7 @@
 
 <!-- ===== Market Briefing ===== -->
 <div class="page" id="page-market-briefing">
-  <div class="page-header"><div class="page-header-left"><h2>行情简览</h2><p>三大市场实时行情 · 指数波动 · 热门股票 · 市场新闻</p></div><div><button class="btn btn-outline btn-sm" onclick="loadMarketBriefing(currentBriefingMarket);showToast('数据已刷新', 'success')">刷新数据</button></div></div>
+  <div class="page-header"><div class="page-header-left"><h2>行情简览</h2><p>三大市场实时行情 · 指数波动 · 热门股票 · 市场新闻</p></div><div><button class="btn btn-outline btn-sm" id="briefing-refresh-btn" onclick="refreshBriefing()">刷新数据</button></div></div>
   <div class="tabs-wrapper"><div class="tabs" data-tab-group="briefing">
     <div class="tab active" data-tab="briefing-a" onclick="switchBriefingMarket('A')">A 股</div>
     <div class="tab" data-tab="briefing-hk" onclick="switchBriefingMarket('HK')">港股</div>
@@ -303,49 +295,9 @@
   </div>
 </div>
 
-<!-- ===== Portfolio ===== -->
-<div class="page" id="page-portfolio">
-  <div class="page-header"><div class="page-header-left"><h2>投资组合</h2><p>多账户持仓管理 · 交易记录 · 资金流水 · 公司行动</p></div><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="openModal('modal-trade')">+ 录入交易</button><button class="btn btn-outline btn-sm" onclick="showToast('请选择账单文件','info')">导入账单</button></div></div>
-  <div class="grid grid-4" style="margin-bottom:20px">
-    <div class="card stat-card accent-primary"><div class="stat-value" style="font-size:22px">¥0</div><div class="stat-label">总市值</div></div>
-    <div class="card stat-card accent-success"><div class="stat-value" style="font-size:22px">¥0</div><div class="stat-label">浮动盈亏</div></div>
-    <div class="card stat-card accent-warning"><div class="stat-value" style="font-size:22px">0.00%</div><div class="stat-label">总收益率</div></div>
-    <div class="card stat-card"><div class="stat-value" style="font-size:22px">0</div><div class="stat-label">持仓个股</div></div>
-  </div>
-  <div class="tabs-wrapper"><div class="tabs" data-tab-group="portfolio"><div class="tab active" data-tab="positions">持仓概览</div><div class="tab" data-tab="trades">交易记录</div><div class="tab" data-tab="cashflow">资金流水</div><div class="tab" data-tab="actions">公司行动</div></div></div>
-  <div class="tab-panel active" data-panel="positions" data-group="portfolio">
-    <div class="grid grid-2" style="margin-bottom:16px">
-      <div class="card"><div class="card-title">持仓分布</div><div class="chart-box-sm" id="chart-portfolio"></div></div>
-      <div class="card"><div class="card-title">收益曲线</div><div class="chart-box-sm" id="chart-pnl"></div></div>
-    </div>
-    <div class="card"><div class="card-title">当前持仓</div><div class="table-container"><table>
-      <thead><tr><th>股票</th><th>数量</th><th>成本价</th><th>现价</th><th>盈亏</th><th>盈亏率</th><th>仓位</th><th>止损</th><th>目标</th></tr></thead>
-      <tbody><tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div></div>
-  </div>
-  <div class="tab-panel" data-panel="trades" data-group="portfolio">
-    <div class="card"><div class="card-title">交易记录</div><div class="table-container"><table>
-      <thead><tr><th>日期</th><th>股票</th><th>方向</th><th>数量</th><th>价格</th><th>金额</th><th>手续费</th><th>备注</th></tr></thead>
-      <tbody><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div></div>
-  </div>
-  <div class="tab-panel" data-panel="cashflow" data-group="portfolio">
-    <div class="card"><div class="card-title">资金流水 <button class="btn btn-sm btn-outline" onclick="openCashEntryForm();">+ 记录出入金</button></div><div class="table-container"><table>
-      <thead><tr><th>日期</th><th>类型</th><th>金额</th><th>货币</th><th>备注</th></tr></thead>
-      <tbody><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div></div>
-  </div>
-  <div class="tab-panel" data-panel="actions" data-group="portfolio">
-    <div class="card"><div class="card-title">公司行动</div><div class="table-container"><table>
-      <thead><tr><th>生效日</th><th>股票</th><th>类型</th><th>详情</th><th>备注</th></tr></thead>
-      <tbody><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
-    </table></div></div>
-  </div>
-</div>
-
-<!-- ===== Paper Trading ===== -->
+<!-- ===== Paper Trading (Merged with Portfolio) ===== -->
 <div class="page" id="page-paper-trading">
-  <div class="page-header"><div class="page-header-left"><h2>模拟交易</h2><p>实时行情模拟下单 · 自动结算资金与持仓 · 零风险策略验证</p></div><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="openModal('modal-paper-account')">+ 创建模拟账户</button><button class="btn btn-outline btn-sm" onclick="resetPaperAccount()">重置账户</button></div></div>
+  <div class="page-header"><div class="page-header-left"><h2>模拟交易</h2><p>模拟下单 · 持仓管理 · 资金流水 · 公司行动 · 零风险策略验证</p></div><div class="btn-group"><button class="btn btn-primary btn-sm" onclick="openModal('modal-paper-account')">+ 创建账户</button><button class="btn btn-outline btn-sm" onclick="openModal('modal-trade')">录入交易</button><button class="btn btn-outline btn-sm" onclick="resetPaperAccount()">重置账户</button></div></div>
 
   <!-- 账户选择 -->
   <div class="card" style="margin-bottom:16px">
@@ -394,8 +346,12 @@
   </div>
 
   <!-- Tab 面板 -->
-  <div class="tabs-wrapper"><div class="tabs" data-tab-group="paper"><div class="tab active" data-tab="paper-positions">持仓</div><div class="tab" data-tab="paper-trades">交易记录</div></div></div>
+  <div class="tabs-wrapper"><div class="tabs" data-tab-group="paper"><div class="tab active" data-tab="paper-positions">持仓</div><div class="tab" data-tab="paper-trades">交易记录</div><div class="tab" data-tab="paper-cashflow">资金流水</div><div class="tab" data-tab="paper-actions">公司行动</div></div></div>
   <div class="tab-panel active" data-panel="paper-positions" data-group="paper">
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card"><div class="card-title">持仓分布</div><div class="chart-box-sm" id="chart-portfolio"></div></div>
+      <div class="card"><div class="card-title">收益曲线</div><div class="chart-box-sm" id="chart-pnl"></div></div>
+    </div>
     <div class="card"><div class="card-title">当前持仓</div><div class="table-container"><table>
       <thead><tr><th>股票</th><th>数量</th><th>成本价</th><th>现价</th><th>市值</th><th>盈亏</th><th>盈亏率</th><th>仓位</th></tr></thead>
       <tbody id="paper-positions-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr></tbody>
@@ -407,11 +363,24 @@
       <tbody id="paper-trades-body"><tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">请先选择模拟账户</td></tr></tbody>
     </table></div></div>
   </div>
+  <div class="tab-panel" data-panel="paper-cashflow" data-group="paper">
+    <div class="card"><div class="card-title">资金流水 <button class="btn btn-sm btn-outline" onclick="openCashEntryForm();">+ 记录出入金</button></div><div class="table-container"><table>
+      <thead><tr><th>日期</th><th>类型</th><th>金额</th><th>货币</th><th>备注</th></tr></thead>
+      <tbody id="portfolio-cashflow-body"><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+    </table></div></div>
+  </div>
+  <div class="tab-panel" data-panel="paper-actions" data-group="paper">
+    <div class="card"><div class="card-title">公司行动</div><div class="table-container"><table>
+      <thead><tr><th>生效日</th><th>股票</th><th>类型</th><th>详情</th><th>备注</th></tr></thead>
+      <tbody id="portfolio-actions-body"><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">加载中...</td></tr></tbody>
+    </table></div></div>
+  </div>
 </div>
 
-<!-- ===== Backtest ===== -->
+<!-- ===== Backtest & Benchmark (Merged) ===== -->
 <div class="page" id="page-backtest">
-  <div class="page-header"><div class="page-header-left"><h2>策略回测</h2><p>历史数据验证策略 · 净值曲线 · 回撤 · 买卖点</p></div></div>
+  <div class="page-header"><div class="page-header-left"><h2>策略回测与评估</h2><p>历史回测 · 净值曲线 · 质量评分 · ABCD 等级 · 策略对比</p></div></div>
+  <!-- Unified Input Area -->
   <div class="card" style="margin-bottom:20px">
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
       <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px"><label>股票代码</label><input class="form-input" id="backtest-code" placeholder="600519" /></div>
@@ -419,38 +388,81 @@
       <div class="form-group" style="margin-bottom:0;width:140px"><label>起始日期</label><input class="form-input" type="date" id="backtest-start" /></div>
       <div class="form-group" style="margin-bottom:0;width:140px"><label>结束日期</label><input class="form-input" type="date" id="backtest-end" /></div>
       <div class="form-group" style="margin-bottom:0;width:130px"><label>初始资金</label><input class="form-input" id="backtest-capital" value="100000" /></div>
+      <div class="form-group" style="margin-bottom:0;width:100px"><label>评估天数</label><input class="form-input" type="number" id="bench-days" value="180" /></div>
       <button class="btn btn-primary" style="height:38px" onclick="runBacktest()">运行回测</button>
+      <button class="btn btn-outline" style="height:38px" onclick="runBenchmark()">评估质量</button>
+      <button class="btn btn-outline" style="height:38px" onclick="runBenchmarkScan()">全策略扫描</button>
     </div>
   </div>
-  <div class="grid grid-4" style="margin-bottom:20px" id="backtest-summary-cards">
-    <div class="card stat-card accent-success"><div class="stat-value" id="bt-total-return" style="font-size:20px">-</div><div class="stat-label">总收益率</div></div>
-    <div class="card stat-card accent-danger"><div class="stat-value" id="bt-max-drawdown" style="font-size:20px">-</div><div class="stat-label">最大回撤</div></div>
-    <div class="card stat-card accent-primary"><div class="stat-value" id="bt-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
-    <div class="card stat-card accent-warning"><div class="stat-value" id="bt-win-rate" style="font-size:20px">-</div><div class="stat-label">胜率</div></div>
-  </div>
-  <div class="card" style="margin-bottom:16px"><div class="card-title">策略净值 vs 基准</div><div class="chart-box" id="chart-backtest"></div></div>
-  <div class="grid grid-2" style="margin-bottom:16px">
-    <div class="card"><div class="card-title">回撤曲线</div><div class="chart-box-sm" id="chart-backtest-drawdown"></div></div>
-    <div class="card"><div class="card-title">月度收益</div><div class="chart-box-sm" id="chart-backtest-monthly"></div></div>
-  </div>
-  <div class="card" style="margin-bottom:16px"><div class="card-title">成交明细</div><div class="table-container"><table>
-    <thead><tr><th>日期</th><th>方向</th><th>价格</th><th>数量</th><th>金额</th><th>佣金</th><th>印花税</th><th>原因</th></tr></thead>
-    <tbody id="backtest-trades-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行回测后显示成交明细</td></tr></tbody>
-  </table></div></div>
-  <div class="card"><div class="card-title">历史回测记录</div><div class="table-container"><table>
-    <thead><tr><th>时间</th><th>股票</th><th>策略</th><th>收益</th><th>回撤</th><th>胜率</th><th>夏普</th><th>操作</th></tr></thead>
-    <tbody id="backtest-history-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录</td></tr></tbody>
-  </table></div></div>
-  <!-- 高级分析 -->
-  <div class="card" style="margin-top:16px">
-    <div class="card-title">高级分析</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-      <button class="btn btn-outline btn-sm" onclick="runOptimize()">参数优化</button>
-      <button class="btn btn-outline btn-sm" onclick="runWalkForward()">Walk-Forward 验证</button>
-      <button class="btn btn-outline btn-sm" onclick="runMonteCarlo()">蒙特卡洛模拟</button>
-      <button class="btn btn-outline btn-sm" onclick="runPortfolioBacktest()">组合回测</button>
+  <!-- Tabs -->
+  <div class="tabs-wrapper"><div class="tabs" data-tab-group="backtest-benchmark">
+    <div class="tab active" data-tab="bt-result">回测结果</div>
+    <div class="tab" data-tab="bt-quality">质量评估</div>
+    <div class="tab" data-tab="bt-compare">策略对比</div>
+    <div class="tab" data-tab="bt-advanced">高级分析</div>
+  </div></div>
+  <!-- Tab: 回测结果 -->
+  <div class="tab-panel active" data-panel="bt-result" data-group="backtest-benchmark">
+    <div class="grid grid-4" style="margin-bottom:20px" id="backtest-summary-cards">
+      <div class="card stat-card accent-success"><div class="stat-value" id="bt-total-return" style="font-size:20px">-</div><div class="stat-label">总收益率</div></div>
+      <div class="card stat-card accent-danger"><div class="stat-value" id="bt-max-drawdown" style="font-size:20px">-</div><div class="stat-label">最大回撤</div></div>
+      <div class="card stat-card accent-primary"><div class="stat-value" id="bt-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
+      <div class="card stat-card accent-warning"><div class="stat-value" id="bt-win-rate" style="font-size:20px">-</div><div class="stat-label">胜率</div></div>
     </div>
-    <div id="backtest-advanced-result" style="min-height:60px"></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-title">策略净值 vs 基准</div><div class="chart-box" id="chart-backtest"></div></div>
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card"><div class="card-title">回撤曲线</div><div class="chart-box-sm" id="chart-backtest-drawdown"></div></div>
+      <div class="card"><div class="card-title">月度收益</div><div class="chart-box-sm" id="chart-backtest-monthly"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-title">成交明细</div><div class="table-container"><table>
+      <thead><tr><th>日期</th><th>方向</th><th>价格</th><th>数量</th><th>金额</th><th>佣金</th><th>印花税</th><th>原因</th></tr></thead>
+      <tbody id="backtest-trades-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行回测后显示成交明细</td></tr></tbody>
+    </table></div></div>
+    <div class="card"><div class="card-title">历史回测记录</div><div class="table-container"><table>
+      <thead><tr><th>时间</th><th>股票</th><th>策略</th><th>收益</th><th>回撤</th><th>胜率</th><th>夏普</th><th>操作</th></tr></thead>
+      <tbody id="backtest-history-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无回测记录</td></tr></tbody>
+    </table></div></div>
+  </div>
+  <!-- Tab: 质量评估 -->
+  <div class="tab-panel" data-panel="bt-quality" data-group="backtest-benchmark">
+    <div id="bench-result-area" style="display:none">
+      <div class="grid grid-4" style="margin-bottom:20px">
+        <div class="card stat-card accent-primary" style="text-align:center"><div class="stat-value" id="bench-score" style="font-size:32px">-</div><div class="stat-label">综合评分</div></div>
+        <div class="card stat-card" style="text-align:center"><div id="bench-grade-badge" style="font-size:28px;font-weight:700;padding:4px 0">-</div><div class="stat-label">质量等级</div></div>
+        <div class="card stat-card accent-success"><div class="stat-value" id="bench-return" style="font-size:20px">-</div><div class="stat-label">年化收益</div></div>
+        <div class="card stat-card accent-warning"><div class="stat-value" id="bench-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
+      </div>
+      <div class="grid grid-2" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">六维度评分</div><div class="chart-box" id="chart-benchmark-radar" style="height:320px"></div></div>
+        <div class="card"><div class="card-title">维度详情</div><div id="bench-dimensions" style="padding:8px 0"></div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px"><div class="card-title">改进建议</div><div id="bench-suggestions" style="padding:8px 0"></div></div>
+    </div>
+    <div id="bench-empty-hint" style="text-align:center;color:var(--text-dim);padding:48px">点击上方「评估质量」按钮，查看策略多维度质量评分</div>
+  </div>
+  <!-- Tab: 策略对比 -->
+  <div class="tab-panel" data-panel="bt-compare" data-group="backtest-benchmark">
+    <div class="card" id="bench-compare-area" style="display:none">
+      <div class="card-title">策略对比排名</div>
+      <div class="table-container"><table>
+        <thead><tr><th>排名</th><th>策略</th><th>评分</th><th>等级</th><th>年化收益</th><th>夏普</th><th>回撤</th><th>胜率</th></tr></thead>
+        <tbody id="bench-compare-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行对比后显示排名</td></tr></tbody>
+      </table></div>
+    </div>
+    <div id="bench-compare-empty-hint" style="text-align:center;color:var(--text-dim);padding:48px">点击上方「全策略扫描」按钮，查看所有策略横向对比排名</div>
+  </div>
+  <!-- Tab: 高级分析 -->
+  <div class="tab-panel" data-panel="bt-advanced" data-group="backtest-benchmark">
+    <div class="card">
+      <div class="card-title">高级分析</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" onclick="runOptimize()">参数优化</button>
+        <button class="btn btn-outline btn-sm" onclick="runWalkForward()">Walk-Forward 验证</button>
+        <button class="btn btn-outline btn-sm" onclick="runMonteCarlo()">蒙特卡洛模拟</button>
+        <button class="btn btn-outline btn-sm" onclick="runPortfolioBacktest()">组合回测</button>
+      </div>
+      <div id="backtest-advanced-result" style="min-height:60px"></div>
+    </div>
   </div>
 </div>
 
@@ -772,41 +784,6 @@
     <div class="table-container"><table>
       <thead><tr><th>因子名称</th><th>分类</th><th>IC</th><th>IR</th><th>夏普</th><th>评分</th><th>代数</th><th>表达式</th></tr></thead>
       <tbody id="evo-factors-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行进化后显示因子列表</td></tr></tbody>
-    </table></div>
-  </div>
-</div>
-
-<!-- ===== Benchmark Page ===== -->
-<div class="page" id="page-benchmark">
-  <div class="page-header"><div class="page-header-left"><h2>策略评估</h2><p>多维度质量评分 · ABCD 等级 · 策略横向对比</p></div></div>
-  <div class="card" style="margin-bottom:20px">
-    <div class="card-title">策略质量评估</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px"><label>股票代码</label><input class="form-input" id="bench-code" placeholder="600519" /></div>
-      <div class="form-group" style="margin-bottom:0;width:180px"><label>策略</label><select class="form-select" id="bench-strategy"><option value="ma_golden_cross">均线金叉策略</option></select></div>
-      <div class="form-group" style="margin-bottom:0;width:120px"><label>回测天数</label><input class="form-input" type="number" id="bench-days" value="180" /></div>
-      <button class="btn btn-primary" style="height:38px" onclick="runBenchmark()">评估质量</button>
-      <button class="btn btn-outline" style="height:38px" onclick="runBenchmarkScan()">全策略扫描</button>
-    </div>
-  </div>
-  <div id="bench-result-area" style="display:none">
-    <div class="grid grid-4" style="margin-bottom:20px">
-      <div class="card stat-card accent-primary" style="text-align:center"><div class="stat-value" id="bench-score" style="font-size:32px">-</div><div class="stat-label">综合评分</div></div>
-      <div class="card stat-card" style="text-align:center"><div id="bench-grade-badge" style="font-size:28px;font-weight:700;padding:4px 0">-</div><div class="stat-label">质量等级</div></div>
-      <div class="card stat-card accent-success"><div class="stat-value" id="bench-return" style="font-size:20px">-</div><div class="stat-label">年化收益</div></div>
-      <div class="card stat-card accent-warning"><div class="stat-value" id="bench-sharpe" style="font-size:20px">-</div><div class="stat-label">夏普比率</div></div>
-    </div>
-    <div class="grid grid-2" style="margin-bottom:16px">
-      <div class="card"><div class="card-title">六维度评分</div><div class="chart-box" id="chart-benchmark-radar" style="height:320px"></div></div>
-      <div class="card"><div class="card-title">维度详情</div><div id="bench-dimensions" style="padding:8px 0"></div></div>
-    </div>
-    <div class="card" style="margin-bottom:16px"><div class="card-title">改进建议</div><div id="bench-suggestions" style="padding:8px 0"></div></div>
-  </div>
-  <div class="card" id="bench-compare-area" style="display:none">
-    <div class="card-title">策略对比排名</div>
-    <div class="table-container"><table>
-      <thead><tr><th>排名</th><th>策略</th><th>评分</th><th>等级</th><th>年化收益</th><th>夏普</th><th>回撤</th><th>胜率</th></tr></thead>
-      <tbody id="bench-compare-body"><tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">运行对比后显示排名</td></tr></tbody>
     </table></div>
   </div>
 </div>

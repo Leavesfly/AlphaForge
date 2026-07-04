@@ -1072,56 +1072,6 @@ function saveAlertRule() {
     .catch(() => showToast('创建失败','error'));
 }
 
-/** 投资组合加载 */
-function loadPortfolio() {
-  // 加载概要
-  fetch('/api/v1/portfolio/summary').then(r => r.json()).then(s => {
-    const cards = document.querySelectorAll('#page-portfolio .stat-card');
-    if (cards[0]) cards[0].querySelector('.stat-value').textContent = '¥'+(s.total_market_value||0).toLocaleString();
-    if (cards[1]) cards[1].querySelector('.stat-value').textContent = (s.total_profit_loss>=0?'+':'')+'¥'+(s.total_profit_loss||0).toLocaleString();
-    if (cards[2]) cards[2].querySelector('.stat-value').textContent = (s.total_return_pct>=0?'+':'')+(s.total_return_pct||0).toFixed(2)+'%';
-    if (cards[3]) cards[3].querySelector('.stat-value').textContent = s.total_positions || 0;
-  }).catch(() => {});
-  // 加载持仓
-  fetch('/api/v1/portfolio/positions').then(r => r.json()).then(positions => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="positions"] table tbody');
-    if (!tbody) return;
-    if (!positions.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无持仓数据，请录入交易或添加持仓</td></tr>'; return; }
-    tbody.innerHTML = positions.map(p => {
-      const pnlCls = (p.profitLoss||0) >= 0 ? 'text-up' : 'text-down';
-      const pctCls = (p.profitLossPct||0) >= 0 ? 'text-up' : 'text-down';
-      return `<tr><td><strong>${p.stockName||''}</strong> ${p.stockCode||''}</td><td>${p.quantity||0}</td><td>${(p.costPrice||0).toFixed(2)}</td><td>${(p.currentPrice||0).toFixed(2)}</td><td class="${pnlCls}">${(p.profitLoss>=0?'+':'')+(p.profitLoss||0).toLocaleString()}</td><td class="${pctCls}">${(p.profitLossPct>=0?'+':'')+(p.profitLossPct||0).toFixed(2)}%</td><td>${(p.positionPct||0).toFixed(1)}%</td><td>-</td><td>-</td></tr>`;
-    }).join('');
-  }).catch(() => {});
-  // 加载交易记录
-  fetch('/api/v1/portfolio/trades').then(r => r.json()).then(trades => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="trades"] table tbody');
-    if (!tbody) return;
-    if (!trades.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无交易记录</td></tr>'; return; }
-    tbody.innerHTML = trades.map(t => {
-      const sideBadge = t.side === 'buy' ? '<span class="badge badge-success">买入</span>' : '<span class="badge badge-danger">卖出</span>';
-      return `<tr><td>${t.tradeDate||'-'}</td><td>${t.symbol||''}</td><td>${sideBadge}</td><td>${t.quantity||0}</td><td>${t.price||0}</td><td>${t.amount||0}</td><td>${t.fee||0}</td><td>${t.note||''}</td></tr>`;
-    }).join('');
-  }).catch(() => {});
-  // 加载资金流水
-  fetch('/api/v1/portfolio/cash-ledger').then(r => r.json()).then(entries => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="cashflow"] table tbody');
-    if (!tbody) return;
-    if (!entries.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无资金流水</td></tr>'; return; }
-    tbody.innerHTML = entries.map(e => {
-      const dirBadge = e.direction === 'in' ? '<span class="badge badge-success">入金</span>' : '<span class="badge badge-danger">出金</span>';
-      const amtCls = e.direction === 'in' ? 'text-up' : 'text-down';
-      return `<tr><td>${e.entryDate||'-'}</td><td>${dirBadge}</td><td class="${amtCls}">${e.direction==='in'?'+':''}${e.amount||0}</td><td>${e.currency||'CNY'}</td><td>${e.note||''}</td></tr>`;
-    }).join('');
-  }).catch(() => {});
-  // 加载公司行动
-  fetch('/api/v1/portfolio/corporate-actions').then(r => r.json()).then(actions => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="actions"] table tbody');
-    if (!tbody) return;
-    if (!actions.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无公司行动记录</td></tr>'; return; }
-    tbody.innerHTML = actions.map(a => `<tr><td>${a.effectiveDate||'-'}</td><td>${a.symbol||''}</td><td><span class="badge badge-info">${a.actionType||'-'}</span></td><td>${a.description||'-'}</td><td>${a.note||''}</td></tr>`).join('');
-  }).catch(() => {});
-}
 function saveTrade() {
   const modal = document.getElementById('modal-trade');
   const inputs = modal.querySelectorAll('.form-input, .form-select');
@@ -1133,7 +1083,7 @@ function saveTrade() {
   };
   trade.amount = trade.quantity * trade.price;
   fetch('/api/v1/portfolio/trades', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(trade)})
-    .then(() => { closeModal('modal-trade'); showToast('交易已录入','success'); loadPortfolio(); })
+    .then(() => { closeModal('modal-trade'); showToast('交易已录入','success'); loadPortfolioExtras(); if (currentPaperAccountId) renderPaperAccountDetail(currentPaperAccountId); })
     .catch(() => showToast('录入失败','error'));
 }
 function openCashEntryForm() {
@@ -1144,8 +1094,8 @@ function openCashEntryForm() {
   const note = prompt('备注（可选）:') || '';
   const entry = { direction: val >= 0 ? 'in' : 'out', amount: Math.abs(val), currency: 'CNY', note: note };
   fetch('/api/v1/portfolio/cash-ledger', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)})
-    .then(() => { showToast('出入金已记录', 'success'); loadPortfolio(); })
-    .catch(() => showToast('记录失败', 'error'));
+    .then(() => { showToast('出入金已记录', 'success'); loadPortfolioExtras(); })
+    .catch(() => showToast('记录失败','error'));
 }
 
 /** 市场概况加载 */
@@ -1163,6 +1113,19 @@ function loadMarketOverview() {
 // ===== 行情简览 =====
 let currentBriefingMarket = 'A';
 const briefingLoaded = {};
+let briefingLoading = false;
+
+function refreshBriefing() {
+  if (briefingLoading) { showToast('正在加载中，请稍候...', 'warning'); return; }
+  briefingLoading = true;
+  const btn = document.getElementById('briefing-refresh-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '加载中...'; }
+  loadMarketBriefing(currentBriefingMarket, () => {
+    briefingLoading = false;
+    if (btn) { btn.disabled = false; btn.textContent = '刷新数据'; }
+    showToast('数据已刷新', 'success');
+  });
+}
 
 function switchBriefingMarket(market) {
   currentBriefingMarket = market;
@@ -1177,9 +1140,9 @@ function switchBriefingMarket(market) {
   }
 }
 
-function loadMarketBriefing(market) {
+function loadMarketBriefing(market, callback) {
   const container = document.getElementById(`briefing-content-${market.toLowerCase()}`);
-  if (!container) return;
+  if (!container) { if (callback) callback(); return; }
   // 骨架屏
   container.innerHTML = renderBriefingSkeleton();
   fetch(`/api/v1/market/briefing?market=${market}`)
@@ -1187,9 +1150,11 @@ function loadMarketBriefing(market) {
     .then(data => {
       renderMarketBriefing(container, data, market);
       briefingLoaded[market] = true;
+      if (callback) callback();
     })
     .catch(e => {
       container.innerHTML = `<div style="text-align:center;color:var(--danger);padding:40px">加载失败: ${e.message}</div>`;
+      if (callback) callback();
     });
 }
 
@@ -1443,42 +1408,20 @@ function renderTempGauge(el, value, label) {
   });
 }
 
-// ===== Portfolio =====
-function loadPortfolio() {
-  fetch('/api/v1/portfolio/summary').then(r => r.json()).then(data => {
-    const cards = document.querySelectorAll('#page-portfolio .stat-card');
-    if (cards[0]) cards[0].querySelector('.stat-value').textContent = '¥' + Number(data.total_market_value || 0).toLocaleString();
-    if (cards[1]) { const pnl = Number(data.total_profit_loss || 0); cards[1].querySelector('.stat-value').textContent = (pnl>=0?'+':'') + '¥' + Math.abs(pnl).toLocaleString(); cards[1].querySelector('.stat-value').className = 'stat-value ' + (pnl>=0?'text-up':'text-down'); }
-    if (cards[2]) cards[2].querySelector('.stat-value').textContent = Number(data.total_return_pct || 0).toFixed(2) + '%';
-    if (cards[3]) cards[3].querySelector('.stat-value').textContent = data.total_positions || 0;
-  }).catch(() => {});
-  fetch('/api/v1/portfolio/positions').then(r => r.json()).then(positions => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="positions"] table tbody');
-    if (!tbody) return;
-    if (!positions.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无持仓数据</td></tr>'; return; }
-    tbody.innerHTML = positions.map(p => {
-      const cost = Number(p.costPrice||p.cost_price||0), cur = Number(p.currentPrice||p.current_price||0), qty = Number(p.quantity||0);
-      const pnl = (cur - cost) * qty, pnlPct = cost ? ((cur-cost)/cost*100).toFixed(2) : '0.00';
-      const cls = pnl >= 0 ? 'text-up' : 'text-down';
-      return `<tr><td><strong>${p.stockName||p.stock_name||''}</strong> ${p.stockCode||p.stock_code||''}</td><td>${qty}</td><td>${cost.toFixed(2)}</td><td>${cur.toFixed(2)}</td><td class="${cls}">${pnl>=0?'+':''}${pnl.toFixed(0)}</td><td class="${cls}">${pnlPct>=0?'+':''}${pnlPct}%</td><td>${p.weight?(p.weight*100).toFixed(1):'-'}%</td><td>${p.stopLoss||p.stop_loss||'-'}</td><td>${p.targetPrice||p.target_price||'-'}</td></tr>`;
-    }).join('');
-  }).catch(() => {});
-  fetch('/api/v1/portfolio/trades').then(r => r.json()).then(trades => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="trades"] table tbody');
-    if (!tbody) return;
-    if (!trades.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无交易记录</td></tr>'; return; }
-    tbody.innerHTML = trades.map(t => `<tr><td>${t.tradeDate||t.trade_date||'-'}</td><td>${t.stockName||t.stock_name||''} ${t.stockCode||t.stock_code||''}</td><td>${t.side==='buy'?'<span class="badge badge-success">买入</span>':'<span class="badge badge-danger">卖出</span>'}</td><td>${t.quantity||0}</td><td>${t.price||'-'}</td><td>${t.totalAmount||t.total_amount||'-'}</td><td>${t.fee||'-'}</td><td>${t.note||'-'}</td></tr>`).join('');
-  }).catch(() => {});
+// ===== Portfolio Extras (merged into Paper Trading page) =====
+function loadPortfolioExtras() {
+  // 加载资金流水
   fetch('/api/v1/portfolio/cash-ledger').then(r => r.json()).then(entries => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="cashflow"] table tbody');
+    const tbody = document.getElementById('portfolio-cashflow-body');
     if (!tbody) return;
-    if (!entries.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无资金流水</td></tr>'; return; }
+    if (!entries || !entries.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无资金流水</td></tr>'; return; }
     tbody.innerHTML = entries.map(e => `<tr><td>${e.entryDate||e.entry_date||'-'}</td><td>${e.direction==='in'?'<span class="badge badge-success">入金</span>':'<span class="badge badge-danger">出金</span>'}</td><td class="${e.direction==='in'?'text-up':'text-down'}">${e.direction==='in'?'+':'-'}${e.amount||0}</td><td>${e.currency||'CNY'}</td><td>${e.note||'-'}</td></tr>`).join('');
   }).catch(() => {});
+  // 加载公司行动
   fetch('/api/v1/portfolio/corporate-actions').then(r => r.json()).then(actions => {
-    const tbody = document.querySelector('#page-portfolio .tab-panel[data-panel="actions"] table tbody');
+    const tbody = document.getElementById('portfolio-actions-body');
     if (!tbody) return;
-    if (!actions.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无公司行动</td></tr>'; return; }
+    if (!actions || !actions.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无公司行动</td></tr>'; return; }
     tbody.innerHTML = actions.map(a => `<tr><td>${a.effectiveDate||a.effective_date||'-'}</td><td>${a.stockName||a.stock_name||''} ${a.stockCode||a.stock_code||''}</td><td><span class="badge badge-info">${a.actionType||a.action_type||'-'}</span></td><td>${a.details||'-'}</td><td>${a.note||'-'}</td></tr>`).join('');
   }).catch(() => {});
 }
@@ -2123,6 +2066,7 @@ function renderDebugSteps(steps) {
 }
 
 function loadPaperTrading() {
+  loadPortfolioExtras();
   fetch('/api/v1/paper-trading/accounts').then(r => r.json()).then(accounts => {
     const select = document.getElementById('paper-account-select');
     if (!select) return;
@@ -2342,8 +2286,7 @@ navigateTo = function(page) {
         case 'market-briefing': loadMarketBriefing(currentBriefingMarket); break;
     case 'analysis': loadHistory(); break;
     case 'signals': loadSignals(); break;
-    case 'portfolio': loadPortfolio(); break;
-    case 'paper-trading': loadPaperTrading(); break;
+        case 'paper-trading': loadPaperTrading(); break;
     case 'watchlist': loadWatchlist(); break;
     case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
     case 'usage': loadUsage(); break;
@@ -2351,7 +2294,6 @@ navigateTo = function(page) {
     case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); loadCustomStrategies(); loadStrategyTemplates(); initDebugStrategySelect(); break;
     case 'loop-monitor': loadLoopStatus(); break;
     case 'factor-evolution': loadEvolutionStatus(); break;
-    case 'benchmark': initBenchmarkPage(); break;
   }
 };
 
@@ -2439,14 +2381,22 @@ function runMultiEvolution() {
 }
 
 // ===== Benchmark =====
-function initBenchmarkPage() {
-  loadStrategyOptions('bench-strategy');
+function switchBacktestTab(tabName) {
+  const tabGroup = document.querySelector('.tabs[data-tab-group="backtest-benchmark"]');
+  if (!tabGroup) return;
+  tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const tab = tabGroup.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (tab) tab.classList.add('active');
+  document.querySelectorAll('.tab-panel[data-group="backtest-benchmark"]').forEach(p => p.classList.remove('active'));
+  const panel = document.querySelector(`.tab-panel[data-panel="${tabName}"][data-group="backtest-benchmark"]`);
+  if (panel) panel.classList.add('active');
+  setTimeout(initCharts, 100);
 }
 
 function runBenchmark() {
-  const code = document.getElementById('bench-code').value.trim();
-  const strategy = document.getElementById('bench-strategy').value;
-  const days = parseInt(document.getElementById('bench-days').value) || 180;
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  const strategy = document.getElementById('backtest-strategy')?.value || 'ma_golden_cross';
+  const days = parseInt(document.getElementById('bench-days')?.value) || 180;
   if (!code) { showToast('请输入股票代码', 'warning'); return; }
 
   showToast('正在评估策略质量...', 'info');
@@ -2460,6 +2410,7 @@ function runBenchmark() {
       if (resp.success && resp.data.success !== false) {
         renderBenchmarkResult(resp.data);
         showToast('策略质量评估完成', 'success');
+        switchBacktestTab('bt-quality');
       } else {
         showToast(resp.data?.error || resp.error || '评估失败', 'error');
       }
@@ -2469,6 +2420,8 @@ function runBenchmark() {
 
 function renderBenchmarkResult(data) {
   document.getElementById('bench-result-area').style.display = '';
+  const hint = document.getElementById('bench-empty-hint');
+  if (hint) hint.style.display = 'none';
   const quality = data.quality;
   if (!quality) return;
 
@@ -2529,8 +2482,8 @@ function renderBenchmarkRadar(scores) {
 }
 
 function runBenchmarkScan() {
-  const code = document.getElementById('bench-code').value.trim();
-  const days = parseInt(document.getElementById('bench-days').value) || 180;
+  const code = document.getElementById('backtest-code')?.value?.trim();
+  const days = parseInt(document.getElementById('bench-days')?.value) || 180;
   if (!code) { showToast('请输入股票代码', 'warning'); return; }
 
   showToast('正在扫描全部策略...', 'info');
@@ -2544,6 +2497,7 @@ function runBenchmarkScan() {
       if (resp.success) {
         renderBenchmarkComparison(resp.data);
         showToast('全策略扫描完成', 'success');
+        switchBacktestTab('bt-compare');
       } else {
         showToast(resp.error || '扫描失败', 'error');
       }
@@ -2553,6 +2507,8 @@ function runBenchmarkScan() {
 
 function renderBenchmarkComparison(data) {
   document.getElementById('bench-compare-area').style.display = '';
+  const hint = document.getElementById('bench-compare-empty-hint');
+  if (hint) hint.style.display = 'none';
   const reports = data.reports || [];
   let html = '';
   let rank = 1;

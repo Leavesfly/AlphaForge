@@ -2,9 +2,6 @@ package io.leavesfly.alphaforge.application.agent.reasoning;
 
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Map;
-
 /**
  * 结构化推理链 Prompt 构建器 — 将推理链注入到 LLM 的 system/user prompt 中
  *
@@ -43,7 +40,7 @@ class ReasoningModeHolder {
  * - 输出格式从简单 JSON 扩展为包含推理过程的结构化 JSON
  */
 @Component
-public class StructuredReasoningPromptBuilder {
+public class ReasoningPromptBuilder {
 
     /** 推理链开关（可通过配置关闭） */
     private volatile boolean enabled = true;
@@ -53,7 +50,7 @@ public class StructuredReasoningPromptBuilder {
 
     /** 可选依赖：Few-shot 推理模板构建器 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private FewShotReasoningTemplateBuilder fewShotTemplateBuilder;
+    private FewShotTemplateBuilder fewShotTemplateBuilder;
 
     /**
      * 为 SubAgent 构建 system prompt 增量

@@ -53,7 +53,7 @@ public class DataFetcherManager implements MarketDataPort {
     private final Map<String, SlidingWindowRateLimiter> slidingWindowLimiters = new ConcurrentHashMap<>();
 
     /** TTL缓存: 缓存键 -> 缓存条目 */
-    private final Map<String, TtlCacheEntry> cache = new ConcurrentHashMap<>();
+    private final Map<String, TtlCacheEntry<?>> cache = new ConcurrentHashMap<>();
     
     /** 随机抖动范围(毫秒)，叠加在限流间隔之上，防止规律性请求被识别 */
     private static final long JITTER_MS = 200;
@@ -96,6 +96,13 @@ public class DataFetcherManager implements MarketDataPort {
      * @return 日K线数据列表
      */
     public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate) {
+        return getHistoryData(stockCode, startDate, endDate, MarketType.detectFromCode(stockCode));
+    }
+
+    /** 获取历史数据（显式指定市场类型） */
+    @Override
+    public List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  MarketType marketType) {
         // 1. 先查缓存（交易日感知）
         List<StockDailyData> cached = getFromCache(stockCode, startDate, endDate);
         if (cached != null && !cached.isEmpty() && isCacheComplete(cached, startDate, endDate)) {
@@ -116,14 +123,12 @@ public class DataFetcherManager implements MarketDataPort {
             if (!fetchStart.isAfter(endDate)) {
                 log.debug("增量拉取: {} 从 {} 到 {} (缓存已有 {} 条)", stockCode, fetchStart, endDate, cached.size());
             } else {
-                // 缓存已覆盖全部范围
                 return cached;
             }
         }
 
-        // 3. 调用数据源获取数据
-        MarketType market = MarketType.detectFromCode(stockCode);
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
+        // 3. 调用数据源获取数据（使用显式指定的市场类型路由）
+        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(marketType);
         
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
@@ -174,9 +179,19 @@ public class DataFetcherManager implements MarketDataPort {
 
     // ==================== 通用故障切换模板 ====================
 
+    /** 单数据源最大重试次数 */
+    private static final int MAX_RETRY = 1;
+    /** 限流等待最大毫秒数 */
+    private static final long RATE_LIMIT_WAIT_MS = 2000;
+
     /**
-     * 通用数据获取模板 — 统一封装熔断器 + 限流 + 故障切换逻辑
-     * 消除 17 个方法中的重复代码
+     * 通用数据获取模板 — 统一封装熔断器 + 限流等待 + 自动重试 + 故障切换
+     *
+     * 高可用策略：
+     * 1. 限流器返回 false 时等待而非跳过（最多等 2s）
+     * 2. 单数据源异常时重试 1 次再切换
+     * 3. 熔断器状态下跳过该数据源
+     * 4. 所有数据源失败时返回空默认值
      */
     private <T> T executeWithFailover(String stockCode,
                                        java.util.function.Function<BaseDataFetcher, T> fetcherCall,
@@ -193,17 +208,35 @@ public class DataFetcherManager implements MarketDataPort {
         List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
-            if (isCircuitOpen(fetcherName)) continue;
-            if (!tryAcquire(fetcher)) continue;
-            try {
-                T result = fetcherCall.apply(fetcher);
-                if (!isEmpty.test(result)) {
-                    recordSuccess(fetcherName);
-                    return result;
+            if (isCircuitOpen(fetcherName)) {
+                log.debug("数据源 {} 熔断中，跳过", fetcherName);
+                continue;
+            }
+            // 限流等待：tryAcquire 返回 false 时短暂等待重试，而非直接跳过
+            if (!tryAcquire(fetcher)) {
+                if (!waitForRateLimit(fetcher, RATE_LIMIT_WAIT_MS)) {
+                    log.debug("数据源 {} 限流等待超时，切换到下一个数据源", fetcherName);
+                    continue;
                 }
-            } catch (Exception e) {
-                log.warn("数据源 {} 获取数据失败: {}", fetcherName, e.getMessage());
-                recordFailure(fetcherName);
+            }
+            // 调用 + 重试
+            for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
+                try {
+                    T result = fetcherCall.apply(fetcher);
+                    if (!isEmpty.test(result)) {
+                        recordSuccess(fetcherName);
+                        return result;
+                    }
+                    // 空结果不算失败，直接切换
+                    break;
+                } catch (Exception e) {
+                    log.warn("数据源 {} 获取数据失败(尝试 {}/{}): {}", fetcherName, attempt + 1, MAX_RETRY + 1, e.getMessage());
+                    if (attempt < MAX_RETRY) {
+                        sleepQuiet(fetcher.getRateLimitMs());
+                    } else {
+                        recordFailure(fetcherName);
+                    }
+                }
             }
         }
         return emptyDefault;
@@ -218,39 +251,145 @@ public class DataFetcherManager implements MarketDataPort {
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
             if (isCircuitOpen(fetcherName)) continue;
-            if (!tryAcquire(fetcher)) continue;
-            try {
-                T result = fetcherCall.apply(fetcher);
-                if (!isEmpty.test(result)) {
-                    recordSuccess(fetcherName);
-                    return result;
+            if (!tryAcquire(fetcher)) {
+                if (!waitForRateLimit(fetcher, RATE_LIMIT_WAIT_MS)) continue;
+            }
+            for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
+                try {
+                    T result = fetcherCall.apply(fetcher);
+                    if (!isEmpty.test(result)) {
+                        recordSuccess(fetcherName);
+                        return result;
+                    }
+                    break;
+                } catch (Exception e) {
+                    log.warn("数据源 {} 获取数据失败(尝试 {}/{}): {}", fetcherName, attempt + 1, MAX_RETRY + 1, e.getMessage());
+                    if (attempt < MAX_RETRY) {
+                        sleepQuiet(fetcher.getRateLimitMs());
+                    } else {
+                        recordFailure(fetcherName);
+                    }
                 }
-            } catch (Exception e) {
-                log.warn("数据源 {} 获取数据失败: {}", fetcherName, e.getMessage());
-                recordFailure(fetcherName);
             }
         }
         return emptyDefault;
     }
 
+    /**
+     * 限流等待 — 在指定时间内循环尝试获取许可
+     * @return true=获取成功，false=超时
+     */
+    private boolean waitForRateLimit(BaseDataFetcher fetcher, long maxWaitMs) {
+        long deadline = System.currentTimeMillis() + maxWaitMs;
+        while (System.currentTimeMillis() < deadline) {
+            sleepQuiet(Math.min(fetcher.getRateLimitMs(), 200));
+            if (tryAcquire(fetcher)) return true;
+        }
+        return false;
+    }
+
+    /** 静默睡眠 */
+    private void sleepQuiet(long ms) {
+        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
     // ==================== 行情数据 ====================
+
+    /** 实时行情 TTL 缓存（2分钟），避免短时间重复请求触发限流 */
+    private static final long QUOTE_CACHE_TTL_MS = 120_000L; // 2分钟
 
     /** 获取实时行情 */
     @Override
     public Map<String, Object> getRealtimeQuote(String stockCode) {
-        return executeWithFailover(stockCode,
+        String cacheKey = "quote:" + stockCode;
+        TtlCacheEntry<?> cached = cache.get(cacheKey);
+        if (cached != null && !cached.isExpired()) {
+            log.debug("实时行情缓存命中: {}", stockCode);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> cachedResult = (Map<String, Object>) cached.getValue();
+            return cachedResult;
+        }
+        Map<String, Object> result = executeWithFailover(stockCode,
                 f -> f.getRealtimeQuote(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
+        if (!result.isEmpty()) {
+            cache.put(cacheKey, new TtlCacheEntry<>(result, System.currentTimeMillis() + QUOTE_CACHE_TTL_MS));
+        } else {
+            // 所有数据源失败，降级返回过期缓存
+            if (cached != null) {
+                log.info("实时行情降级返回过期缓存: {}", stockCode);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> expiredResult = (Map<String, Object>) cached.getValue();
+                return expiredResult;
+            }
+        }
+        return result;
     }
 
     /** 获取实时行情（显式指定市场类型，用于指数等无法自动检测的代码） */
     @Override
     public Map<String, Object> getRealtimeQuote(String stockCode, MarketType marketType) {
-        return executeWithFailover(marketType,
+        String cacheKey = "quote:" + stockCode + ":" + marketType.getCode();
+        TtlCacheEntry<?> cached = cache.get(cacheKey);
+        if (cached != null && !cached.isExpired()) {
+            log.debug("实时行情缓存命中(指定市场): {}", stockCode);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> cachedResult = (Map<String, Object>) cached.getValue();
+            return cachedResult;
+        }
+        Map<String, Object> result = executeWithFailover(marketType,
                 f -> f.getRealtimeQuote(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
+        if (!result.isEmpty()) {
+            cache.put(cacheKey, new TtlCacheEntry<>(result, System.currentTimeMillis() + QUOTE_CACHE_TTL_MS));
+        } else if (cached != null) {
+            log.info("实时行情降级返回过期缓存(指定市场): {}", stockCode);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> expiredResult = (Map<String, Object>) cached.getValue();
+            return expiredResult;
+        }
+        return result;
+    }
+
+    /**
+     * 批量获取实时行情 — 优先调用 Fetcher 的批量接口（1 次 API），减少限流
+     */
+    @Override
+    public Map<String, Map<String, Object>> getBatchRealtimeQuotes(List<String> stockCodes) {
+        if (stockCodes == null || stockCodes.isEmpty()) return Collections.emptyMap();
+        // 先查缓存，筛出未命中的
+        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+        List<String> needFetch = new ArrayList<>();
+        for (String code : stockCodes) {
+            String cacheKey = "quote:" + code;
+            TtlCacheEntry<?> cached = cache.get(cacheKey);
+            if (cached != null && !cached.isExpired()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> cachedVal = (Map<String, Object>) cached.getValue();
+                result.put(code, cachedVal);
+            } else {
+                needFetch.add(code);
+            }
+        }
+        if (needFetch.isEmpty()) {
+            log.debug("批量行情全部缓存命中: {}", stockCodes.size());
+            return result;
+        }
+        // 调用批量接口
+        Map<String, Map<String, Object>> fetched = executeWithFailover(needFetch.get(0),
+                f -> f.getBatchRealtimeQuotes(needFetch),
+                r -> r == null || r.isEmpty(),
+                Collections.emptyMap());
+        // 写入缓存
+        for (Map.Entry<String, Map<String, Object>> entry : fetched.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                result.put(entry.getKey(), entry.getValue());
+                cache.put("quote:" + entry.getKey(), new TtlCacheEntry<>(entry.getValue(), System.currentTimeMillis() + QUOTE_CACHE_TTL_MS));
+            }
+        }
+        return result;
     }
 
     /** 获取股票基本信息 */
@@ -715,14 +854,16 @@ public class DataFetcherManager implements MarketDataPort {
      */
     private List<Map<String, Object>> getOrFetch(String cacheKey, long ttlMs,
                                                   java.util.function.Supplier<List<Map<String, Object>>> supplier) {
-        TtlCacheEntry entry = cache.get(cacheKey);
+        TtlCacheEntry<?> entry = cache.get(cacheKey);
         if (entry != null && !entry.isExpired()) {
             log.debug("缓存命中: {}", cacheKey);
-            return entry.getValue();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> entryValue = (List<Map<String, Object>>) entry.getValue();
+            return entryValue;
         }
         List<Map<String, Object>> data = supplier.get();
         if (data != null && !data.isEmpty()) {
-            cache.put(cacheKey, new TtlCacheEntry(data, System.currentTimeMillis() + ttlMs));
+            cache.put(cacheKey, new TtlCacheEntry<>(data, System.currentTimeMillis() + ttlMs));
         }
         return data != null ? data : Collections.emptyList();
     }

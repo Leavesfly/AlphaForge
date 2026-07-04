@@ -2,9 +2,7 @@ package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.application.agent.skills.SkillsLoader;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
-import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
-import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,22 +32,17 @@ public class ReActAgent {
 
     private static final Logger log = LoggerFactory.getLogger(ReActAgent.class);
 
-    private final LlmPort llmService;
     private final LlmToolAdapter toolAdapter;
     private final ToolRegistry toolRegistry;
     private final SkillsLoader skillsLoader;
-    private final SignalLearningService signalLearningService;
     private final PromptManager promptManager;
 
-    public ReActAgent(LlmPort llmService, LlmToolAdapter toolAdapter,
+    public ReActAgent(LlmToolAdapter toolAdapter,
                       ToolRegistry toolRegistry, SkillsLoader skillsLoader,
-                      SignalLearningService signalLearningService,
                       PromptManager promptManager) {
-        this.llmService = llmService;
         this.toolAdapter = toolAdapter;
         this.toolRegistry = toolRegistry;
         this.skillsLoader = skillsLoader;
-        this.signalLearningService = signalLearningService;
         this.promptManager = promptManager;
     }
 
@@ -178,17 +171,10 @@ public class ReActAgent {
             }
         }
 
-        // 注入学习提示（统一入口：合并信号反馈 Few-shot + 经验记忆）
-        Object techObj = context != null ? context.get("technical_analysis") : null;
-        Map<String, Object> techContext = null;
-        if (techObj instanceof Map<?, ?> techMap) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> casted = (Map<String, Object>) techMap;
-            techContext = casted;
-        }
-        String learningPrompt = signalLearningService.buildLearningPrompt(stockCode, techContext);
-        if (learningPrompt != null && !learningPrompt.isEmpty()) {
-            sb.append(learningPrompt);
+        // 注入学习提示（由上游应用服务预构建后传入 context）
+        Object learningPrompt = context != null ? context.get("learning_prompt") : null;
+        if (learningPrompt instanceof String lp && !lp.isEmpty()) {
+            sb.append(lp);
         }
 
         sb.append("""
@@ -219,6 +205,5 @@ public class ReActAgent {
      * @param totalToolCalls 工具调用次数
      * @param durationMs    总耗时（毫秒）
      */
-    public record ReactResult(String response, List<String> toolCallLog,
-                               int totalToolCalls, long durationMs) {}
+    public record ReactResult(String response, List<String> toolCallLog, int totalToolCalls, long durationMs) {}
 }

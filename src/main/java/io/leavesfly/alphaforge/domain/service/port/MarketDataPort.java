@@ -21,6 +21,14 @@ public interface MarketDataPort {
     List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate);
 
     /**
+     * 获取历史数据（显式指定市场类型，用于指数等无法自动检测市场的代码）
+     */
+    default List<StockDailyData> getHistoryData(String stockCode, LocalDate startDate, LocalDate endDate,
+                                                  MarketType marketType) {
+        return getHistoryData(stockCode, startDate, endDate);
+    }
+
+    /**
      * 获取多频率K线数据（支持日/周/月/分钟级 + 复权类型）
      *
      * @param stockCode 股票代码
@@ -49,6 +57,21 @@ public interface MarketDataPort {
      */
     default Map<String, Object> getRealtimeQuote(String stockCode, MarketType marketType) {
         return getRealtimeQuote(stockCode);
+    }
+
+    /**
+     * 批量获取实时行情（减少 API 调用次数，避免限流）
+     *
+     * @param stockCodes 股票代码列表
+     * @return 代码 -> 行情数据
+     */
+    default Map<String, Map<String, Object>> getBatchRealtimeQuotes(List<String> stockCodes) {
+        Map<String, Map<String, Object>> result = new java.util.LinkedHashMap<>();
+        for (String code : stockCodes) {
+            Map<String, Object> quote = getRealtimeQuote(code);
+            if (quote != null && !quote.isEmpty()) result.put(code, quote);
+        }
+        return result;
     }
 
     /** 获取股票基本信息(名称、行业、市值等) */

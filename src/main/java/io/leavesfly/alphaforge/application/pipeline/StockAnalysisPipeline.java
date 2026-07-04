@@ -1,5 +1,6 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
+import io.leavesfly.alphaforge.application.service.AgentAnalysisService;
 import io.leavesfly.alphaforge.config.LlmConfig;
 import io.leavesfly.alphaforge.config.AppConfig;
 
@@ -9,7 +10,6 @@ import io.leavesfly.alphaforge.domain.model.entity.analysis.TrendAnalysisResult;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
-import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.domain.service.port.NotificationPort;
 
@@ -26,6 +26,7 @@ import io.leavesfly.alphaforge.domain.service.TechnicalAnalysisService;
 import io.leavesfly.alphaforge.domain.service.SignalVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -75,7 +76,7 @@ public class StockAnalysisPipeline {
     private final SignalExtractionService signalExtractionService;
 
     /** 可选依赖：分析记忆服务（字段注入，避免构造函数过度膨胀） */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @Autowired(required = false)
     private AnalysisMemoryService analysisMemoryService;
 
 

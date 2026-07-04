@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.application.agent.tools.ToolRegistry;
-import io.leavesfly.alphaforge.application.agent.reasoning.StructuredReasoningPromptBuilder;
+import io.leavesfly.alphaforge.application.agent.reasoning.ReasoningPromptBuilder;
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -26,7 +26,7 @@ public abstract class AbstractSpecializedAgent implements SubAgent {
 
     /** 结构化推理链 Prompt 构建器（可选依赖，字段注入） */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    protected StructuredReasoningPromptBuilder reasoningPromptBuilder;
+    protected ReasoningPromptBuilder reasoningPromptBuilder;
 
     /** Prompt 模板管理器（可选依赖，字段注入） */
     @org.springframework.beans.factory.annotation.Autowired(required = false)

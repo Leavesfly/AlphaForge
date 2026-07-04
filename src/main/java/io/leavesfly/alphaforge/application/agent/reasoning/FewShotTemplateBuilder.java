@@ -17,7 +17,7 @@ import java.util.*;
  *
  * 与现有 SignalLearningService 的关系：
  * - SignalLearningService 提供原始的信号案例（信号→结果→收益）
- * - FewShotReasoningTemplateBuilder 在此基础上增加"推理路径分析"：
+ * - FewShotTemplateBuilder 在此基础上增加"推理路径分析"：
  *   1. 从正确信号中提取"成功推理模式"（什么推理路径导致正确判断）
  *   2. 从错误信号中提取"失败推理模式"（什么推理缺陷导致错误判断）
  *   3. 从 ExperienceMemory 的错误模式中提取"条件→结果"映射
@@ -29,9 +29,9 @@ import java.util.*;
  * - ⚠ 条件警示：在特定条件下信号准确率偏低（让 LLM 谨慎）
  */
 @Component
-public class FewShotReasoningTemplateBuilder {
+public class FewShotTemplateBuilder {
 
-    private static final Logger log = LoggerFactory.getLogger(FewShotReasoningTemplateBuilder.class);
+    private static final Logger log = LoggerFactory.getLogger(FewShotTemplateBuilder.class);
 
     /** 正确范例最大数量 */
     private static final int MAX_POSITIVE_EXAMPLES = 2;
@@ -42,7 +42,7 @@ public class FewShotReasoningTemplateBuilder {
 
     private final SignalLearningService signalLearningService;
 
-    public FewShotReasoningTemplateBuilder(SignalLearningService signalLearningService) {
+    public FewShotTemplateBuilder(SignalLearningService signalLearningService) {
         this.signalLearningService = signalLearningService;
     }
 

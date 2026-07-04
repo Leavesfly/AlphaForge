@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.agent;
 
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
-import io.leavesfly.alphaforge.application.agent.reasoning.StructuredReasoningPromptBuilder;
+import io.leavesfly.alphaforge.application.agent.reasoning.ReasoningPromptBuilder;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +40,7 @@ public class MultiAgentOrchestrator {
 
     /** 可选依赖：结构化推理链 Prompt 构建器 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private StructuredReasoningPromptBuilder reasoningPromptBuilder;
+    private ReasoningPromptBuilder reasoningPromptBuilder;
 
     public MultiAgentOrchestrator(LlmPort llmService, List<SubAgent> subAgents) {
         this.llmService = llmService;

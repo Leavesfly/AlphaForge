@@ -45,14 +45,18 @@ public final class MarketConstants {
     /** 港股指数（Yahoo Finance 代码 → 名称） */
     public static final Map<String, String> HK_INDICES = Map.of(
             "^HSI", "恒生指数",
-            "^HSCE", "国企指数"
+            "^HSCE", "国企指数",
+            "^HSTECH", "恒生科技",
+            "^HSCEI", "红筹指数"
     );
 
     /** 美股指数（Yahoo Finance 代码 → 名称） */
     public static final Map<String, String> US_INDICES = Map.of(
             "^DJI", "道琼斯工业",
             "^IXIC", "纳斯达克",
-            "^GSPC", "标普500"
+            "^GSPC", "标普500",
+            "^RUT", "罗素2000",
+            "^VIX", "恐慌指数"
     );
 
     /** 获取指定市场的指数列表 */

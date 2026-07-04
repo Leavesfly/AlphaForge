@@ -260,7 +260,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
   transition: background 0.3s, border-color 0.3s;
 }
 .nav-section { padding: 0 12px; margin-bottom: 4px; }
-.nav-section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-dim); padding: 10px 12px 6px; font-weight: 600; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+.nav-section-title { font-size: 13px; letter-spacing: 0.5px; color: var(--primary-light); padding: 10px 12px 6px; font-weight: 700; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
 .nav-section-title:hover { color: var(--text-muted); }
 .nav-collapse-arrow { width: 12px; height: 12px; flex-shrink: 0; transition: transform 0.2s ease; }
 .nav-section.collapsed .nav-collapse-arrow { transform: rotate(-90deg); }

@@ -9,6 +9,7 @@ import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository
 import io.leavesfly.alphaforge.domain.model.feedback.ErrorPattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -16,7 +17,7 @@ import java.util.*;
 
 /**
  * 信号学习服务 — 统一的经验/反馈/因子经验学习入口
- *
+ * <p>
  * 合并了原 SignalLearningService + SignalFeedbackLoop，消除中间委托层，提供单一入口：
  * 1. recordExperience() — 记录分析经验（委托给 ExperienceMemory）
  * 2. buildLearningPrompt() — 统一构建学习提示（合并信号反馈 + 经验提示）
@@ -31,27 +32,35 @@ public class SignalLearningService {
 
     private static final Logger log = LoggerFactory.getLogger(SignalLearningService.class);
 
-    /** Few-shot 示例最大数量 */
+    /**
+     * Few-shot 示例最大数量
+     */
     private static final int MAX_CORRECT_EXAMPLES = 3;
     private static final int MAX_ERROR_EXAMPLES = 3;
-    /** 查询历史信号的天数范围 */
+    /**
+     * 查询历史信号的天数范围
+     */
     private static final int LOOKBACK_DAYS = 30;
 
     private final ExperienceMemory experienceMemory;
     private final DecisionSignalRepository signalRepository;
     private final DecisionSignalOutcomeRepository outcomeRepository;
 
-    /** 可选依赖：因子进化记忆（因子级经验注入） */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /**
+     * 可选依赖：因子进化记忆（因子级经验注入）
+     */
+    @Autowired(required = false)
     private FactorEvolutionMemory factorEvolutionMemory;
 
-    /** 可选依赖：可进化因子库（因子推荐） */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /**
+     * 可选依赖：可进化因子库（因子推荐）
+     */
+    @Autowired(required = false)
     private EvolvableFactorLibrary factorLibrary;
 
     public SignalLearningService(ExperienceMemory experienceMemory,
-                                  DecisionSignalRepository signalRepository,
-                                  DecisionSignalOutcomeRepository outcomeRepository) {
+                                 DecisionSignalRepository signalRepository,
+                                 DecisionSignalOutcomeRepository outcomeRepository) {
         this.experienceMemory = experienceMemory;
         this.signalRepository = signalRepository;
         this.outcomeRepository = outcomeRepository;
@@ -63,7 +72,8 @@ public class SignalLearningService {
      * 记录一次分析经验
      */
     public void recordExperience(String stockCode, String signal, int score, String confidence,
-                                  Map<String, Object> technicalSnapshot, String marketSentiment) {
+                                 Map<String, Object> technicalSnapshot, String marketSentiment) {
+
         experienceMemory.recordExperience(stockCode, signal, score, confidence,
                 technicalSnapshot, marketSentiment);
     }
@@ -116,7 +126,7 @@ public class SignalLearningService {
 
     /**
      * 构建信号反馈提示（注入到 LLM 分析 prompt 中）
-     *
+     * <p>
      * 从历史信号效果中提取"经验教训"（正确/错误案例），
      * 构建 Few-shot 示例文本，让 LLM 从自己的历史错误中学习。
      *
@@ -252,8 +262,8 @@ public class SignalLearningService {
      * @return 统一经验提示文本
      */
     public String buildUnifiedExperienceHint(String stockCode,
-                                               Map<String, Object> currentConditions,
-                                               String marketPhase) {
+                                             Map<String, Object> currentConditions,
+                                             String marketPhase) {
         StringBuilder sb = new StringBuilder();
 
         // 1. 信号级经验
@@ -326,7 +336,9 @@ public class SignalLearningService {
 
     // ===== 数据类 =====
 
-    /** 信号案例（用于 Few-shot 示例） */
+    /**
+     * 信号案例（用于 Few-shot 示例）
+     */
     private record SignalCase(
             String action,
             Double confidence,
@@ -335,9 +347,12 @@ public class SignalLearningService {
             String outcome,
             Double returnPct,
             String date
-    ) {}
+    ) {
+    }
 
-    /** 全局信号效果摘要 */
+    /**
+     * 全局信号效果摘要
+     */
     public static class FeedbackSummary {
         public int totalEvaluated;
         public int correctCount;
@@ -352,7 +367,9 @@ public class SignalLearningService {
         }
     }
 
-    /** 因子推荐项 */
+    /**
+     * 因子推荐项
+     */
     public record FactorRecommendation(
             String factorId,
             String factorName,
@@ -361,5 +378,6 @@ public class SignalLearningService {
             double sharpeRatio,
             double overallScore,
             String marketCondition
-    ) {}
+    ) {
+    }
 }

@@ -12,8 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 市场分析服务 — 统一的市场行情、情绪判断和上下文服务
@@ -36,10 +34,10 @@ public class MarketAnalysisService {
     private Map<String, Object> cachedContext;
     private LocalDate cachedDate;
 
-    /** 行情简览缓存: 市场代码 -> {data, timestamp}，TTL 5分钟 */
+    /** 行情简览缓存: 市场代码 -> {data, timestamp}，TTL 10分钟 */
     private final Map<String, long[]> briefingCacheTime = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Map<String, Object>> briefingCacheData = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final long BRIEFING_CACHE_TTL_MS = 300_000L; // 5分钟
+    private static final long BRIEFING_CACHE_TTL_MS = 600_000L; // 10分钟
 
     public MarketAnalysisService(MarketDataPort dataFetcher, TechnicalAnalysisService technicalService,
                                  @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -254,118 +252,88 @@ public class MarketAnalysisService {
         briefing.put("market", marketType.getName());
         briefing.put("market_code", marketType.getCode());
 
-        // === 并行获取 4 个数据块 ===
-
-        // Task 1: 指数行情 + sparkline
-        CompletableFuture<List<Map<String, Object>>> indicesFuture = CompletableFuture.supplyAsync(() -> {
-            List<Map<String, Object>> indices = new CopyOnWriteArrayList<>();
-            Map<String, String> indexDefs = MarketConstants.getIndices(marketType);
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-            for (Map.Entry<String, String> entry : indexDefs.entrySet()) {
-                futures.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        Map<String, Object> quote = dataFetcher.getRealtimeQuote(entry.getKey(), marketType);
-                        if (quote != null && !quote.isEmpty()) {
-                            quote.put("name", entry.getValue());
-                            quote.put("code", entry.getKey());
-                            quote.put("sparkline", fetchSparkline(entry.getKey(), marketType));
-                            indices.add(quote);
-                        }
-                    } catch (Exception e) {
-                        log.debug("获取指数行情失败: {} - {}", entry.getKey(), e.getMessage());
-                    }
-                }));
-            }
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            return new ArrayList<>(indices);
-        });
-
-        // Task 2: 热门股行情 + sparkline
-        CompletableFuture<List<Map<String, Object>>> stocksFuture = CompletableFuture.supplyAsync(() -> {
-            List<Map<String, Object>> hotStocks = new CopyOnWriteArrayList<>();
-            Map<String, String> stockDefs = MarketConstants.getHotStocks(marketType);
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-            for (Map.Entry<String, String> entry : stockDefs.entrySet()) {
-                futures.add(CompletableFuture.runAsync(() -> {
-                    try {
-                        Map<String, Object> quote = dataFetcher.getRealtimeQuote(entry.getKey());
-                        if (quote != null && !quote.isEmpty()) {
-                            quote.put("name", entry.getValue());
-                            quote.put("code", entry.getKey());
-                            quote.put("sparkline", fetchSparkline(entry.getKey(), marketType));
-                            hotStocks.add(quote);
-                        }
-                    } catch (Exception e) {
-                        log.debug("获取热门股行情失败: {} - {}", entry.getKey(), e.getMessage());
-                    }
-                }));
-            }
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            return new ArrayList<>(hotStocks);
-        });
-
-        // Task 3: 市场新闻
-        CompletableFuture<List<Map<String, Object>>> newsFuture = CompletableFuture.supplyAsync(() -> {
-            if (newsSearchService == null) return Collections.emptyList();
+        // 1. 指数行情 + 近5日迷你走势数据
+        List<Map<String, Object>> indices = new ArrayList<>();
+        Map<String, String> indexDefs = MarketConstants.getIndices(marketType);
+        for (Map.Entry<String, String> entry : indexDefs.entrySet()) {
             try {
-                return newsSearchService.searchNews(MarketConstants.getNewsKeyword(marketType), "");
+                Map<String, Object> quote = dataFetcher.getRealtimeQuote(entry.getKey(), marketType);
+                if (quote != null && !quote.isEmpty()) {
+                    quote.put("name", entry.getValue());
+                    quote.put("code", entry.getKey());
+                    quote.put("sparkline", fetchSparkline(entry.getKey(), marketType));
+                    indices.add(quote);
+                }
+            } catch (Exception e) {
+                log.debug("获取指数行情失败: {} - {}", entry.getKey(), e.getMessage());
+            }
+        }
+        briefing.put("indices", indices);
+
+        // 2. 热门股票行情（批量获取，1 次 API 代替 N 次逐个调用）
+        List<Map<String, Object>> hotStocks = new ArrayList<>();
+        Map<String, String> stockDefs = MarketConstants.getHotStocks(marketType);
+        List<String> stockCodes = new ArrayList<>(stockDefs.keySet());
+        Map<String, Map<String, Object>> batchQuotes = dataFetcher.getBatchRealtimeQuotes(stockCodes);
+        for (Map.Entry<String, String> entry : stockDefs.entrySet()) {
+            String code = entry.getKey();
+            Map<String, Object> quote = batchQuotes.get(code);
+            if (quote == null || quote.isEmpty()) {
+                // 批量未命中，降级逐个获取
+                quote = dataFetcher.getRealtimeQuote(code);
+            }
+            if (quote != null && !quote.isEmpty()) {
+                quote.put("name", entry.getValue());
+                quote.put("code", code);
+                quote.put("sparkline", fetchSparkline(code, marketType));
+                hotStocks.add(quote);
+            }
+        }
+        briefing.put("hot_stocks", hotStocks);
+
+        // 3. 市场新闻
+        List<Map<String, Object>> news = new ArrayList<>();
+        if (newsSearchService != null) {
+            try {
+                news = newsSearchService.searchNews(MarketConstants.getNewsKeyword(marketType), "");
             } catch (Exception e) {
                 log.debug("获取市场新闻失败: {}", e.getMessage());
-                return Collections.emptyList();
             }
-        });
+        }
+        briefing.put("news", news);
 
-        // Task 4: 板块排行（仅 A 股）
-        CompletableFuture<List<Map<String, Object>>> sectorsFuture = CompletableFuture.supplyAsync(() -> {
-            if (marketType != MarketType.A) return Collections.emptyList();
+        // 4. 板块排行（仅 A 股支持）
+        if (marketType == MarketType.A) {
             try {
-                return fetchSectorRanking();
+                briefing.put("sectors", fetchSectorRanking());
             } catch (Exception e) {
                 log.debug("获取板块排行失败: {}", e.getMessage());
-                return Collections.emptyList();
             }
-        });
-
-        // 等待全部完成
-        CompletableFuture.allOf(indicesFuture, stocksFuture, newsFuture, sectorsFuture).join();
-
-        List<Map<String, Object>> indices = indicesFuture.join();
-        List<Map<String, Object>> hotStocks = stocksFuture.join();
-        List<Map<String, Object>> news = newsFuture.join();
-        List<Map<String, Object>> sectors = sectorsFuture.join();
-
-        briefing.put("indices", indices);
-        briefing.put("hot_stocks", hotStocks);
-        briefing.put("news", news);
-        if (marketType == MarketType.A && !sectors.isEmpty()) {
-            briefing.put("sectors", sectors);
         }
+
+        // 5. 市场温度（涨跌统计，基于指数涨跌）
         briefing.put("temperature", computeTemperature(indices));
 
         // 写入缓存
         briefingCacheData.put(cacheKey, briefing);
         briefingCacheTime.put(cacheKey, new long[]{System.currentTimeMillis()});
 
-        log.info("行情简览生成完成: {} 耗时 {}ms (指数:{}, 热门股:{}, 新闻:{}, 板块:{})",
+        log.info("行情简览生成完成: {} 耗时 {}ms (指数:{}, 热门股:{}, 新闻:{})",
                 cacheKey, System.currentTimeMillis() - startTime,
-                indices.size(), hotStocks.size(), news.size(), sectors.size());
+                indices.size(), hotStocks.size(), news.size());
 
         return briefing;
     }
 
     /**
      * 获取近5日收盘价数组，用于前端迷你走势图
-     * 跳过 Yahoo 指数代码（^HSI/^DJI 等），这些代码无法被 detectFromCode 正确路由
+     * 使用显式指定市场类型路由，支持 ^HSI/^DJI 等 Yahoo 指数代码
      */
     private List<Double> fetchSparkline(String stockCode, MarketType marketType) {
-        // Yahoo 指数代码以 ^ 开头，跳过（无法通过 getHistoryData 获取）
-        if (stockCode == null || stockCode.startsWith("^")) {
-            return Collections.emptyList();
-        }
         try {
             LocalDate end = LocalDate.now();
             LocalDate start = end.minusDays(10); // 多取几天以防非交易日
-            List<StockDailyData> data = dataFetcher.getHistoryData(stockCode, start, end);
+            List<StockDailyData> data = dataFetcher.getHistoryData(stockCode, start, end, marketType);
             List<Double> closes = new ArrayList<>();
             for (StockDailyData d : data) {
                 if (d.getClosePrice() != null) closes.add(d.getClosePrice());

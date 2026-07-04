@@ -1,4 +1,4 @@
-package io.leavesfly.alphaforge.application.pipeline;
+package io.leavesfly.alphaforge.application.service;
 
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.application.agent.MultiAgentOrchestrator;
@@ -6,7 +6,9 @@ import io.leavesfly.alphaforge.application.agent.debate.AgentDebateOrchestrator;
 import io.leavesfly.alphaforge.application.agent.debate.DebateResult;
 import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQuality;
 import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQualityAssessor;
+import io.leavesfly.alphaforge.application.pipeline.DiagnosticContext;
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
+import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
 import io.leavesfly.alphaforge.application.service.signal.SignalExtractionService;
 import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
@@ -21,12 +23,12 @@ import java.util.Map;
 
 /**
  * Agent 分析服务 — 从 StockAnalysisPipeline 提取的 Agent/LLM 分析逻辑
- *
+ * <p>
  * 职责：
  * - Agent 模式分析（debate/multi/react 三选一，含降级策略）
  * - 传统 LLM 直接分析（作为 Agent 模式的降级方案）
  * - LLM 分析质量自动评估
- *
+ * <p>
  * 设计原则：
  * - Pipeline 只负责编排，不关心具体分析实现
  * - 降级链 debate → multi → react → llm 全部封装在此类中
@@ -54,45 +56,48 @@ public class AgentAnalysisService {
     private final ReActAgent reactAgent;
     private final SignalExtractionService signalExtractionService;
     private final PromptManager promptManager;
+    private final SignalLearningService signalLearningService;
 
-    /** 可选依赖：多 Agent 编排器 */
+    /**
+     * 可选依赖：多 Agent 编排器
+     */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private MultiAgentOrchestrator multiAgentOrchestrator;
 
-    /** 可选依赖：Agent 辩论编排器 */
+    /**
+     * 可选依赖：Agent 辩论编排器
+     */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AgentDebateOrchestrator debateOrchestrator;
 
-    /** 可选依赖：LLM 分析质量评估器 */
+    /**
+     * 可选依赖：LLM 分析质量评估器
+     */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private LlmAnalysisQualityAssessor analysisQualityAssessor;
 
-    public AgentAnalysisService(SchedulerAuthConfig schedulerAuthConfig, LlmPort llmService,
-                                  ReActAgent reactAgent,
-                                  SignalExtractionService signalExtractionService,
-                                  PromptManager promptManager) {
+    public AgentAnalysisService(SchedulerAuthConfig schedulerAuthConfig, LlmPort llmService, ReActAgent reactAgent, SignalExtractionService signalExtractionService, PromptManager promptManager, SignalLearningService signalLearningService) {
         this.schedulerAuthConfig = schedulerAuthConfig;
         this.llmService = llmService;
         this.reactAgent = reactAgent;
         this.signalExtractionService = signalExtractionService;
         this.promptManager = promptManager;
+        this.signalLearningService = signalLearningService;
     }
 
     /**
      * 使用 Agent 模式进行分析（含降级策略）
-     *
+     * <p>
      * 降级链：debate → multi → react → llm
      *
-     * @param stockCode  股票代码
-     * @param stockName  股票名称
-     * @param context    分析上下文
-     * @param diag       诊断上下文（可为 null）
+     * @param stockCode 股票代码
+     * @param stockName 股票名称
+     * @param context   分析上下文
+     * @param diag      诊断上下文（可为 null）
      * @return 分析结果
      */
-    public AnalysisResult analyze(
-            String stockCode, String stockName,
-            Map<String, Object> context,
-            DiagnosticContext diag) {
+    public AnalysisResult analyze(String stockCode, String stockName, Map<String, Object> context, DiagnosticContext diag) {
+
         String agentMode = schedulerAuthConfig.getAgentMode();
 
         // 1. 辩论模式：多 Agent 独立分析 → 交叉质询 → 裁判裁决
@@ -116,6 +121,7 @@ public class AgentAnalysisService {
         }
 
         // 3. ReactAgent 模式
+        enrichContextWithLearningPrompt(stockCode, context);
         try {
             ReActAgent.ReactResult reactResult = reactAgent.analyze(stockCode, stockName, context);
             if (diag != null) {
@@ -135,12 +141,8 @@ public class AgentAnalysisService {
     /**
      * 辩论模式分析
      */
-    private AnalysisResult analyzeWithDebate(
-            String stockCode, String stockName,
-            Map<String, Object> context,
-            DiagnosticContext diag) {
-        DebateResult debateResult = debateOrchestrator.orchestrateWithDebate(
-                stockCode, stockName, context, 120);
+    private AnalysisResult analyzeWithDebate(String stockCode, String stockName, Map<String, Object> context, DiagnosticContext diag) {
+        DebateResult debateResult = debateOrchestrator.orchestrateWithDebate(stockCode, stockName, context, 120);
         if (diag != null) {
             diag.record("agent_mode", "debate");
             diag.record("agent_count", debateResult.getInitialResults().size());
@@ -169,12 +171,8 @@ public class AgentAnalysisService {
     /**
      * 多 Agent 模式分析
      */
-    private AnalysisResult analyzeWithMultiAgent(
-            String stockCode, String stockName,
-            Map<String, Object> context,
-            DiagnosticContext diag) {
-        MultiAgentOrchestrator.OrchestrationResult orcResult =
-                multiAgentOrchestrator.orchestrate(stockCode, stockName, context, 120);
+    private AnalysisResult analyzeWithMultiAgent(String stockCode, String stockName, Map<String, Object> context, DiagnosticContext diag) {
+        MultiAgentOrchestrator.OrchestrationResult orcResult = multiAgentOrchestrator.orchestrate(stockCode, stockName, context, 120);
         if (diag != null) {
             diag.record("agent_mode", "multi_agent");
             diag.record("agent_count", orcResult.agentResults().size());
@@ -192,8 +190,7 @@ public class AgentAnalysisService {
     /**
      * ReactAgent 结果转换为标准 AnalysisResult
      */
-    private AnalysisResult reactResultToAnalysisResult(
-            ReActAgent.ReactResult reactResult, String stockCode, String stockName) {
+    private AnalysisResult reactResultToAnalysisResult(ReActAgent.ReactResult reactResult, String stockCode, String stockName) {
         AnalysisResult result = new AnalysisResult();
         result.stockCode = stockCode;
         result.stockName = stockName;
@@ -206,8 +203,8 @@ public class AgentAnalysisService {
     /**
      * 传统 LLM 直接分析（最终降级方案）
      */
-    private AnalysisResult analyzeWithLlm(
-            String stockCode, String stockName, Map<String, Object> context) {
+    private AnalysisResult analyzeWithLlm(String stockCode, String stockName, Map<String, Object> context) {
+
         // 优先使用结构化输出（JSON Mode），fallback 到传统 analyzeStock
         String response;
         try {
@@ -248,7 +245,29 @@ public class AgentAnalysisService {
         return result;
     }
 
-    /** 为结构化输出构建用户提示 */
+    /**
+     * 为 ReactAgent 预构建学习提示并注入上下文
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichContextWithLearningPrompt(String stockCode, Map<String, Object> context) {
+        if (context == null || signalLearningService == null) return;
+
+        Object techObj = context.get("technical_analysis");
+        Map<String, Object> techContext = null;
+        if (techObj instanceof Map<?, ?> techMap) {
+            Map<String, Object> casted = (Map<String, Object>) techMap;
+            techContext = casted;
+        }
+
+        String learningPrompt = signalLearningService.buildLearningPrompt(stockCode, techContext);
+        if (learningPrompt != null && !learningPrompt.isEmpty()) {
+            context.put("learning_prompt", learningPrompt);
+        }
+    }
+
+    /**
+     * 为结构化输出构建用户提示
+     */
     private String buildLlmUserPrompt(String stockCode, String stockName, Map<String, Object> context) {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("请分析股票 %s(%s)。\n", stockName, stockCode));
@@ -262,13 +281,17 @@ public class AgentAnalysisService {
         return sb.toString();
     }
 
-    /** 构建系统提示词（原 StockAnalysisPromptService.buildSystemPrompt） */
+    /**
+     * 构建系统提示词（原 StockAnalysisPromptService.buildSystemPrompt）
+     */
     private String buildSystemPrompt() {
         if (promptManager == null) return DEFAULT_SYSTEM_PROMPT;
         return promptManager.getTemplateOrDefault("stock_analysis_system", DEFAULT_SYSTEM_PROMPT);
     }
 
-    /** 构建分析用户提示词（原 StockAnalysisPromptService.buildAnalysisPrompt） */
+    /**
+     * 构建分析用户提示词（原 StockAnalysisPromptService.buildAnalysisPrompt）
+     */
     private String buildAnalysisPrompt(Map<String, Object> context) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("请分析以下股票:\n\n");
@@ -284,16 +307,14 @@ public class AgentAnalysisService {
         Object quote = context.get("realtime_quote");
         if (quote instanceof Map && !((Map<?, ?>) quote).isEmpty()) {
             prompt.append("## 实时行情\n");
-            ((Map<?, ?>) quote).forEach((k, v) ->
-                    prompt.append("- ").append(k).append(": ").append(v).append("\n"));
+            ((Map<?, ?>) quote).forEach((k, v) -> prompt.append("- ").append(k).append(": ").append(v).append("\n"));
             prompt.append("\n");
         }
 
         Object tech = context.get("technical_analysis");
         if (tech instanceof Map && !((Map<?, ?>) tech).isEmpty()) {
             prompt.append("## 技术指标\n");
-            ((Map<?, ?>) tech).forEach((k, v) ->
-                    prompt.append("- ").append(k).append(": ").append(v).append("\n"));
+            ((Map<?, ?>) tech).forEach((k, v) -> prompt.append("- ").append(k).append(": ").append(v).append("\n"));
             prompt.append("\n");
         }
 

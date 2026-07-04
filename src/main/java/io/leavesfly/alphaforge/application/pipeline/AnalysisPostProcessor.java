@@ -11,6 +11,7 @@ import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisResult;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.TrendAnalysisResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.Map;
 
 /**
  * 分析结果后处理器
- * 
+ * <p>
  * 从 StockAnalysisPipeline 提取的后处理逻辑，负责：
  * - Fallback 兜底（当 LLM 未给出明确结果时用技术分析补全）
  * - 决策动作刷新
@@ -36,12 +37,14 @@ public class AnalysisPostProcessor {
     private final AdaptiveScoreBlender adaptiveBlender;
     private final FactorLibrary factorLibrary;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public AnalysisPostProcessor(CompositeScoringEngine compositeScoringEngine, ScoringConfig scoringConfig,
-                                  @org.springframework.beans.factory.annotation.Autowired(required = false) FactorLibrary factorLibrary) {
+                                 @Autowired(required = false) FactorLibrary factorLibrary) {
+
         this.compositeScoringEngine = compositeScoringEngine;
         this.scoringConfig = scoringConfig;
         this.factorLibrary = factorLibrary;
+
         this.adaptiveBlender = new AdaptiveScoreBlender(
                 scoringConfig.getAdaptiveBlendBaseRatio(),
                 scoringConfig.getAdaptiveStrategyConfidenceImpact(),

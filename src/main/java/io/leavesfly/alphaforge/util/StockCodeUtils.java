@@ -3,6 +3,7 @@ package io.leavesfly.alphaforge.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -18,6 +19,18 @@ public class StockCodeUtils {
     private static final Pattern HK_PATTERN = Pattern.compile("^(hk|HK)?(\\d{4,5})$");
     /** 美股代码正则 */
     private static final Pattern US_PATTERN = Pattern.compile("^[A-Za-z]{1,5}$");
+    /** 沪市指数代码前缀集合（用于区分指数与股票） */
+    private static final Set<String> SH_INDEX_PREFIXES = Set.of("0000", "0001", "0003", "0006", "0009");
+
+    /**
+     * 判断是否为沪市指数代码（000xxx 系列）
+     * 沪市指数: 000001(上证指数) 000016(上证50) 000300(沪深300) 000688(科创50) 000905(中证500)
+     */
+    private static boolean isShIndex(String code) {
+        if (code == null || code.length() < 6) return false;
+        String prefix4 = code.substring(0, 4);
+        return SH_INDEX_PREFIXES.contains(prefix4);
+    }
 
     /**
      * 标准化股票代码
@@ -90,10 +103,8 @@ public class StockCodeUtils {
      */
     public static String toSecId(String stockCode) {
         String code = normalize(stockCode);
-        // 沪市指数: 000001(上证指数) 000300(沪深300) 000016(上证50) 000905(中证500)
-        if (code.startsWith("0000") || code.startsWith("0009")) {
-            return "1." + code;
-        }
+        // 沪市指数: 000001(上证指数) 000300(沪深300) 000016(上证50) 000905(中证500) 000688(科创50)
+        if (isShIndex(code)) return "1." + code;
         if (code.startsWith("6") || code.startsWith("9")
                 || code.startsWith("11") || code.startsWith("13")) {
             return "1." + code;
@@ -152,6 +163,8 @@ public class StockCodeUtils {
         // A股（6位数字）
         String normalized = normalize(code);
         if (normalized.matches("^\\d{6}$")) {
+            // 沪市指数: 000001(上证指数) 000300(沪深300) 000016(上证50) 000905(中证500)
+            if (isShIndex(normalized)) return normalized + ".SH";
             if (normalized.startsWith("6") || normalized.startsWith("9")) return normalized + ".SH";
             if (normalized.startsWith("4") || normalized.startsWith("8")) return normalized + ".BJ";
             return normalized + ".SZ";
