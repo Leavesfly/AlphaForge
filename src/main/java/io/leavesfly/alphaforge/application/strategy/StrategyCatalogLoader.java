@@ -3,9 +3,6 @@ package io.leavesfly.alphaforge.application.strategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.condition.ScoringConditionRegistry;
-import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
-import io.leavesfly.alphaforge.application.strategy.model.ScoringProfile;
-import io.leavesfly.alphaforge.application.strategy.model.ScreeningProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -14,7 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -125,40 +121,13 @@ public class StrategyCatalogLoader {
         }
     }
 
-    /** 从 YAML 字符串解析策略定义 */
+    /** 从 YAML 字符串解析策略定义（支持旧三段与统一 rules DSL） */
     private StrategyDefinition parseYamlContent(String yamlContent) throws Exception {
         @SuppressWarnings("unchecked")
         Map<String, Object> raw = yamlMapper.readValue(yamlContent, Map.class);
-        StrategyDefinition definition = new StrategyDefinition();
-        definition.setId(stringVal(raw.get("id"), ""));
-        definition.setSchemaVersion(intVal(raw.get("schema_version"), 1));
-        definition.setLabel(stringVal(raw.get("label"), definition.getId()));
-        definition.setDescription(stringVal(raw.get("description"), ""));
-        definition.setCategory(stringVal(raw.get("category"), ""));
-        definition.setRiskLevel(stringVal(raw.get("risk_level"), "medium"));
-
-        if (raw.get("backtest") instanceof Map<?, ?> backtestRaw) {
-            definition.setBacktest(mapBacktest((Map<String, Object>) backtestRaw));
-        }
-        if (raw.get("screening") instanceof Map<?, ?> screeningRaw) {
-            definition.setScreening(mapScreening((Map<String, Object>) screeningRaw));
-        }
-        if (raw.get("scoring") instanceof Map<?, ?> scoringRaw) {
-            definition.setScoring(mapScoring((Map<String, Object>) scoringRaw));
-        }
-
-        // 自动检测能力
-        java.util.List<String> caps = new java.util.ArrayList<>();
-        if (definition.getBacktest() != null) caps.add("backtest");
-        if (definition.getScreening() != null) caps.add("screening");
-        if (definition.getScoring() != null) caps.add("scoring");
-        definition.setCapabilities(caps);
+        StrategyDefinition definition = StrategyYamlMapper.mapDefinition(raw);
+        definition.setCapabilities(StrategyYamlMapper.inferCapabilities(definition));
         definition.setRuntime("implemented");
-
-        definition.setApplicableMarket(parseStringList(raw.get("applicable_market")));
-        definition.setApplicableCap(parseStringList(raw.get("applicable_cap")));
-        definition.setTags(parseStringList(raw.get("tags")));
-
         return definition;
     }
 
@@ -188,7 +157,7 @@ public class StrategyCatalogLoader {
         }
         if (definition.getScoring() != null && definition.getScoring().getConditions() != null) {
             for (String key : definition.getScoring().getConditions().keySet()) {
-                if (!ScoringConditionRegistry.SUPPORTED_KEYS.contains(key)) {
+                if (!ScoringConditionRegistry.isSupportedKey(key)) {
                     issues.add("未实现的 scoring 条件: " + key);
                 }
             }
@@ -223,138 +192,23 @@ public class StrategyCatalogLoader {
                 throw new IllegalStateException("策略定义不存在: " + path);
             }
             Map<String, Object> raw = yamlMapper.readValue(in, Map.class);
-            StrategyDefinition definition = new StrategyDefinition();
-            definition.setId(stringVal(raw.get("id"), id));
-            definition.setSchemaVersion(intVal(raw.get("schema_version"), 1));
-            definition.setLabel(stringVal(raw.get("label"), id));
-            definition.setDescription(stringVal(raw.get("description"), ""));
-            definition.setCategory(stringVal(raw.get("category"), ""));
-            definition.setRiskLevel(stringVal(raw.get("risk_level"), "medium"));
-
-            if (raw.get("backtest") instanceof Map<?, ?> backtestRaw) {
-                definition.setBacktest(mapBacktest((Map<String, Object>) backtestRaw));
+            StrategyDefinition definition = StrategyYamlMapper.mapDefinition(raw);
+            if (definition.getId() == null || definition.getId().isBlank()) {
+                definition.setId(id);
             }
-            if (raw.get("screening") instanceof Map<?, ?> screeningRaw) {
-                definition.setScreening(mapScreening((Map<String, Object>) screeningRaw));
-            }
-            if (raw.get("scoring") instanceof Map<?, ?> scoringRaw) {
-                definition.setScoring(mapScoring((Map<String, Object>) scoringRaw));
-            }
-
             Object caps = meta.get("capabilities");
             if (caps instanceof List<?> list) {
                 definition.setCapabilities(list.stream().map(String::valueOf).toList());
+            } else {
+                definition.setCapabilities(StrategyYamlMapper.inferCapabilities(definition));
             }
             definition.setRuntime(stringVal(meta.get("runtime"), "planned"));
-
-            // 解析策略元数据（供 LLM 策略编排使用）
-            definition.setApplicableMarket(parseStringList(raw.get("applicable_market")));
-            definition.setApplicableCap(parseStringList(raw.get("applicable_cap")));
-            definition.setTags(parseStringList(raw.get("tags")));
-
             return definition;
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private BacktestProfile mapBacktest(Map<String, Object> raw) {
-        BacktestProfile profile = new BacktestProfile();
-        if (raw.get("parameters") instanceof Map<?, ?> params) {
-            profile.setParameters((Map<String, Object>) params);
-        }
-        if (raw.get("entry_conditions") instanceof List<?> entries) {
-            profile.setEntryConditions(entries.stream().map(this::asConditionMap).toList());
-        }
-        if (raw.get("exit_conditions") instanceof List<?> exits) {
-            profile.setExitConditions(exits.stream().map(this::asConditionMap).toList());
-        }
-        profile.setPositionSize(doubleVal(raw.get("position_size"), 0.95));
-        if (raw.get("simulation") instanceof Map<?, ?> simulation) {
-            profile.setSimulation((Map<String, Object>) simulation);
-        }
-        if (raw.get("param_space") instanceof Map<?, ?> paramSpace) {
-            profile.setParamSpace(parseParamSpace((Map<String, Object>) paramSpace));
-        }
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private ScreeningProfile mapScreening(Map<String, Object> raw) {
-        ScreeningProfile profile = new ScreeningProfile();
-        if (raw.get("parameters") instanceof Map<?, ?> params) {
-            profile.setParameters((Map<String, Object>) params);
-        }
-        if (raw.get("scoring_rules") instanceof List<?> rules) {
-            profile.setScoringRules(rules.stream().map(this::asConditionMap).toList());
-        }
-        if (raw.get("reason_templates") instanceof Map<?, ?> templates) {
-            profile.setReasonTemplates((Map<String, String>) templates);
-        }
-        if (raw.get("fallback") instanceof Map<?, ?> fallback) {
-            profile.setFallback((Map<String, Object>) fallback);
-        }
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private ScoringProfile mapScoring(Map<String, Object> raw) {
-        ScoringProfile profile = new ScoringProfile();
-        profile.setScoreWeight(intVal(raw.get("score_weight"), 0));
-        if (raw.get("conditions") instanceof Map<?, ?> conditions) {
-            profile.setConditions((Map<String, Object>) conditions);
-        }
-        profile.setLabel(stringVal(raw.get("label"), null));
-        // 解析自动衰减配置
-        profile.setAutoDecay(Boolean.TRUE.equals(raw.get("auto_decay")));
-        profile.setDecayWindow(intVal(raw.get("decay_window"), 30));
-        profile.setMinWeight(intVal(raw.get("min_weight"), 5));
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> asConditionMap(Object item) {
-        return (Map<String, Object>) item;
-    }
-
     private String stringVal(Object value, String defaultValue) {
         return value == null ? defaultValue : String.valueOf(value);
-    }
-
-    private int intVal(Object value, int defaultValue) {
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        return defaultValue;
-    }
-
-    private double doubleVal(Object value, double defaultValue) {
-        if (value instanceof Number number) {
-            return number.doubleValue();
-        }
-        return defaultValue;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> parseStringList(Object value) {
-        if (value instanceof List<?> list) {
-            return list.stream().map(String::valueOf).toList();
-        }
-        if (value instanceof String str && !str.isBlank()) {
-            return List.of(str.split(","))
-                    .stream().map(String::trim).filter(s -> !s.isEmpty()).toList();
-        }
-        return List.of();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, List<Object>> parseParamSpace(Map<String, Object> raw) {
-        Map<String, List<Object>> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : raw.entrySet()) {
-            if (entry.getValue() instanceof List<?> list) {
-                result.put(entry.getKey(), new ArrayList<>(list));
-            }
-        }
-        return result;
     }
 
     public StrategyCatalog getCatalog() {

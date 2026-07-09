@@ -1,6 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 高股息策略（智能选股）
-# 股息率越高分越高，适合稳健分红型标的
+# 高股息策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: dividend
@@ -8,24 +7,49 @@ label: 高股息
 description: 股息率 > 3% 的稳健分红标的
 category: fundamental
 risk_level: low
+applicable_market: [all]
+applicable_cap: [large, mid]
+tags: [股息, 分红, 稳健, 长线]
 
-screening:
+rules:
   parameters:
-    min_dividend_yield: 3   # 股息率合格线（%）
+    lookback_days: 60
+    max_amplitude_pct: 20
+    support_ma: 60
+  param_space:
+    max_amplitude_pct: [15, 20, 25]
+    lookback_days: [40, 60, 90]
 
-  # 公式（operator: gt）：得分 = 实际值 × weight，越高越好
-  scoring_rules:
-    - metric: dividend_yield   # 兼容行情字段 dy
-      operator: gt              # 大于阈值才计分
-      threshold: 3              # 股息率 > 3%
-      weight: 15                # 得分 = 股息率 × 15
+  signal:
+    position_size: 0.90
+    entry:
+      - type: amplitude_below
+        lookback: 60
+        max_pct: 20
+      - type: price_near_support
+        tolerance_pct: 3.0
+      - type: price_above_ma
+        ma: 60
+    exit:
+      - type: break_below_ma
+        ma: 60
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 20
 
-  reason_templates:
-    high: 高股息稳健标的
-    low: 分红较好
-
-  # 没有股息率字段时走兜底（35~75 分）
-  fallback:
-    metrics: [dividend_yield]
-    score_min: 35
-    score_max: 75
+  rank:
+    parameters:
+      min_dividend_yield: 3
+    scoring_rules:
+      - metric: dividend_yield
+        operator: gt
+        threshold: 3
+        weight: 15
+    reason_templates:
+      high: 高股息稳健标的
+      low: 分红较好
+    fallback:
+      metrics: [dividend_yield]
+      score_min: 35
+      score_max: 75

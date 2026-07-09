@@ -8,9 +8,11 @@ import io.leavesfly.alphaforge.application.factor.analysis.FactorAnalysisService
 import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionConfig;
 import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionOrchestrator;
 import io.leavesfly.alphaforge.application.factor.evolution.model.EvolutionResult;
+import io.leavesfly.alphaforge.application.strategy.generator.StrategyRefineLoop;
 import io.leavesfly.alphaforge.presentation.api.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,12 +35,42 @@ public class AiCapabilityController {
     private final BenchmarkSuite benchmarkSuite;
     private final FactorAnalysisService factorAnalysisService;
 
+    @Autowired(required = false)
+    private StrategyRefineLoop strategyRefineLoop;
+
     public AiCapabilityController(FactorEvolutionOrchestrator evolutionOrchestrator,
                                    BenchmarkSuite benchmarkSuite,
                                    FactorAnalysisService factorAnalysisService) {
         this.evolutionOrchestrator = evolutionOrchestrator;
         this.benchmarkSuite = benchmarkSuite;
         this.factorAnalysisService = factorAnalysisService;
+    }
+
+    /**
+     * 策略生成→回测→改写闭环
+     * POST /api/v1/ai-capability/strategy/refine
+     */
+    @PostMapping("/strategy/refine")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> refineStrategy(
+            @RequestBody Map<String, Object> body) {
+        if (strategyRefineLoop == null) {
+            return ResponseEntity.ok(ApiResponse.error(503, "StrategyRefineLoop 未启用"));
+        }
+        String description = body != null ? (String) body.get("description") : null;
+        if (description == null || description.isBlank()) {
+            return ResponseEntity.ok(ApiResponse.error("description 不能为空"));
+        }
+        String stockCode = body.containsKey("stock_code") ? String.valueOf(body.get("stock_code")) : "600519";
+        int maxRounds = body.containsKey("max_rounds") ? ((Number) body.get("max_rounds")).intValue() : 3;
+        boolean toTesting = !body.containsKey("promote_to_testing")
+                || Boolean.TRUE.equals(body.get("promote_to_testing"));
+        try {
+            Map<String, Object> result = strategyRefineLoop.run(description, stockCode, maxRounds, toTesting);
+            return ResponseEntity.ok(ApiResponse.ok(result, "策略 refine 完成"));
+        } catch (Exception e) {
+            log.error("策略 refine 失败", e);
+            return ResponseEntity.ok(ApiResponse.error(500, "策略 refine 失败: " + e.getMessage()));
+        }
     }
 
     // ===== 因子自进化 =====

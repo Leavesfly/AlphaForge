@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 数据源管理器 - 策略模式 + 熔断器 + 限流 + 数据质量校验
+ * 数据源管理器 - 策略模式 + 熔断器 + 限流 + 数据质量校验 + 多源交叉校验
  *
  * 功能:
  * 1. 多数据源自动切换
@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 4. 指数退避重试
  * 5. 交易日感知缓存 — 区分交易日/非交易日，增量更新
  * 6. 数据质量校验 — 缺失交易日检测 + 异常价格过滤
+ * 7. 多源交叉校验 — 主源与异族备源 OHLC 共识抽检
  */
 @Component
 public class DataFetcherManager implements MarketDataPort {
@@ -43,6 +44,7 @@ public class DataFetcherManager implements MarketDataPort {
     private final StockDailyDataRepository dailyDataRepo;
     private final TradingCalendar tradingCalendar;
     private final DataQualityValidator qualityValidator;
+    private final CrossSourceValidator crossSourceValidator;
     
     /** 熔断器状态: 数据源名称 -> 熔断信息 */
     private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
@@ -67,19 +69,23 @@ public class DataFetcherManager implements MarketDataPort {
                               List<BaseDataFetcher> fetchers,
                               StockDailyDataRepository dailyDataRepo,
                               @Autowired(required = false) TradingCalendar tradingCalendar,
-                              @Autowired(required = false) DataQualityValidator qualityValidator) {
+                              @Autowired(required = false) DataQualityValidator qualityValidator,
+                              @Autowired(required = false) CrossSourceValidator crossSourceValidator) {
         this.dataProviderConfig = dataProviderConfig;
         this.fetchers = fetchers;
         this.dailyDataRepo = dailyDataRepo;
         this.tradingCalendar = tradingCalendar;
         this.qualityValidator = qualityValidator;
-        log.info("数据源管理器初始化完成, 已注册 {} 个数据源, 交易日历: {}, 质量校验: {}",
-                fetchers.size(), tradingCalendar != null, qualityValidator != null);
+        this.crossSourceValidator = crossSourceValidator;
+        log.info("数据源管理器初始化完成, 已注册 {} 个数据源, 交易日历: {}, 质量校验: {}, 交叉校验: {}",
+                fetchers.size(), tradingCalendar != null, qualityValidator != null,
+                crossSourceValidator != null && dataProviderConfig.isCrossCheckEnabled()
+                        ? dataProviderConfig.getCrossCheckMode() : "off");
     }
 
     // 测试用构造器(无Spring环境)
     public DataFetcherManager(List<BaseDataFetcher> fetchers, DataProviderConfig dataProviderConfig) {
-        this(dataProviderConfig, fetchers, null, null, null);
+        this(dataProviderConfig, fetchers, null, null, null, null);
     }
 
     /**
@@ -129,6 +135,7 @@ public class DataFetcherManager implements MarketDataPort {
 
         // 3. 调用数据源获取数据（使用显式指定的市场类型路由）
         List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(marketType);
+        Set<String> rejectedPrimaries = new HashSet<>();
         
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
@@ -150,6 +157,13 @@ public class DataFetcherManager implements MarketDataPort {
                 List<StockDailyData> data = fetcher.getHistoryData(stockCode, fetchStart, endDate);
                 
                 if (data != null && !data.isEmpty()) {
+                    // 多源交叉校验（写缓存前）；reject 模式下失败则切换下一主源
+                    if (!crossCheckOrAllow(data, fetcher, stockCode, marketType, rejectedPrimaries)) {
+                        log.warn("数据源 {} 交叉校验未通过(reject)，切换下一数据源: {}", fetcherName, stockCode);
+                        rejectedPrimaries.add(fetcherName);
+                        recordFailure(fetcherName);
+                        continue;
+                    }
                     // 记录成功
                     recordSuccess(fetcherName);
                     // 写入缓存
@@ -829,6 +843,92 @@ public class DataFetcherManager implements MarketDataPort {
         }
 
         return filtered;
+    }
+
+    /**
+     * 多源交叉校验。
+     *
+     * @return true=允许继续使用主源数据；false=reject 模式下应切换下一主源
+     */
+    private boolean crossCheckOrAllow(List<StockDailyData> primaryData,
+                                      BaseDataFetcher primaryFetcher,
+                                      String stockCode,
+                                      MarketType marketType,
+                                      Set<String> rejectedPrimaries) {
+        if (crossSourceValidator == null || dataProviderConfig == null
+                || !dataProviderConfig.isCrossCheckEnabled()) {
+            return true;
+        }
+
+        BaseDataFetcher secondary = pickCrossCheckFetcher(primaryFetcher, marketType, rejectedPrimaries);
+        if (secondary == null) {
+            log.debug("[{}] 无可用异族备源，跳过交叉校验", stockCode);
+            return true;
+        }
+
+        List<StockDailyData> samplePrimary = CrossSourceValidator.sampleTail(
+                primaryData, dataProviderConfig.getCrossCheckSampleDays());
+        if (samplePrimary.isEmpty()) {
+            return true;
+        }
+        LocalDate sampleStart = samplePrimary.get(0).getTradeDate();
+        LocalDate sampleEnd = samplePrimary.get(samplePrimary.size() - 1).getTradeDate();
+
+        if (isCircuitOpen(secondary.getName())) {
+            log.debug("[{}] 备源 {} 熔断中，跳过交叉校验", stockCode, secondary.getName());
+            return true;
+        }
+        if (!tryAcquire(secondary) && !waitForRateLimit(secondary, RATE_LIMIT_WAIT_MS)) {
+            log.debug("[{}] 备源 {} 限流，跳过交叉校验", stockCode, secondary.getName());
+            return true;
+        }
+
+        try {
+            List<StockDailyData> secondaryData = secondary.getHistoryData(stockCode, sampleStart, sampleEnd);
+            CrossSourceValidator.CrossCheckResult result = crossSourceValidator.validate(
+                    primaryData,
+                    secondaryData,
+                    stockCode,
+                    primaryFetcher.getName(),
+                    secondary.getName(),
+                    dataProviderConfig.getCrossCheckCloseTolerance(),
+                    dataProviderConfig.getCrossCheckOhlcTolerance(),
+                    dataProviderConfig.getCrossCheckSampleDays(),
+                    dataProviderConfig.getCrossCheckRejectRatio());
+
+            if (result.isPassed()) {
+                if (result.getComparedDays() > 0) {
+                    recordSuccess(secondary.getName());
+                }
+                return true;
+            }
+            if (dataProviderConfig.isCrossCheckRejectMode()) {
+                return false;
+            }
+            // warn 模式：记录后仍放行
+            return true;
+        } catch (Exception e) {
+            log.warn("[{}] 交叉校验拉取备源 {} 失败，跳过: {}", stockCode, secondary.getName(), e.getMessage());
+            recordFailure(secondary.getName());
+            return true;
+        }
+    }
+
+    /**
+     * 选择异族、可用、支持当前市场的备源（按优先级）。
+     * 跳过本轮已被 reject 的主源，避免脏主源反过来否决干净备源。
+     */
+    private BaseDataFetcher pickCrossCheckFetcher(BaseDataFetcher primary, MarketType market,
+                                                  Set<String> rejectedPrimaries) {
+        String primaryFamily = primary.getDataFamily();
+        return getOrderedFetchers(market).stream()
+                .filter(f -> !f.getName().equalsIgnoreCase(primary.getName()))
+                .filter(f -> rejectedPrimaries == null || !rejectedPrimaries.contains(f.getName()))
+                .filter(f -> !Objects.equals(f.getDataFamily(), primaryFamily))
+                .filter(BaseDataFetcher::isAvailable)
+                .filter(f -> !isCircuitOpen(f.getName()))
+                .findFirst()
+                .orElse(null);
     }
 
     /** 保存数据到缓存 */

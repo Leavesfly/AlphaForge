@@ -1,9 +1,10 @@
 package io.leavesfly.alphaforge.application.strategy.engine;
 
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
+import io.leavesfly.alphaforge.application.strategy.condition.BarPatternConditions;
+import io.leavesfly.alphaforge.application.strategy.condition.FactorConditions;
 import io.leavesfly.alphaforge.application.strategy.model.ScoringProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
-import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -115,7 +116,7 @@ public class CompositeScoringEngine {
             case "cycle_phase" -> marketPhase(ctx).equalsIgnoreCase(String.valueOf(expected));
             case "sentiment_score_min" -> marketSentiment(ctx) >= doubleVal(expected, -50);
             case "has_major_event" -> bool(expected) && hasMajorEvent(ctx);
-            case "event_freshness_days" -> true;
+            case "event_freshness_days" -> eventFreshnessOk(ctx, intVal(expected, 3));
             case "divergence" -> bool(expected) && hasDivergence(ctx);
             case "center_break" -> bool(expected) && hasCenterBreak(ctx);
             case "eps_revision_pct" -> quoteMetric(ctx, "eps_revision_pct") >= doubleVal(expected, 0);
@@ -123,8 +124,37 @@ public class CompositeScoringEngine {
             case "theme_heat_rank" -> quoteMetric(ctx, "theme_heat_rank") <= intVal(expected, 3)
                     && quoteMetric(ctx, "theme_heat_rank") > 0;
             case "inflow_positive" -> bool(expected) && quoteMetric(ctx, "main_inflow", "net_inflow") > 0;
-            default -> false;
+            case "channel_breakout" -> bool(expected) && channelBreakout(ctx);
+            case "channel_breakdown" -> bool(expected) && channelBreakdown(ctx);
+            case "boll_lower_touch" -> bool(expected) && bollLowerTouch(ctx);
+            case "boll_upper_touch" -> bool(expected) && bollUpperTouch(ctx);
+            case "boll_mid_reclaim" -> bool(expected) && bollMidReclaim(ctx);
+            case "momentum_up_min" -> momentumUp(ctx, doubleVal(expected, 1.5));
+            default -> evaluateFactorCondition(key, expected, ctx);
         };
+    }
+
+    /** 动态因子条件：factor_{name}_min / _max / _present */
+    private boolean evaluateFactorCondition(String key, Object expected, ScoringContext ctx) {
+        if (key == null || !key.startsWith("factor_")) {
+            return false;
+        }
+        if (key.endsWith("_min")) {
+            String name = key.substring("factor_".length(), key.length() - "_min".length());
+            return FactorConditions.matches(name, ctx.getHistory(), ctx.size() - 1,
+                    doubleVal(expected, Double.NaN), null);
+        }
+        if (key.endsWith("_max")) {
+            String name = key.substring("factor_".length(), key.length() - "_max".length());
+            return FactorConditions.matches(name, ctx.getHistory(), ctx.size() - 1,
+                    null, doubleVal(expected, Double.NaN));
+        }
+        if (key.endsWith("_present")) {
+            String name = key.substring("factor_".length(), key.length() - "_present".length());
+            return bool(expected) && !Double.isNaN(
+                    FactorConditions.compute(name, ctx.getHistory(), ctx.size() - 1));
+        }
+        return false;
     }
 
     // ── 从技术指标派生判断 ──────────────────────────────────────────
@@ -242,60 +272,19 @@ public class CompositeScoringEngine {
     }
 
     private boolean priceNearLow(ScoringContext ctx) {
-        int end = ctx.size() - 1;
-        int lookback = Math.min(60, ctx.size());
-        double low = Double.MAX_VALUE;
-        double high = Double.MIN_VALUE;
-        for (int i = end - lookback + 1; i <= end; i++) {
-            low = Math.min(low, ctx.close(i));
-            high = Math.max(high, ctx.close(i));
-        }
-        if (high <= low) return false;
-        double pos = (ctx.close(end) - low) / (high - low);
-        return pos <= 0.25;
+        return BarPatternConditions.priceNearLow(ctx.getHistory(), ctx.size() - 1, 60, 0.25);
     }
 
     private boolean consecutiveVolumeDays(ScoringContext ctx, int days) {
-        int end = ctx.size() - 1;
-        if (end < 20 + days) return false;
-        for (int i = end - days + 1; i <= end; i++) {
-            long avg = 0;
-            for (int j = i - 20; j < i; j++) avg += ctx.volume(j);
-            avg /= 20;
-            if (avg <= 0 || ctx.volume(i) < avg * 2) return false;
-        }
-        return true;
+        return BarPatternConditions.consecutiveVolumeDays(ctx.getHistory(), ctx.size() - 1, days, 2.0, 20);
     }
 
     private boolean oneYangCoversYin(ScoringContext ctx, int yinCount) {
-        int end = ctx.size() - 1;
-        if (end < yinCount) return false;
-        StockDailyData yang = ctx.getHistory().get(end);
-        if (yang.getOpenPrice() == null || yang.getClosePrice() == null) {
-            Double chg = yang.getChangePct();
-            if (chg == null || chg <= 0) return false;
-        } else if (yang.getClosePrice() <= yang.getOpenPrice()) {
-            return false;
-        }
-        double yangLow = yang.getLowPrice() != null ? yang.getLowPrice() : yang.getOpenPrice();
-        double yangHigh = yang.getHighPrice() != null ? yang.getHighPrice() : yang.getClosePrice();
-        for (int i = end - yinCount; i < end; i++) {
-            var bar = ctx.getHistory().get(i);
-            double open = bar.getOpenPrice() != null ? bar.getOpenPrice() : bar.getClosePrice();
-            double close = bar.getClosePrice();
-            if (close >= open) return false;
-            double yinHigh = bar.getHighPrice() != null ? bar.getHighPrice() : open;
-            double yinLow = bar.getLowPrice() != null ? bar.getLowPrice() : close;
-            if (yangLow > yinLow || yangHigh < yinHigh) return false;
-        }
-        return true;
+        return BarPatternConditions.oneYangCoversYin(ctx.getHistory(), ctx.size() - 1, yinCount);
     }
 
     private double volumeAmplify(ScoringContext ctx) {
-        int end = ctx.size() - 1;
-        if (end < 1) return 1;
-        long prev = ctx.volume(end - 1);
-        return prev > 0 ? (double) ctx.volume(end) / prev : 1;
+        return BarPatternConditions.volumeAmplify(ctx.getHistory(), ctx.size() - 1);
     }
 
     private boolean isLimitUp(ScoringContext ctx) {
@@ -333,22 +322,76 @@ public class CompositeScoringEngine {
                 || ctx.getMarketContext().containsKey("major_event");
     }
 
+    /**
+     * 事件新鲜度：要求 major_event 发生在近 {@code maxDays} 日内。
+     * 支持 marketContext.major_event.days_ago / quote.event_days_ago；
+     * 无时间戳时，用当日涨幅 ≥5% 作为「当日事件」代理（与回测 event_trigger 对齐）。
+     */
+    private boolean eventFreshnessOk(ScoringContext ctx, int maxDays) {
+        Object event = ctx.getMarketContext().get("major_event");
+        if (event instanceof Map<?, ?> map) {
+            Object daysAgo = map.get("days_ago");
+            if (daysAgo instanceof Number number) {
+                return number.intValue() >= 0 && number.intValue() <= maxDays;
+            }
+        }
+        Object quoteDays = ctx.getQuote().get("event_days_ago");
+        if (quoteDays instanceof Number number) {
+            return number.intValue() >= 0 && number.intValue() <= maxDays;
+        }
+        if (!hasMajorEvent(ctx) && ctx.size() > 0) {
+            Double chg = ctx.changePct(ctx.size() - 1);
+            return chg != null && chg >= 5.0;
+        }
+        // 有事件标记但无时间戳：视为当日新鲜事件
+        return hasMajorEvent(ctx);
+    }
+
     private boolean hasDivergence(ScoringContext ctx) {
         Object macd = ctx.getTechnical().get("macd");
         if (macd instanceof Map<?, ?> map) {
             String cross = map.get("cross") != null ? String.valueOf(map.get("cross")) : "";
-            return cross.contains("金叉") || "底背离".equals(String.valueOf(map.get("divergence")));
+            if (cross.contains("金叉") || "底背离".equals(String.valueOf(map.get("divergence")))) {
+                return true;
+            }
         }
-        return false;
+        // 与回测口径对齐：无预计算 MACD 时用共享金叉判断
+        return ctx.size() > 0 && BarPatternConditions.macdGoldenCross(ctx.getHistory(), ctx.size() - 1);
     }
 
     private boolean hasCenterBreak(ScoringContext ctx) {
         Object boll = ctx.getTechnical().get("boll");
         if (boll instanceof Map<?, ?> map) {
             String pos = map.get("position") != null ? String.valueOf(map.get("position")) : "";
-            return pos.contains("突破") || pos.contains("上轨");
+            if (pos.contains("突破") || pos.contains("上轨")) {
+                return true;
+            }
         }
-        return false;
+        return ctx.size() > 0 && BarPatternConditions.bollUpperBreak(ctx.getHistory(), ctx.size() - 1, 20, 2.0);
+    }
+
+    private boolean channelBreakout(ScoringContext ctx) {
+        return ctx.size() > 0 && BarPatternConditions.channelBreakout(ctx.getHistory(), ctx.size() - 1, 20);
+    }
+
+    private boolean channelBreakdown(ScoringContext ctx) {
+        return ctx.size() > 0 && BarPatternConditions.channelBreakdown(ctx.getHistory(), ctx.size() - 1, 10);
+    }
+
+    private boolean bollLowerTouch(ScoringContext ctx) {
+        return ctx.size() > 0 && BarPatternConditions.bollLowerTouch(ctx.getHistory(), ctx.size() - 1, 20, 2.0);
+    }
+
+    private boolean bollUpperTouch(ScoringContext ctx) {
+        return ctx.size() > 0 && BarPatternConditions.bollUpperTouch(ctx.getHistory(), ctx.size() - 1, 20, 2.0);
+    }
+
+    private boolean bollMidReclaim(ScoringContext ctx) {
+        return ctx.size() > 0 && BarPatternConditions.bollMidReclaim(ctx.getHistory(), ctx.size() - 1, 20);
+    }
+
+    private boolean momentumUp(ScoringContext ctx, double minChange) {
+        return ctx.size() > 0 && BarPatternConditions.momentumUp(ctx.getHistory(), ctx.size() - 1, minChange);
     }
 
     // ── 行情与工具方法 ──────────────────────────────────────────────

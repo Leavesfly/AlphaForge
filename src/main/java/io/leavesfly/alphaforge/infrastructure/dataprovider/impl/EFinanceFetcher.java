@@ -45,6 +45,7 @@ public class EFinanceFetcher implements BaseDataFetcher {
     }
 
     @Override public String getName() { return "efinance"; }
+    @Override public String getDataFamily() { return "eastmoney"; }
     @Override public int getPriority() { return 0; } // 最高优先级
     @Override public boolean isAvailable() { return true; } // 无需API Key
 

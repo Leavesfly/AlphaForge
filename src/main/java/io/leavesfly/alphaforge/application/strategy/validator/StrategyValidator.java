@@ -1,15 +1,10 @@
 package io.leavesfly.alphaforge.application.strategy.validator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.leavesfly.alphaforge.application.strategy.StrategyYamlMapper;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.condition.ScoringConditionRegistry;
-import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
-import io.leavesfly.alphaforge.application.strategy.model.ScoringProfile;
-import io.leavesfly.alphaforge.application.strategy.model.ScreeningProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
-import io.leavesfly.alphaforge.application.strategy.StrategyCatalogLoader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -20,17 +15,10 @@ import java.util.regex.Pattern;
 /**
  * 策略校验器：校验 YAML 内容的结构完整性、条件类型支持度、参数合理性。
  *
- * 校验维度：
- * 1. YAML 语法校验 — 能否被 YAML Mapper 解析
- * 2. 必填字段校验 — id / label / category 等
- * 3. 条件类型校验 — backtest 条件是否在 SUPPORTED_TYPES 中
- * 4. 评分条件校验 — scoring 条件 key 是否在 SUPPORTED_KEYS 中
- * 5. 参数合理性校验 — 仓位比例范围、均线周期等
+ * <p>同时支持旧三段（backtest/scoring/screening）与统一 {@code rules} DSL。</p>
  */
 @Component
 public class StrategyValidator {
-
-    private static final Logger log = LoggerFactory.getLogger(StrategyValidator.class);
 
     private static final Set<String> VALID_CATEGORIES = Set.of(
             "technical", "fundamental", "sentiment", "event"
@@ -51,10 +39,8 @@ public class StrategyValidator {
 
     /**
      * 校验策略 YAML 内容
-     *
-     * @param yamlContent 策略 YAML 字符串
-     * @return 校验结果
      */
+    @SuppressWarnings("unchecked")
     public ValidationResult validate(String yamlContent) {
         ValidationResult result = ValidationResult.success();
 
@@ -63,7 +49,6 @@ public class StrategyValidator {
             return result;
         }
 
-        // 1. YAML 语法校验
         Map<String, Object> raw;
         try {
             raw = yamlMapper.readValue(yamlContent, Map.class);
@@ -72,29 +57,21 @@ public class StrategyValidator {
             return result;
         }
 
-        // 2. 必填字段校验
         validateRequiredFields(raw, result);
         if (!result.isValid()) {
             return result;
         }
 
-        // 3. 字段格式校验
         validateFieldFormats(raw, result);
-
-        // 4. backtest 条件校验
         validateBacktestConditions(raw, result);
-
-        // 5. scoring 条件校验
         validateScoringConditions(raw, result);
-
-        // 6. 参数合理性校验
         validateParameters(raw, result);
 
         return result;
     }
 
     /**
-     * 校验并返回解析后的 StrategyDefinition
+     * 校验并返回解析后的 StrategyDefinition（支持旧三段与统一 rules DSL）
      */
     @SuppressWarnings("unchecked")
     public StrategyDefinition validateAndParse(String yamlContent) {
@@ -104,125 +81,14 @@ public class StrategyValidator {
         }
         try {
             Map<String, Object> raw = yamlMapper.readValue(yamlContent, Map.class);
-            StrategyDefinition definition = new StrategyDefinition();
-            definition.setId(stringVal(raw.get("id")));
-            definition.setSchemaVersion(intVal(raw.get("schema_version"), 1));
-            definition.setLabel(stringVal(raw.get("label")));
-            definition.setDescription(stringVal(raw.get("description")));
-            definition.setCategory(stringVal(raw.get("category")));
-            definition.setRiskLevel(stringVal(raw.get("risk_level"), "medium"));
-
-            if (raw.get("backtest") instanceof Map<?, ?> backtestRaw) {
-                definition.setBacktest(mapBacktest((Map<String, Object>) backtestRaw));
-            }
-            if (raw.get("screening") instanceof Map<?, ?> screeningRaw) {
-                definition.setScreening(mapScreening((Map<String, Object>) screeningRaw));
-            }
-            if (raw.get("scoring") instanceof Map<?, ?> scoringRaw) {
-                definition.setScoring(mapScoring((Map<String, Object>) scoringRaw));
-            }
-
-            List<String> caps = new java.util.ArrayList<>();
-            if (definition.getBacktest() != null) caps.add("backtest");
-            if (definition.getScreening() != null) caps.add("screening");
-            if (definition.getScoring() != null) caps.add("scoring");
-            definition.setCapabilities(caps);
+            StrategyDefinition definition = StrategyYamlMapper.mapDefinition(raw);
+            definition.setCapabilities(StrategyYamlMapper.inferCapabilities(definition));
             definition.setRuntime("implemented");
             definition.setAvailable(true);
-
-            // 解析策略元数据
-            definition.setApplicableMarket(parseStringList(raw.get("applicable_market")));
-            definition.setApplicableCap(parseStringList(raw.get("applicable_cap")));
-            definition.setTags(parseStringList(raw.get("tags")));
-
             return definition;
         } catch (Exception e) {
             throw new IllegalArgumentException("策略解析失败: " + e.getMessage(), e);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private BacktestProfile mapBacktest(Map<String, Object> raw) {
-        BacktestProfile profile = new BacktestProfile();
-        if (raw.get("parameters") instanceof Map<?, ?> params) {
-            profile.setParameters((Map<String, Object>) params);
-        }
-        if (raw.get("entry_conditions") instanceof List<?> entries) {
-            profile.setEntryConditions(entries.stream().map(this::asConditionMap).toList());
-        }
-        if (raw.get("exit_conditions") instanceof List<?> exits) {
-            profile.setExitConditions(exits.stream().map(this::asConditionMap).toList());
-        }
-        profile.setPositionSize(doubleVal(raw.get("position_size"), 0.95));
-        if (raw.get("simulation") instanceof Map<?, ?> simulation) {
-            profile.setSimulation((Map<String, Object>) simulation);
-        }
-        if (raw.get("param_space") instanceof Map<?, ?> paramSpace) {
-            Map<String, List<Object>> result = new java.util.LinkedHashMap<>();
-            for (Map.Entry<String, Object> entry : ((Map<String, Object>) paramSpace).entrySet()) {
-                if (entry.getValue() instanceof List<?> list) {
-                    result.put(entry.getKey(), new java.util.ArrayList<>(list));
-                }
-            }
-            profile.setParamSpace(result);
-        }
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private ScreeningProfile mapScreening(Map<String, Object> raw) {
-        ScreeningProfile profile = new ScreeningProfile();
-        if (raw.get("parameters") instanceof Map<?, ?> params) {
-            profile.setParameters((Map<String, Object>) params);
-        }
-        if (raw.get("scoring_rules") instanceof List<?> rules) {
-            profile.setScoringRules(rules.stream().map(this::asConditionMap).toList());
-        }
-        if (raw.get("reason_templates") instanceof Map<?, ?> templates) {
-            profile.setReasonTemplates((Map<String, String>) templates);
-        }
-        if (raw.get("fallback") instanceof Map<?, ?> fallback) {
-            profile.setFallback((Map<String, Object>) fallback);
-        }
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private ScoringProfile mapScoring(Map<String, Object> raw) {
-        ScoringProfile profile = new ScoringProfile();
-        profile.setScoreWeight(intVal(raw.get("score_weight"), 0));
-        if (raw.get("conditions") instanceof Map<?, ?> conditions) {
-            profile.setConditions((Map<String, Object>) conditions);
-        }
-        profile.setLabel(stringVal(raw.get("label")));
-        profile.setAutoDecay(Boolean.TRUE.equals(raw.get("auto_decay")));
-        profile.setDecayWindow(intVal(raw.get("decay_window"), 30));
-        profile.setMinWeight(intVal(raw.get("min_weight"), 5));
-        return profile;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> asConditionMap(Object item) {
-        return (Map<String, Object>) item;
-    }
-
-    private int intVal(Object value, int defaultValue) {
-        return value instanceof Number ? ((Number) value).intValue() : defaultValue;
-    }
-
-    private double doubleVal(Object value, double defaultValue) {
-        return value instanceof Number ? ((Number) value).doubleValue() : defaultValue;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> parseStringList(Object value) {
-        if (value instanceof List<?> list) {
-            return list.stream().map(String::valueOf).toList();
-        }
-        if (value instanceof String str && !str.isBlank()) {
-            return List.of(str.split(",")).stream().map(String::trim).filter(s -> !s.isEmpty()).toList();
-        }
-        return List.of();
     }
 
     private void validateRequiredFields(Map<String, Object> raw, ValidationResult result) {
@@ -256,31 +122,30 @@ public class StrategyValidator {
 
     @SuppressWarnings("unchecked")
     private void validateBacktestConditions(Map<String, Object> raw, ValidationResult result) {
-        Object backtestObj = raw.get("backtest");
-        if (!(backtestObj instanceof Map<?, ?> backtestRaw)) {
-            return; // backtest 段可选
+        Map<?, ?> signal = resolveSignalSection(raw);
+        if (signal == null) {
+            return;
         }
 
-        // 校验入场条件
-        if (backtestRaw.get("entry_conditions") instanceof List<?> entries) {
+        Object entry = signal.containsKey("entry") ? signal.get("entry") : signal.get("entry_conditions");
+        if (entry instanceof List<?> entries) {
             for (Object item : entries) {
                 if (item instanceof Map<?, ?> condition) {
-                    checkConditionType(condition, "backtest.entry_conditions", result);
+                    checkConditionType(condition, "signal.entry", result);
                 }
             }
         }
 
-        // 校验出场条件
-        if (backtestRaw.get("exit_conditions") instanceof List<?> exits) {
+        Object exit = signal.containsKey("exit") ? signal.get("exit") : signal.get("exit_conditions");
+        if (exit instanceof List<?> exits) {
             for (Object item : exits) {
                 if (item instanceof Map<?, ?> condition) {
-                    checkConditionType(condition, "backtest.exit_conditions", result);
+                    checkConditionType(condition, "signal.exit", result);
                 }
             }
         }
 
-        // 校验仓位比例
-        Object positionSize = backtestRaw.get("position_size");
+        Object positionSize = signal.get("position_size");
         if (positionSize instanceof Number num) {
             double ps = num.doubleValue();
             if (ps <= 0 || ps > 1) {
@@ -291,12 +156,12 @@ public class StrategyValidator {
 
     @SuppressWarnings("unchecked")
     private void validateScoringConditions(Map<String, Object> raw, ValidationResult result) {
-        Object scoringObj = raw.get("scoring");
-        if (!(scoringObj instanceof Map<?, ?> scoringRaw)) {
-            return; // scoring 段可选
+        Map<?, ?> score = resolveScoreSection(raw);
+        if (score == null) {
+            return;
         }
 
-        Object conditions = scoringRaw.get("conditions");
+        Object conditions = score.get("conditions");
         if (conditions instanceof Map<?, ?> conds) {
             for (Object key : conds.keySet()) {
                 String keyStr = String.valueOf(key);
@@ -305,26 +170,56 @@ public class StrategyValidator {
                 }
             }
         }
+
+        // rules.score.when 使用统一 type，校验 type 是否可映射
+        if (score.get("when") instanceof List<?> whenList) {
+            for (Object item : whenList) {
+                if (item instanceof Map<?, ?> condition) {
+                    Object type = condition.get("type");
+                    if (type == null || String.valueOf(type).isBlank()) {
+                        result.addError("rules.score.when 条件缺少 type");
+                        continue;
+                    }
+                    Map<String, Object> mapped = StrategyYamlMapper.typedConditionToScoringKeys(
+                            (Map<String, Object>) condition);
+                    if (mapped.isEmpty()) {
+                        result.addWarning("rules.score.when 条件暂无评分映射: " + type);
+                    } else {
+                        for (String key : mapped.keySet()) {
+                            if (!ScoringConditionRegistry.isSupportedKey(key)) {
+                                result.addWarning("映射后的 scoring key 未实现: " + key);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
     private void validateParameters(Map<String, Object> raw, ValidationResult result) {
-        Object backtestObj = raw.get("backtest");
-        if (!(backtestObj instanceof Map<?, ?> backtestRaw)) {
+        Map<?, ?> signal = resolveSignalSection(raw);
+        if (signal == null) {
             return;
         }
 
-        // 检查参数空间定义
-        if (backtestRaw.get("param_space") instanceof Map<?, ?> paramSpace) {
-            for (Map.Entry<?, ?> entry : paramSpace.entrySet()) {
+        Object paramSpace = signal.get("param_space");
+        if (paramSpace == null && raw.get("rules") instanceof Map<?, ?> rules) {
+            paramSpace = rules.get("param_space");
+        }
+        if (paramSpace instanceof Map<?, ?> space) {
+            for (Map.Entry<?, ?> entry : space.entrySet()) {
                 if (!(entry.getValue() instanceof List<?> list) || list.isEmpty()) {
                     result.addWarning("param_space 中 " + entry.getKey() + " 的搜索值为空或非列表");
                 }
             }
         }
 
-        // 检查参数中的均线周期是否为正整数
-        if (backtestRaw.get("parameters") instanceof Map<?, ?> params) {
+        Object parameters = signal.get("parameters");
+        if (parameters == null && raw.get("rules") instanceof Map<?, ?> rules) {
+            parameters = rules.get("parameters");
+        }
+        if (parameters instanceof Map<?, ?> params) {
             checkPositiveInt(params, "fast_period", result);
             checkPositiveInt(params, "slow_period", result);
             checkPositiveInt(params, "short_ma", result);
@@ -332,6 +227,28 @@ public class StrategyValidator {
             checkPositiveInt(params, "ma_period", result);
             checkPositiveInt(params, "lookback_days", result);
         }
+    }
+
+    private Map<?, ?> resolveSignalSection(Map<String, Object> raw) {
+        if (raw.get("backtest") instanceof Map<?, ?> backtest) {
+            return backtest;
+        }
+        if (raw.get("rules") instanceof Map<?, ?> rules
+                && rules.get("signal") instanceof Map<?, ?> signal) {
+            return signal;
+        }
+        return null;
+    }
+
+    private Map<?, ?> resolveScoreSection(Map<String, Object> raw) {
+        if (raw.get("scoring") instanceof Map<?, ?> scoring) {
+            return scoring;
+        }
+        if (raw.get("rules") instanceof Map<?, ?> rules
+                && rules.get("score") instanceof Map<?, ?> score) {
+            return score;
+        }
+        return null;
     }
 
     private void checkConditionType(Map<?, ?> condition, String section, ValidationResult result) {
@@ -356,9 +273,5 @@ public class StrategyValidator {
 
     private String stringVal(Object value) {
         return value == null ? "" : String.valueOf(value);
-    }
-
-    private String stringVal(Object value, String defaultValue) {
-        return value == null ? defaultValue : String.valueOf(value);
     }
 }

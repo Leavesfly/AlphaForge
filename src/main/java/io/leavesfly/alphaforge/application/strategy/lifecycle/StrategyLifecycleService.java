@@ -1,6 +1,7 @@
 package io.leavesfly.alphaforge.application.strategy.lifecycle;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.application.strategy.validator.StrategyValidator;
@@ -9,6 +10,7 @@ import io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy;
 import io.leavesfly.alphaforge.domain.repository.strategy.CustomStrategyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -32,6 +34,12 @@ public class StrategyLifecycleService {
     private final StrategyValidator validator;
     private final StrategyCatalog catalog;
     private final ObjectMapper jsonMapper;
+
+    @Autowired(required = false)
+    private StrategyPromotionGate promotionGate;
+
+    @Autowired(required = false)
+    private AutonomyPolicy autonomyPolicy;
 
     public StrategyLifecycleService(CustomStrategyRepository repository,
                                    StrategyValidator validator,
@@ -211,6 +219,19 @@ public class StrategyLifecycleService {
             throw new IllegalStateException("策略未通过校验，不能转换到 " + targetState);
         }
 
+        // TESTING → PUBLISHED：必须通过晋升质量门
+        if (currentState == StrategyLifecycleState.TESTING
+                && targetState == StrategyLifecycleState.PUBLISHED
+                && promotionGate != null) {
+            PromotionDecision decision = promotionGate.getCached(strategyId)
+                    .orElseGet(() -> promotionGate.evaluateOrLoad(strategyId, existing));
+            promotionGate.assertPromotable(decision);
+            if (autonomyPolicy != null) {
+                autonomyPolicy.audit("promote", "strategy", strategyId,
+                        currentState.name(), targetState.name(), decision.getReason());
+            }
+        }
+
         existing.setLifecycleState(targetState.name());
         repository.update(existing);
 
@@ -218,8 +239,16 @@ public class StrategyLifecycleService {
         if (targetState == StrategyLifecycleState.PUBLISHED) {
             registerToCatalog(existing);
         } else if (targetState == StrategyLifecycleState.DEPRECATED
-                || targetState == StrategyLifecycleState.ARCHIVED) {
-            catalog.remove(strategyId);
+                || targetState == StrategyLifecycleState.ARCHIVED
+                || targetState == StrategyLifecycleState.TESTING) {
+            // 从 PUBLISHED 降级时移出目录
+            if (currentState == StrategyLifecycleState.PUBLISHED) {
+                catalog.remove(strategyId);
+                if (autonomyPolicy != null) {
+                    autonomyPolicy.audit("demote", "strategy", strategyId,
+                            currentState.name(), targetState.name(), "lifecycle transition");
+                }
+            }
         }
 
         log.info("策略状态转换: id={}, {} → {}", strategyId, currentState, targetState);

@@ -35,6 +35,11 @@ public class AkShareFetcher implements BaseDataFetcher {
     }
 
     @Override
+    public String getDataFamily() {
+        return "eastmoney";
+    }
+
+    @Override
     public int getPriority() {
         return 1;
     }

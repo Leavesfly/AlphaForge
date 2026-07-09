@@ -51,10 +51,11 @@ class StrategyControllerTest {
         assertEquals(200, response.getStatusCode().value());
         Map<String, Object> body = response.getBody();
         assertNotNull(body);
-        assertEquals(19, body.get("total"));
+        assertEquals(23, body.get("total"));
         List<Map<String, Object>> strategies = (List<Map<String, Object>>) body.get("strategies");
-        assertEquals(19, strategies.size());
+        assertEquals(23, strategies.size());
         assertTrue(strategies.stream().anyMatch(s -> "ma_golden_cross".equals(s.get("id"))));
+        assertTrue(strategies.stream().anyMatch(s -> "multi_factor".equals(s.get("id"))));
     }
 
     @Test
@@ -79,6 +80,6 @@ class StrategyControllerTest {
 
         Map<String, Object> body = response.getBody();
         assertNotNull(body);
-        assertEquals(4, body.get("total"));
+        assertEquals(6, body.get("total"));
     }
 }

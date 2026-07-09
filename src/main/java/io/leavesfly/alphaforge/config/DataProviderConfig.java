@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
  * - ALPHAVANTAGE_API_KEY: Alpha Vantage API Key
  * - FINNHUB_API_KEY: Finnhub API Key
  * - TICKFLOW_API_KEY / TICKFLOW_BASE_URL: TickFlow 证件
+ * - CROSS_CHECK_MODE: 多源交叉校验模式 off / warn / reject（默认 warn）
+ * - CROSS_CHECK_SAMPLE_DAYS / CROSS_CHECK_CLOSE_TOLERANCE / CROSS_CHECK_OHLC_TOLERANCE / CROSS_CHECK_REJECT_RATIO
  */
 @Component
 public class DataProviderConfig {
@@ -33,6 +35,13 @@ public class DataProviderConfig {
     private String tickflowApiKey = "";
     private String tickflowBaseUrl = "https://api.tickflow.org";
 
+    /** 交叉校验模式: off / warn / reject */
+    private String crossCheckMode = "warn";
+    private int crossCheckSampleDays = 20;
+    private double crossCheckCloseTolerance = 0.005;
+    private double crossCheckOhlcTolerance = 0.01;
+    private double crossCheckRejectRatio = 0.10;
+
     public DataProviderConfig(EnvVarProvider envVarProvider) {
         this.envVarProvider = envVarProvider;
     }
@@ -48,11 +57,26 @@ public class DataProviderConfig {
         finnhubApiKey        = envVarProvider.get("FINNHUB_API_KEY",         "");
         tickflowApiKey       = envVarProvider.get("TICKFLOW_API_KEY",        "");
         tickflowBaseUrl      = envVarProvider.get("TICKFLOW_BASE_URL",       "https://api.tickflow.org");
-        log.info("数据源配置加载完成: provider={}, tushare={}, longbridge={}, tickflow={}",
+        crossCheckMode       = normalizeCrossCheckMode(envVarProvider.get("CROSS_CHECK_MODE", "warn"));
+        crossCheckSampleDays = Math.max(1, envVarProvider.getInt("CROSS_CHECK_SAMPLE_DAYS", 20));
+        crossCheckCloseTolerance = envVarProvider.getDouble("CROSS_CHECK_CLOSE_TOLERANCE", 0.005);
+        crossCheckOhlcTolerance = envVarProvider.getDouble("CROSS_CHECK_OHLC_TOLERANCE", 0.01);
+        crossCheckRejectRatio = envVarProvider.getDouble("CROSS_CHECK_REJECT_RATIO", 0.10);
+        log.info("数据源配置加载完成: provider={}, tushare={}, longbridge={}, tickflow={}, crossCheck={}",
                 dataProvider,
                 tushareToken.isEmpty() ? "未配置" : "已配置",
                 longbridgeAppKey.isEmpty() ? "未配置" : "已配置",
-                tickflowApiKey.isEmpty() ? "未配置" : "已配置");
+                tickflowApiKey.isEmpty() ? "未配置" : "已配置",
+                crossCheckMode);
+    }
+
+    private static String normalizeCrossCheckMode(String mode) {
+        if (mode == null || mode.isBlank()) return "warn";
+        String m = mode.trim().toLowerCase();
+        return switch (m) {
+            case "off", "warn", "reject" -> m;
+            default -> "warn";
+        };
     }
 
     // Getters
@@ -65,4 +89,17 @@ public class DataProviderConfig {
     public String getFinnhubApiKey()         { return finnhubApiKey; }
     public String getTickflowApiKey()        { return tickflowApiKey; }
     public String getTickflowBaseUrl()       { return tickflowBaseUrl; }
+    public String getCrossCheckMode()        { return crossCheckMode; }
+    public int getCrossCheckSampleDays()     { return crossCheckSampleDays; }
+    public double getCrossCheckCloseTolerance() { return crossCheckCloseTolerance; }
+    public double getCrossCheckOhlcTolerance()  { return crossCheckOhlcTolerance; }
+    public double getCrossCheckRejectRatio()    { return crossCheckRejectRatio; }
+
+    public boolean isCrossCheckEnabled() {
+        return !"off".equalsIgnoreCase(crossCheckMode);
+    }
+
+    public boolean isCrossCheckRejectMode() {
+        return "reject".equalsIgnoreCase(crossCheckMode);
+    }
 }

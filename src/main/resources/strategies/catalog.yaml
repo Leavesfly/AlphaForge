@@ -2,18 +2,19 @@
 # 策略总目录（catalog）
 #
 # 加载顺序：本文件 → definitions/{category}/{id}.yaml
-# 引擎对应关系：
-#   backtest  → BacktestSignalEngine（历史 K 线回测）
-#   screening → ScreeningScoreEngine（实时行情选股）
-#   scoring   → CompositeScoringEngine（综合分析加权评分）
+# 定义格式：统一 rules DSL（signal / score / rank）
+#   rules.signal → BacktestSignalEngine（历史回测）
+#   rules.score  → CompositeScoringEngine（综合评分）
+#   rules.rank   → ScreeningScoreEngine（智能选股）
+# 能力标识仍用 backtest / scoring / screening（与引擎 API 对齐）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 
 # 能力说明
 capabilities:
-  backtest: 历史回测（入场/出场信号模拟）
-  screening: 智能选股（AlphaSift 全市场打分筛选）
-  scoring: 综合分析（多策略加权评分，CompositeScoringEngine）
+  backtest: 历史回测（rules.signal → 入场/出场信号）
+  screening: 智能选股（rules.rank → AlphaSift 打分）
+  scoring: 综合分析（rules.score → 多策略加权）
 
 # 策略分类（中文标签）
 categories:
@@ -78,49 +79,70 @@ strategies:
     capabilities: [backtest, scoring]
     runtime: implemented
 
-  # ── 综合评分策略（scoring 段，CompositeScoringEngine）──
+  # ── 综合评分策略（均已补 backtest；部分为可计算近似）──
   bottom_volume:
     file: definitions/technical/bottom_volume.yaml
-    capabilities: [scoring]
+    capabilities: [backtest, scoring]
     runtime: implemented
 
   chan_theory:
     file: definitions/technical/chan_theory.yaml
-    capabilities: [scoring]
+    capabilities: [backtest, scoring]
     runtime: implemented
 
   expectation_repricing:
     file: definitions/fundamental/expectation_repricing.yaml
-    capabilities: [scoring]
+    capabilities: [backtest, scoring]
     runtime: implemented
 
   hot_theme:
     file: definitions/sentiment/hot_theme.yaml
-    capabilities: [scoring]
+    capabilities: [backtest, scoring]
     runtime: implemented
 
   one_yang_three_yin:
     file: definitions/technical/one_yang_three_yin.yaml
-    capabilities: [scoring]
+    capabilities: [backtest, scoring]
     runtime: implemented
 
-  # ── 智能选股策略（screening 段）──────────────────────────
+  # ── 智能选股策略（均已补 backtest；基本面依赖参数注入或技术代理）──
   dual_low:
     file: definitions/fundamental/dual_low.yaml
-    capabilities: [screening]
+    capabilities: [backtest, screening]
     runtime: implemented
 
   value_growth:
     file: definitions/fundamental/value_growth.yaml
-    capabilities: [screening]
+    capabilities: [backtest, screening]
     runtime: implemented
 
   momentum:
     file: definitions/technical/momentum.yaml
-    capabilities: [screening]
+    capabilities: [backtest, screening]
     runtime: implemented
 
   dividend:
     file: definitions/fundamental/dividend.yaml
-    capabilities: [screening]
+    capabilities: [backtest, screening]
+    runtime: implemented
+
+  # ── 经典量化补齐（因子 / 通道突破 / 均值回归）──
+  short_reversal:
+    file: definitions/technical/short_reversal.yaml
+    capabilities: [backtest, scoring, screening]
+    runtime: implemented
+
+  multi_factor:
+    file: definitions/fundamental/multi_factor.yaml
+    capabilities: [backtest, scoring, screening]
+    runtime: implemented
+
+  channel_breakout:
+    file: definitions/technical/channel_breakout.yaml
+    capabilities: [backtest, scoring]
+    runtime: implemented
+
+  boll_mean_reversion:
+    file: definitions/technical/boll_mean_reversion.yaml
+    capabilities: [backtest, scoring]
     runtime: implemented

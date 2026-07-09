@@ -1,7 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 放量突破策略
-# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
-# 逻辑：放量上涨突破时买入，大跌或止盈止损时卖出
+# 放量突破策略（统一 rules DSL 试点）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: volume_breakout
@@ -13,36 +11,41 @@ applicable_market: [bull, range]
 applicable_cap: [mid, small]
 tags: [突破, 放量, 动量, 短线]
 
-backtest:
+rules:
   parameters:
-    volume_multiple: 2.0   # 成交量需超过均量的倍数
-    min_change_pct: 3.0    # 最低涨幅要求（%）
-    ma_period: 20          # 均量计算周期（日）
-
-  # 参数搜索空间
+    volume_multiple: 2.0
+    min_change_pct: 3.0
+    ma_period: 20
   param_space:
     volume_multiple: [1.5, 2.0, 2.5, 3.0]
     min_change_pct: [2.0, 3.0, 4.0]
+  position_sizing:
+    mode: atr
+    risk_fraction: 0.012
+    atr_period: 14
+    atr_multiplier: 2.0
 
-  entry_conditions:
-    - type: volume_breakout
-      multiple: 2.0
-      min_change: 3.0
+  signal:
+    position_size: 0.80
+    entry:
+      - type: volume_breakout
+        multiple: 2.0
+        min_change: 3.0
+    exit:
+      - type: change_below
+        pct: -5
+      - type: atr_stop
+        period: 14
+        multiplier: 2.0
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 15
 
-  exit_conditions:
-    - type: change_below
-      pct: -5              # 单日跌幅超过 5% 卖出
-    - type: stop_loss
-      pct: -10
-    - type: take_profit
-      pct: 15              # 盈利 15% 止盈
-
-  position_size: 0.80
-
-# 综合分析评分权重
-scoring:
-  score_weight: 18         # 在组合评分中的权重
-  conditions:
-    breakout_resistance: true       # 突破前期压力位
-    volume_ratio_min: 2.0           # 量比下限
-    close_above_resistance: true    # 收盘价站上压力位
+  score:
+    weight: 18
+    # 突破类评分仍保留扁平 key（含阻力位语义，暂无单一 type 覆盖）
+    conditions:
+      breakout_resistance: true
+      volume_ratio_min: 2.0
+      close_above_resistance: true

@@ -1,12 +1,15 @@
 package io.leavesfly.alphaforge.presentation.scheduler;
 
-import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
+import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
-import io.leavesfly.alphaforge.application.service.signal.SignalOutcomeEvaluator;
 import io.leavesfly.alphaforge.application.service.loop.LoopStateManager;
+import io.leavesfly.alphaforge.application.service.signal.DecisionSignalService;
+import io.leavesfly.alphaforge.application.service.signal.SignalOutcomeEvaluator;
+import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -36,6 +39,12 @@ public class AnalysisScheduler {
     private final SignalOutcomeEvaluator outcomeEvaluator;
     private final LoopStateManager loopState;
     private volatile boolean running = false;
+
+    @Autowired(required = false)
+    private AutonomyPolicy autonomyPolicy;
+
+    @Autowired(required = false)
+    private DecisionSignalService decisionSignalService;
 
     public AnalysisScheduler(SchedulerAuthConfig schedulerAuthConfig, StockAnalysisPipeline pipeline,
                              TradingCalendar tradingCalendar,
@@ -91,6 +100,13 @@ public class AnalysisScheduler {
             int stocks = result.containsKey("total_stocks") ?
                     ((Number) result.get("total_stocks")).intValue() : 0;
             loopState.onLoopComplete(loopType, System.currentTimeMillis() - start, stocks);
+
+            // L4：盘后自动执行活跃信号（受 autonomy.auto-execute-signals 控制）
+            if (autonomyPolicy != null && autonomyPolicy.canAutoExecuteSignals()
+                    && decisionSignalService != null) {
+                int n = decisionSignalService.executeActiveSignals();
+                log.info("[Loop3] 纸面信号执行完成: {} 条", n);
+            }
         } catch (Exception e) {
             log.error("[Loop3] 盘后分析失败: {}", e.getMessage(), e);
             loopState.onLoopError(loopType, e.getMessage());

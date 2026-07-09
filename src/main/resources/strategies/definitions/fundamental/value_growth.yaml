@@ -1,6 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 价值成长策略（智能选股）
-# 核心指标 PEG = PE ÷ 预估增速，由引擎现场计算
+# 价值成长策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: value_growth
@@ -8,25 +7,54 @@ label: 价值成长
 description: PEG < 1.5 的成长价值兼具标的
 category: fundamental
 risk_level: medium
+applicable_market: [bull, recovery]
+applicable_cap: [large, mid]
+tags: [成长, PEG, 价值, 中线]
 
-screening:
+rules:
   parameters:
-    peg_max: 1.5                  # PEG 合格线
-    growth_estimate_offset: 15  # 预估增速 ≈ 涨跌幅 + 15（简化估算）
+    min_revenue_growth: 15
+    min_roe: 12
+    max_pe: 40
+    support_ma: 60
+    lookback_days: 20
+  param_space:
+    min_revenue_growth: [10, 15, 20]
+    max_pe: [30, 40, 50]
 
-  # PEG 越低分越高：得分 = (1.5 - PEG) × 60
-  scoring_rules:
-    - metric: peg       # 引擎计算：PE ÷ max(涨跌幅 + offset, 5)
-      operator: lt
-      threshold: 1.5
-      weight: 60
+  signal:
+    position_size: 0.80
+    entry:
+      - type: fundamental_filter
+        revenue_growth_min: 15
+        roe_min: 12
+        max_pe: 40
+      - type: trend_above
+        ma: 60
+      - type: price_near_support
+        tolerance_pct: 4.0
+    exit:
+      - type: fundamental_deterioration
+      - type: break_below_ma
+        ma: 60
+      - type: stop_loss
+        pct: -15
+      - type: take_profit
+        pct: 35
 
-  reason_templates:
-    high: 成长性突出
-    low: 价值成长兼具
-
-  # 没有 PE 时走兜底（30~80 分）
-  fallback:
-    metrics: [pe]
-    score_min: 30
-    score_max: 80
+  rank:
+    parameters:
+      peg_max: 1.5
+      growth_estimate_offset: 15
+    scoring_rules:
+      - metric: peg
+        operator: lt
+        threshold: 1.5
+        weight: 60
+    reason_templates:
+      high: 成长性突出
+      low: 价值成长兼具
+    fallback:
+      metrics: [pe]
+      score_min: 30
+      score_max: 80

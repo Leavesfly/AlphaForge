@@ -34,6 +34,7 @@ public class BacktestService {
     private final StrategyCatalog catalog;
     private final BacktestSimulator simulator;
     private final BacktestSignalEngine signalEngine;
+    private final FundamentalSnapshotLoader fundamentalLoader;
     private final ObjectMapper objectMapper;
 
     public BacktestService(MarketDataPort dataFetcher,
@@ -41,12 +42,14 @@ public class BacktestService {
                            StrategyCatalog catalog,
                            BacktestSimulator simulator,
                            BacktestSignalEngine signalEngine,
+                           FundamentalSnapshotLoader fundamentalLoader,
                            ObjectMapper objectMapper) {
         this.dataFetcher = dataFetcher;
         this.backtestRepo = backtestRepo;
         this.catalog = catalog;
         this.simulator = simulator;
         this.signalEngine = signalEngine;
+        this.fundamentalLoader = fundamentalLoader;
         this.objectMapper = objectMapper;
     }
 
@@ -74,7 +77,9 @@ public class BacktestService {
             return null;
         }
 
-        BacktestSimulationResult result = simulator.simulate(historyData, strategy, initialCapital, config);
+        PointInTimeFundamentals fundamentals = fundamentalLoader.load(stockCode, strategy);
+        BacktestSimulationResult result = simulator.simulate(
+                historyData, strategy, initialCapital, config, fundamentals);
         BacktestRecord record = toRecord(stockCode, strategyName, startDate, endDate, initialCapital, historyData, strategy, config, result);
         backtestRepo.save(record);
         log.info("回测完成: {} 总收益: {}% 最大回撤: {}% 交易成本: {}",

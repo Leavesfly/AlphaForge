@@ -1,6 +1,6 @@
 # ──────────────────────────────────────────────────────────────
-# 动量策略（智能选股）
-# 按当日涨跌幅分档计分，规则按顺序匹配，命中第一条即停止
+# 动量策略（统一 rules DSL 试点）
+# signal → 回测 | rank → 选股打分
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: momentum
@@ -12,21 +12,35 @@ applicable_market: [bull, range]
 applicable_cap: [mid, small]
 tags: [动量, 涨幅, 强势, 短线]
 
-screening:
+rules:
   parameters:
-    strong_change_pct: 1.5   # 「强势」涨幅门槛（%）
+    strong_change_pct: 1.5
+  param_space:
+    strong_change_pct: [1.0, 1.5, 2.0, 3.0]
 
-  # 条件公式规则（when + formula），自上而下匹配
-  scoring_rules:
-    # 涨幅 > 1.5%：得分 = 50 + 涨幅 × 8
-    - when: change_pct_gt
-      threshold: 1.5
-      formula: "50 + change_pct * 8"
-    # 涨幅 > 0%（弱势上涨）：得分 = 30 + 涨幅 × 12
-    - when: change_pct_gt
-      threshold: 0
-      formula: "30 + change_pct * 12"
+  signal:
+    position_size: 0.70
+    entry:
+      - type: momentum_up
+        min_change: 1.5
+    exit:
+      - type: change_below
+        pct: -3
+      - type: stop_loss
+        pct: -8
+      - type: take_profit
+        pct: 12
+      - type: holding_days
+        max: 5
 
-  reason_templates:
-    high: 强势突破   # 分数 > 70
-    low: 趋势向好    # 分数 ≤ 70
+  rank:
+    scoring_rules:
+      - when: change_pct_gt
+        threshold: 1.5
+        formula: "50 + change_pct * 8"
+      - when: change_pct_gt
+        threshold: 0
+        formula: "30 + change_pct * 12"
+    reason_templates:
+      high: 强势突破
+      low: 趋势向好

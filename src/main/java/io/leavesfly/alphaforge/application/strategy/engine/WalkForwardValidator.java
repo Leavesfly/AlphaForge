@@ -162,6 +162,7 @@ public class WalkForwardValidator {
         variantProfile.setEntryConditions(originalProfile.getEntryConditions());
         variantProfile.setExitConditions(originalProfile.getExitConditions());
         variantProfile.setPositionSize(originalProfile.getPositionSize());
+        variantProfile.setPositionSizing(originalProfile.getPositionSizing());
         variantProfile.setSimulation(originalProfile.getSimulation());
         variant.setBacktest(variantProfile);
         return variant;

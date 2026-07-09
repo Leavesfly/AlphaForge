@@ -1,17 +1,41 @@
 # ──────────────────────────────────────────────────────────────
-# 缠论策略（综合分析评分）
-# 引擎：scoring → CompositeScoringEngine
-# 逻辑：基于缠中说禅理论的背驰与中枢突破判断买卖点
+# 缠论策略（统一 rules DSL）
+# 背驰≈MACD金叉，中枢突破≈布林上轨突破
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: chan_theory
 label: 缠论
-description: 基于缠中说禅理论的买卖点判断
+description: 基于缠中说禅理论的买卖点判断（回测用 MACD/布林近似）
 category: technical
 risk_level: medium
+applicable_market: [bull, range, recovery]
+applicable_cap: [large, mid, small]
+tags: [缠论, 背驰, 中枢, 技术]
 
-scoring:
-  score_weight: 12
-  conditions:
-    divergence: true                # 出现背驰信号
-    center_break: true              # 突破中枢
+rules:
+  parameters:
+    boll_period: 20
+    boll_std: 2.0
+  param_space:
+    boll_period: [15, 20, 30]
+    boll_std: [1.5, 2.0, 2.5]
+
+  signal:
+    position_size: 0.80
+    entry:
+      - type: macd_golden_cross
+      - type: boll_upper_break
+        period: 20
+        std_mult: 2.0
+    exit:
+      - type: macd_death_cross
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 18
+
+  score:
+    weight: 12
+    when:
+      - type: macd_golden_cross
+      - type: boll_upper_break

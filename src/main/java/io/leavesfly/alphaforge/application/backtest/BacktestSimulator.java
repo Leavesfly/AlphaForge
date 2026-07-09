@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 真实感回测仿真器：次日开盘成交、T+1、交易成本、涨跌停与停牌约束。
@@ -30,9 +31,19 @@ public class BacktestSimulator {
                                            StrategyDefinition strategy,
                                            double initialCapital,
                                            BacktestSimulationConfig config) {
+        return simulate(data, strategy, initialCapital, config, PointInTimeFundamentals.empty());
+    }
+
+    public BacktestSimulationResult simulate(List<StockDailyData> data,
+                                           StrategyDefinition strategy,
+                                           double initialCapital,
+                                           BacktestSimulationConfig config,
+                                           PointInTimeFundamentals fundamentals) {
         BacktestProfile profile = strategy.getBacktest();
-        double positionSize = profile.getPositionSize();
+        double basePositionSize = profile.getPositionSize();
+        Map<String, Object> positionSizing = profile.getPositionSizing();
         int warmup = signalEngine.computeWarmupDays(strategy);
+        PointInTimeFundamentals pit = fundamentals != null ? fundamentals : PointInTimeFundamentals.empty();
 
         BacktestSimulationResult result = new BacktestSimulationResult();
         SimulationState state = new SimulationState(initialCapital);
@@ -42,8 +53,14 @@ public class BacktestSimulator {
 
         for (int i = warmup; i < data.size(); i++) {
             StockDailyData bar = data.get(i);
+            Map<String, Object> overlay = pit.asOf(bar.getTradeDate(), bar.getClosePrice());
 
             if (config.getExecutionMode() == ExecutionMode.NEXT_OPEN) {
+                // NEXT_OPEN：用信号日（前一日）的 ATR 决定仓位
+                int sizingIndex = state.pendingBuy && state.signalBarIndex >= 0
+                        ? state.signalBarIndex : Math.max(0, i - 1);
+                double positionSize = PositionSizer.resolve(
+                        basePositionSize, positionSizing, data, sizingIndex);
                 executePendingOrders(bar, i, positionSize, config, state, result);
             }
 
@@ -59,8 +76,10 @@ public class BacktestSimulator {
                 }
             }
 
-            int signal = signalEngine.signal(strategy, data, i, state.shares > 0, state.entryPrice, state.entryDay);
+            int signal = signalEngine.signal(strategy, data, i, state.shares > 0,
+                    state.entryPrice, state.entryDay, overlay);
             if (config.getExecutionMode() == ExecutionMode.CLOSE) {
+                double positionSize = PositionSizer.resolve(basePositionSize, positionSizing, data, i);
                 applyCloseExecution(bar, i, positionSize, config, state, result, signal);
             } else {
                 queueNextOpenOrders(config, state, signal, i);
@@ -68,7 +87,8 @@ public class BacktestSimulator {
         }
 
         forceCloseAtEnd(data, config, state, result);
-        finalizeMetrics(data, warmup, initialCapital, state, dailyReturns, result, config);
+        finalizeMetrics(data, warmup, initialCapital, state, dailyReturns, result, config, positionSizing);
+        result.getDiagnostics().put("fundamentals_snapshots", pit.size());
         return result;
     }
 
@@ -79,6 +99,7 @@ public class BacktestSimulator {
         if (signal == 1 && state.shares == 0) {
             state.pendingBuy = true;
             state.pendingSell = false;
+            state.signalBarIndex = signalIndex;
             return;
         }
         if (signal == -1 && state.shares > 0) {
@@ -88,6 +109,7 @@ public class BacktestSimulator {
             }
             state.pendingSell = true;
             state.pendingBuy = false;
+            state.signalBarIndex = signalIndex;
         }
     }
 
@@ -273,7 +295,8 @@ public class BacktestSimulator {
                                  SimulationState state,
                                  List<Double> dailyReturns,
                                  BacktestSimulationResult result,
-                                 BacktestSimulationConfig config) {
+                                 BacktestSimulationConfig config,
+                                 Map<String, Object> positionSizing) {
         double lastClose = requirePrice(data.get(data.size() - 1).getClosePrice(), data.get(data.size() - 1), "close");
         double finalValue = state.cash + state.shares * lastClose;
         double benchmarkReturn = (lastClose - data.get(warmup).getClosePrice())
@@ -317,6 +340,15 @@ public class BacktestSimulator {
         result.getDiagnostics().put("t1_blocked_sells", state.t1BlockedSells);
         result.getDiagnostics().put("open_position_at_end", state.shares > 0);
         result.getDiagnostics().put("equity_curve", result.getEquityCurve());
+        result.getDiagnostics().put("position_sizing_mode", positionSizingMode(positionSizing));
+    }
+
+    private String positionSizingMode(Map<String, Object> positionSizing) {
+        if (positionSizing == null || positionSizing.isEmpty()) {
+            return "fixed";
+        }
+        Object mode = positionSizing.get("mode");
+        return mode != null ? String.valueOf(mode) : "fixed";
     }
 
     private void recordEquitySnapshot(BacktestSimulationResult result,
@@ -384,6 +416,7 @@ public class BacktestSimulator {
         int entryDay = -1;
         boolean pendingBuy;
         boolean pendingSell;
+        int signalBarIndex = -1;
         double peakValue;
         double maxDrawdown;
         int completedTrades;

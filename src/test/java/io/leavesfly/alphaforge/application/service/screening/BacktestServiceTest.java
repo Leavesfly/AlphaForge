@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.application.service.screening;
 
 import io.leavesfly.alphaforge.application.backtest.BacktestService;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
+import io.leavesfly.alphaforge.application.backtest.FundamentalSnapshotLoader;
 import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
@@ -40,6 +41,7 @@ class BacktestServiceTest {
         BacktestSignalEngine signalEngine = new BacktestSignalEngine(new BacktestConditionEvaluator());
         service = new BacktestService(dataFetcher, backtestRepo, StrategyTestData.loadCatalog(),
                 new BacktestSimulator(signalEngine), signalEngine,
+                new FundamentalSnapshotLoader(dataFetcher),
                 new com.fasterxml.jackson.databind.ObjectMapper()
                         .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
                         .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS));

@@ -1,7 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 情绪周期策略
-# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
-# 逻辑：情绪极度低迷时买入，极度亢奋时卖出（逆向操作）
+# 情绪周期策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: emotion_cycle
@@ -10,26 +8,25 @@ description: 跟踪市场情绪周期高低点做反向操作
 category: sentiment
 risk_level: medium
 
-backtest:
+rules:
   parameters:
-    sentiment_period: 20            # 情绪指标计算周期
-    oversold_threshold: 20          # 超卖阈值
-    overbought_threshold: 80        # 超买阈值
+    sentiment_period: 20
+    oversold_threshold: 20
+    overbought_threshold: 80
 
-  entry_conditions:
-    - type: sentiment_extreme
-      level: oversold               # 情绪极度低迷时买入
+  signal:
+    position_size: 0.60
+    entry:
+      - type: sentiment_extreme
+        level: oversold
+    exit:
+      - type: sentiment_extreme
+        level: overbought
+      - type: stop_loss
+        pct: -7
 
-  exit_conditions:
-    - type: sentiment_extreme
-      level: overbought             # 情绪极度亢奋时卖出
-    - type: stop_loss
-      pct: -7
-
-  position_size: 0.60
-
-scoring:
-  score_weight: 10
-  conditions:
-    cycle_phase: recovery           # 情绪周期处于回暖阶段
-    sentiment_score_min: -50        # 情绪分数下限
+  score:
+    weight: 10
+    conditions:
+      cycle_phase: recovery
+      sentiment_score_min: -50

@@ -1,9 +1,12 @@
 package io.leavesfly.alphaforge.application.service.signal;
 
+import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
+import io.leavesfly.alphaforge.application.autonomy.SignalToPortfolioExecutor;
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
 import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -19,6 +22,12 @@ public class DecisionSignalService {
 
     private static final Logger log = LoggerFactory.getLogger(DecisionSignalService.class);
     private final DecisionSignalRepository signalRepo;
+
+    @Autowired(required = false)
+    private AutonomyPolicy autonomyPolicy;
+
+    @Autowired(required = false)
+    private SignalToPortfolioExecutor signalExecutor;
 
     public DecisionSignalService(DecisionSignalRepository signalRepo) {
         this.signalRepo = signalRepo;
@@ -76,9 +85,45 @@ public class DecisionSignalService {
         return signal;
     }
 
-    /** 标记信号为已执行 */
+    /**
+     * 标记信号为已执行；若开启 auto-execute，先走纸面下单。
+     */
     public DecisionSignal executeSignal(Long id) {
+        DecisionSignal signal = signalRepo.findById(id);
+        if (signal == null) return null;
+
+        if (autonomyPolicy != null && autonomyPolicy.canAutoExecuteSignals()
+                && signalExecutor != null) {
+            try {
+                Map<String, Object> execResult = signalExecutor.execute(signal);
+                log.info("信号 {} 纸面执行结果: {}", id, execResult);
+                Object skipped = execResult.get("skipped");
+                if (Boolean.TRUE.equals(skipped) && execResult.containsKey("error")) {
+                    // 风控/执行失败：不改状态，保持 active
+                    return signal;
+                }
+            } catch (Exception e) {
+                log.warn("信号 {} 自动执行失败，保持 active: {}", id, e.getMessage());
+                return signal;
+            }
+        }
         return updateSignalStatus(id, "executed");
+    }
+
+    /** 批量执行活跃信号（调度器用） */
+    public int executeActiveSignals() {
+        if (autonomyPolicy == null || !autonomyPolicy.canAutoExecuteSignals() || signalExecutor == null) {
+            return 0;
+        }
+        List<DecisionSignal> active = getActiveSignals();
+        int executed = 0;
+        for (DecisionSignal s : active) {
+            DecisionSignal after = executeSignal(s.getId());
+            if (after != null && "executed".equals(after.getStatus())) {
+                executed++;
+            }
+        }
+        return executed;
     }
 
     /** 取消信号 */

@@ -38,6 +38,7 @@ public class AlphaSiftScreeningEngine {
     private final EnvVarProvider envVarProvider;
     private final StrategyCatalog catalog;
     private final ScreeningScoreEngine scoreEngine;
+    private final CrossSectionalFactorEnricher factorEnricher;
     private final WatchlistService watchlistService;
     private final AlphaSiftTaskRepository taskRepo;
     private final ObjectMapper objectMapper;
@@ -56,6 +57,7 @@ public class AlphaSiftScreeningEngine {
                                     EnvVarProvider envVarProvider,
                                     StrategyCatalog catalog,
                                     ScreeningScoreEngine scoreEngine,
+                                    CrossSectionalFactorEnricher factorEnricher,
                                     WatchlistService watchlistService,
                                     AlphaSiftTaskRepository taskRepo,
                                     ObjectMapper objectMapper) {
@@ -64,6 +66,7 @@ public class AlphaSiftScreeningEngine {
         this.envVarProvider = envVarProvider;
         this.catalog = catalog;
         this.scoreEngine = scoreEngine;
+        this.factorEnricher = factorEnricher;
         this.watchlistService = watchlistService;
         this.taskRepo = taskRepo;
         this.objectMapper = objectMapper;
@@ -132,13 +135,24 @@ public class AlphaSiftScreeningEngine {
         List<Map<String, Object>> candidates = new ArrayList<>();
         int scanned = 0;
 
+        // 先批量拉行情，再注入截面因子分位，最后打分
+        Map<String, Map<String, Object>> quotesByCode = new LinkedHashMap<>();
+        for (Map<String, String> stock : pool) {
+            Map<String, Object> quote = dataFetcher.getRealtimeQuote(stock.get("code"));
+            if (quote != null && !quote.isEmpty()) {
+                // 可变副本，便于 enrich 写入 factor_*_rank
+                quotesByCode.put(stock.get("code"), new LinkedHashMap<>(quote));
+            }
+        }
+        factorEnricher.enrich(definition, quotesByCode);
+
         for (Map<String, String> stock : pool) {
             scanned++;
             if (taskId != null && scanned % 5 == 0) {
                 int progress = Math.min(95, scanned * 100 / Math.max(pool.size(), 1));
                 taskRepo.updateStatus(taskId, "running", progress);
             }
-            Map<String, Object> quote = dataFetcher.getRealtimeQuote(stock.get("code"));
+            Map<String, Object> quote = quotesByCode.get(stock.get("code"));
             if (quote == null || quote.isEmpty()) {
                 continue;
             }
@@ -152,6 +166,12 @@ public class AlphaSiftScreeningEngine {
                 item.put("reason", scoreEngine.reason(definition, score));
                 item.put("strategy", definition.getId());
                 item.put("change_pct", quote.get("change_pct"));
+                // 透出截面分位，便于前端/调试
+                for (Map.Entry<String, Object> e : quote.entrySet()) {
+                    if (e.getKey().startsWith("factor_") && e.getKey().endsWith("_rank")) {
+                        item.put(e.getKey(), e.getValue());
+                    }
+                }
                 candidates.add(item);
             }
         }

@@ -232,7 +232,11 @@ public class AgentAnalysisService {
             try {
                 LlmAnalysisQuality quality = analysisQualityAssessor.assess(response, context);
                 if (quality.hasHallucinations()) {
-                    log.warn("[{}] LLM 分析存在 {} 处数据幻觉", stockCode, quality.getHallucinations().size());
+                    log.warn("[{}] LLM 分析存在 {} 处数据幻觉 — 阻断决策信号落库",
+                            stockCode, quality.getHallucinations().size());
+                    result.blockSignal = true;
+                    // 置信度封顶为低
+                    result.confidence = "低";
                 }
                 if (quality.hasLogicalContradictions()) {
                     log.warn("[{}] LLM 分析存在 {} 处逻辑矛盾", stockCode, quality.getLogicalContradictions().size());

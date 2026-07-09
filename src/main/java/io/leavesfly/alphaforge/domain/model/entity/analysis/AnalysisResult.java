@@ -27,6 +27,8 @@ public class AnalysisResult {
     public Double pricePosition;
     public Map<String, Object> compositeScoring;
     public Double qualityScore;
+    /** L4：幻觉/质量硬门 — true 时禁止落库决策信号 */
+    public boolean blockSignal;
 
     public static AnalysisResult dryRun(String code, String name) {
         AnalysisResult r = new AnalysisResult();

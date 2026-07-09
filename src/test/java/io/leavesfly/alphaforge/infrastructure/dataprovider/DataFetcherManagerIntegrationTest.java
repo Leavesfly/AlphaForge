@@ -36,6 +36,8 @@ class DataFetcherManagerIntegrationTest {
     void setUp() {
         DataProviderConfig mockDataProviderConfig = mock(DataProviderConfig.class);
         when(mockDataProviderConfig.getDataProvider()).thenReturn("auto");
+        when(mockDataProviderConfig.isCrossCheckEnabled()).thenReturn(false);
+        when(mockDataProviderConfig.getCrossCheckMode()).thenReturn("off");
 
         okhttp3.OkHttpClient http = new okhttp3.OkHttpClient();
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -49,7 +51,8 @@ class DataFetcherManagerIntegrationTest {
                 List.of(fetcher),
                 null,       // 无 SQLite 缓存，直连 API
                 calendar,
-                validator
+                validator,
+                new CrossSourceValidator()
         );
     }
 

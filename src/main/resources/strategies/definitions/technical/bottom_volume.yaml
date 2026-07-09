@@ -1,7 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 底部放量策略（综合分析评分）
-# 引擎：scoring → CompositeScoringEngine
-# 逻辑：股价在低位区间显著放量，视为主力建仓信号
+# 底部放量策略（统一 rules DSL 试点）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: bottom_volume
@@ -13,10 +11,40 @@ applicable_market: [bear, range]
 applicable_cap: [mid, small]
 tags: [底部, 放量, 主力, 抄底]
 
-# 综合分析评分段（CompositeScoringEngine 多策略加权）
-scoring:
-  score_weight: 15                  # 在组合评分中的权重
-  conditions:
-    price_near_low: true            # 价格处于近期低位区间
-    volume_ratio_min: 2.0           # 量比 ≥ 2 倍
-    consecutive_days: 2             # 连续放量天数
+rules:
+  parameters:
+    lookback_days: 60
+    max_position: 0.25
+    consecutive_days: 2
+    volume_multiple: 2.0
+    ma_period: 20
+  param_space:
+    consecutive_days: [2, 3]
+    volume_multiple: [1.5, 2.0, 2.5]
+
+  signal:
+    position_size: 0.80
+    entry:
+      - type: price_near_low
+        lookback: 60
+        max_position: 0.25
+      - type: consecutive_volume_days
+        days: 2
+        multiple: 2.0
+        avg_period: 20
+    exit:
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 20
+      - type: change_below
+        pct: -5
+
+  score:
+    weight: 15
+    when:
+      - type: price_near_low
+      - type: consecutive_volume_days
+        days: 2
+      - type: volume_breakout
+        multiple: 2.0

@@ -259,3 +259,66 @@ Agent 从历史错误中学习，产出更高质量的新信号
 | 风险披露 | 是否提及潜在风险和不利因素 |
 
 **幻觉检测**：将 LLM 报告中提及的数值与上下文实际数据对比，识别捏造数据。
+
+检测到幻觉时设置 `AnalysisResult.blockSignal=true`，`SignalExtractionService` 将跳过决策信号落库。
+
+## L4 纸面闭环（Phase1+2）
+
+系统在约束内可完成：生成/优化 → 质量门晋升 → 信号纸面执行 → 复盘降级/写回 → 因子周进化。
+
+### 开关（环境变量，默认关闭自动执行/晋升）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `AUTONOMY_ENABLED` | false | 总开关；关闭时自动晋升/降级/执行/因子调度均不生效 |
+| `AUTONOMY_AUTO_EXECUTE_SIGNALS` | false | 盘后将 active 信号转为纸面买卖 |
+| `AUTONOMY_AUTO_PROMOTE` | false | TESTING 策略达标后自动 PUBLISHED |
+| `AUTONOMY_AUTO_DEMOTE` | true | 命中率 &lt;10% 时 PUBLISHED→TESTING（需 enabled） |
+| `AUTONOMY_AUTO_APPLY_PARAMS` | false | 优化结果写回自定义策略 YAML |
+| `AUTONOMY_MIN_PROMOTE_GRADE` | B | 晋升最低质量等级 |
+| `AUTONOMY_PAPER_ACCOUNT_ID` | 空 | 纸面账户 ID；空则跳过执行 |
+| `AUTONOMY_MAX_DRAWDOWN_HALT_PCT` | 15 | 组合回撤熔断 |
+| `AUTONOMY_DAILY_LOSS_HALT_PCT` | 5 | 日亏损熔断 |
+| `AUTONOMY_FACTOR_EVOLUTION_CRON` | `0 0 20 * * MON` | 因子进化调度 |
+
+### 关键组件
+
+| 组件 | 职责 |
+|---|---|
+| `AutonomyPolicy` / `AutonomyConfig` | 开关与审计 |
+| `StrategyPromotionGate` | TESTING→PUBLISHED 质量门（Grade + Walk-Forward） |
+| `StrategyParamWriteBackService` | 优参写回；PUBLISHED 先降级再更新 |
+| `TradingRiskGuard` | 熔断 / 回撤 / 日亏 |
+| `OrderExecutionPort` + `PaperOrderExecutionAdapter` | 仅纸面下单 |
+| `SignalToPortfolioExecutor` | 信号→仓位→买卖 |
+| `StrategyRefineLoop` | 生成→回测→改写（API: `POST /api/v1/ai-capability/strategy/refine`） |
+| `FactorEvolutionScheduler` | 周进化；`promoteFactor` 注册到 `EvolvableFactorLibrary` |
+
+### 控制 API
+
+- `GET /api/v1/autonomy/status`
+- `POST /api/v1/autonomy/halt` / `POST /api/v1/autonomy/resume`
+- `POST /api/v1/autonomy/bind-paper-account` — 运行时绑定纸面账户
+
+### Web 产品入口
+
+- 导航 **监控与运维 → L4 自主控制**：状态、熔断/恢复、账户绑定、审计列表
+- **仪表盘** L4 纸面闭环卡片
+- **策略中心 → AI 策略生成 → Refine 闭环**：对接 `/api/v1/ai-capability/strategy/refine`
+- 策略状态转到 PUBLISHED 失败时展示晋升质量门原因
+
+### Chat 自然语言控制（`autonomy_control` 工具）
+
+ReAct / AI 对话可直接调用：
+
+| 用户说法 | action |
+|---|---|
+| 查自主状态 / L4 开了吗 | `status` |
+| 打开自主、开启自动执行 | `set_flags` |
+| 列出/绑定模拟账户 | `list_accounts` / `bind_account` |
+| 查审计 | `audit` |
+| 熔断 / 恢复交易 | `halt` / `resume` |
+
+运行时修改仅影响当前进程；重启后恢复环境变量。
+
+**本次不包含**：实盘券商、发布 RBAC、策略漂移监控、前端持久化改环境变量。

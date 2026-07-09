@@ -26,82 +26,359 @@ function updateThemeIcons() {
   document.getElementById('theme-icon-light').style.display = isDark ? 'none' : 'block';
 }
 
+// ===== UI Mode =====
+const UI_MODE_KEY = 'alphaforge-ui-mode';
+let currentUiMode = (() => { try { return localStorage.getItem(UI_MODE_KEY) || 'investor'; } catch(e) { return 'investor'; } })();
+let _recentHistoryCache = [];
+let currentSignalStockCode = null;
+let currentSignalStockName = null;
+let commandPaletteIndex = 0;
+
+const HASH_ALIASES = {
+  dashboard: 'today',
+  analysis: ['research', 'analysis'],
+  signals: ['research', 'signals'],
+  screening: ['research', 'screening'],
+  watchlist: ['mine', 'watchlist'],
+  'paper-trading': ['mine', 'paper-trading'],
+  alerts: ['mine', 'alerts'],
+  chat: null
+};
+
+let _skipHashChange = false;
+
+const COMMAND_PAGES = [
+  { label: '工作台', page: 'today', type: '页面' },
+  { label: '行情简览', page: 'market-briefing', type: '页面' },
+  { label: '智能选股', page: 'research', subTab: 'screening', type: '页面' },
+  { label: '智能分析', page: 'research', subTab: 'analysis', type: '页面' },
+  { label: '决策信号', page: 'research', subTab: 'signals', type: '页面' },
+  { label: '策略中心', page: 'strategy-center', type: '页面' },
+  { label: '回测评估', page: 'backtest', type: '页面' },
+  { label: '因子进化', page: 'factor-evolution', type: '页面' },
+  { label: '模拟交易', page: 'mine', subTab: 'paper-trading', type: '页面' },
+  { label: '自选股', page: 'mine', subTab: 'watchlist', type: '页面' },
+  { label: '告警中心', page: 'mine', subTab: 'alerts', type: '页面' },
+  { label: 'L4 自主控制', page: 'autonomy', type: '页面' },
+  { label: 'Loop 监控', page: 'loop-monitor', type: '页面' },
+  { label: '用量监控', page: 'usage', type: '页面' },
+  { label: '问 AI', action: 'chat', type: '命令' }
+];
+
+function mountSubPages() {
+  document.querySelectorAll('.sub-page-source[data-mount-target]').forEach(src => {
+    const target = document.getElementById(src.dataset.mountTarget);
+    if (target) {
+      while (src.firstChild) target.appendChild(src.firstChild);
+      src.remove();
+    }
+  });
+}
+
+function applyUiMode(mode) {
+  currentUiMode = mode;
+  try { localStorage.setItem(UI_MODE_KEY, mode); } catch(e) {}
+  const isPro = mode === 'researcher';
+  document.querySelectorAll('.nav-advanced').forEach(el => { el.style.display = isPro ? '' : 'none'; });
+  const advSection = document.querySelector('.nav-advanced-section');
+  if (advSection) advSection.style.display = isPro ? '' : 'none';
+  const label = document.getElementById('ui-mode-label');
+  if (label) label.textContent = isPro ? '专业模式' : '新手模式';
+  document.querySelectorAll('#ui-mode-toggle .mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+}
+
+function setUiMode(mode) {
+  applyUiMode(mode);
+  showToast(mode === 'researcher' ? '已切换为专业模式，已展开全部高级能力' : '已切换为新手模式，仅保留核心动线', 'info');
+}
+
+function openSettingsDrawer() {
+  document.getElementById('settings-drawer-overlay')?.classList.add('show');
+}
+function closeSettingsDrawer() {
+  document.getElementById('settings-drawer-overlay')?.classList.remove('show');
+}
+
+let copilotDockPref = (() => { try { return localStorage.getItem('alphaforge-copilot-dock') === '1'; } catch(e) { return false; } })();
+let currentCopilotContext = { key: 'general', label: '通用助手', stock: null };
+
+const COPILOT_CONTEXT_LABELS = {
+  general: '通用助手', today: '工作台', 'market-briefing': '行情简览', research: '发现与研判',
+  'strategy-center': '策略研发', backtest: '回测评估', 'factor-evolution': '因子进化',
+  mine: '交易与持仓', autonomy: 'L4 自主', 'loop-monitor': 'Loop 监控', usage: '用量监控',
+  'stock-hub': '个股中心'
+};
+const COPILOT_SUGGESTIONS = {
+  general: ['分析贵州茅台', '今天大盘怎么样？', '帮我做一条量化策略'],
+  today: ['今天有哪些交易机会？', '解读当前市场情绪', '我该从哪一步开始？'],
+  'market-briefing': ['解读今日三大市场走势', '哪些板块最强？', '有什么风险需要注意？'],
+  research: ['帮我筛选低估值成长股', '这个信号该如何操作？', '解释这只股票的技术面'],
+  'strategy-center': ['用自然语言帮我生成一条均线策略', '这条策略有什么风险？', '如何优化策略参数？'],
+  backtest: ['解读这份回测结果', '夏普比率多少算好？', '如何降低最大回撤？'],
+  'factor-evolution': ['解释因子进化的原理', '哪个因子 IC 最高？'],
+  mine: ['复盘我的持仓表现', '帮我设置一个止损告警', '当前仓位是否过重？'],
+  autonomy: ['L4 自主交易是什么？', '熔断后如何恢复？'],
+  'loop-monitor': ['系统健康度如何？', '信号准确率怎么提升？'],
+  usage: ['本月 Token 消耗趋势如何？']
+};
+
+function openChatDrawer() {
+  document.getElementById('chat-drawer-overlay')?.classList.add('show');
+  if (copilotDockPref) document.body.classList.add('copilot-docked');
+  updateCopilotDockBtn();
+  initChat();
+  renderCopilotSuggestions();
+}
+function closeChatDrawer() {
+  document.getElementById('chat-drawer-overlay')?.classList.remove('show');
+  document.body.classList.remove('copilot-docked');
+}
+function toggleCopilotDock() {
+  copilotDockPref = !copilotDockPref;
+  try { localStorage.setItem('alphaforge-copilot-dock', copilotDockPref ? '1' : '0'); } catch(e) {}
+  document.getElementById('chat-drawer-overlay')?.classList.add('show');
+  document.body.classList.toggle('copilot-docked', copilotDockPref);
+  updateCopilotDockBtn();
+  initChat();
+  renderCopilotSuggestions();
+}
+function updateCopilotDockBtn() {
+  const btn = document.getElementById('copilot-dock-btn');
+  if (!btn) return;
+  btn.textContent = copilotDockPref ? '浮动' : '停靠';
+  btn.title = copilotDockPref ? '切换为浮动窗口' : '停靠到右侧';
+}
+
+/** 切换 Copilot 语境，联动上下文标签与快捷提问 */
+function setCopilotContext(key, meta) {
+  meta = meta || {};
+  const label = meta.label || COPILOT_CONTEXT_LABELS[key] || '通用助手';
+  currentCopilotContext = { key: key || 'general', label, stock: meta.stock || null };
+  const ctxEl = document.getElementById('copilot-context');
+  if (ctxEl) ctxEl.textContent = meta.stock ? `讨论 ${meta.stock}` : label;
+  renderCopilotSuggestions();
+}
+function renderCopilotSuggestions() {
+  const el = document.getElementById('copilot-suggestions');
+  if (!el) return;
+  let list;
+  if (currentCopilotContext.stock) {
+    const s = currentCopilotContext.stock;
+    list = [`分析 ${s} 的技术面`, `${s} 现在适合买入吗？`, `为 ${s} 生成一条策略`];
+  } else {
+    list = COPILOT_SUGGESTIONS[currentCopilotContext.key] || COPILOT_SUGGESTIONS.general;
+  }
+  el.innerHTML = '';
+  list.forEach(t => {
+    const chip = document.createElement('span');
+    chip.className = 'copilot-chip';
+    chip.textContent = t;
+    chip.addEventListener('click', () => copilotAsk(t));
+    el.appendChild(chip);
+  });
+}
+/** 点击快捷提问：打开 Copilot 并直接发送 */
+function copilotAsk(text) {
+  openChatDrawer();
+  setTimeout(() => {
+    const input = document.getElementById('chat-input');
+    if (input) { input.value = text; sendChatMessage(); }
+  }, 200);
+}
+
+function openChatWith(text) {
+  openChatDrawer();
+  if (text) {
+    setTimeout(() => {
+      const input = document.getElementById('chat-input');
+      if (input) { input.value = text; sendChatMessage(); }
+    }, 300);
+  }
+}
+
+function goToResearchTab(tab) {
+  navigateTo('research', tab);
+}
+function goToMineTab(tab) {
+  navigateTo('mine', tab);
+}
+
+function switchHubTab(group, tab) {
+  const tabGroup = document.getElementById(group === 'research' ? 'research-tabs' : 'mine-tabs');
+  if (tabGroup) {
+    tabGroup.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  }
+  const panelPrefix = group === 'research' ? 'research-panel-' : 'mine-panel-';
+  document.querySelectorAll(group === 'research' ? '.research-panel' : '.mine-panel').forEach(p => {
+    p.classList.toggle('active', p.id === panelPrefix + tab);
+  });
+}
+
+function resolveHash(hash) {
+  const raw = (hash || '').replace(/^#/, '').trim();
+  if (!raw) return { page: 'today', subTab: null };
+  if (raw.includes('/')) {
+    const [page, subTab] = raw.split('/');
+    return { page, subTab };
+  }
+  const alias = HASH_ALIASES[raw];
+  if (alias === null) return { page: 'today', subTab: null };
+  if (Array.isArray(alias)) return { page: alias[0], subTab: alias[1] };
+  if (alias) return { page: alias, subTab: null };
+  return { page: raw, subTab: null };
+}
+
+function buildHash(page, subTab) {
+  if (page === 'research' && subTab) return `research/${subTab}`;
+  if (page === 'mine' && subTab) return `mine/${subTab}`;
+  return page;
+}
+
 // ===== Navigation =====
-function navigateTo(page) {
+function navigateTo(page, subTab) {
+  if (page === 'chat') { openChatDrawer(); return; }
+
+  const resolved = resolveHash(page);
+  if (!subTab && resolved.subTab && (page === resolved.page || HASH_ALIASES[page])) {
+    page = resolved.page;
+    subTab = resolved.subTab;
+  } else if (HASH_ALIASES[page] && Array.isArray(HASH_ALIASES[page])) {
+    page = HASH_ALIASES[page][0];
+    subTab = subTab || HASH_ALIASES[page][1];
+  } else if (HASH_ALIASES[page] && typeof HASH_ALIASES[page] === 'string') {
+    page = HASH_ALIASES[page];
+  }
+
+  if (page === 'research' && !subTab) subTab = 'screening';
+  if (page === 'mine' && !subTab) subTab = 'paper-trading';
+
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
-  const pageEl = document.getElementById('page-' + page);
+  const navPage = (page === 'analysis' || page === 'signals' || page === 'screening') ? 'research'
+    : (page === 'watchlist' || page === 'paper-trading' || page === 'alerts') ? 'mine' : page;
+  let navItem = null;
+  if ((navPage === 'research' || navPage === 'mine') && subTab) {
+    navItem = document.querySelector(`.nav-item[data-page="${navPage}"][data-default-tab="${subTab}"]`);
+  }
+  if (!navItem) navItem = document.querySelector(`.nav-item[data-page="${navPage}"]`);
   if (navItem) {
     navItem.classList.add('active');
-    // 自动展开所在的折叠分组
-    const parentSection = navItem.closest('.nav-section');
-    if (parentSection && parentSection.classList.contains('collapsed')) {
-      parentSection.classList.remove('collapsed');
-      const groupName = parentSection.dataset.navGroup;
-      if (groupName) {
-        try {
-          const collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}');
-          delete collapsed[groupName];
-          localStorage.setItem('alphaforge-nav-collapsed', JSON.stringify(collapsed));
-        } catch(e) {}
-      }
+    // 导航时自动展开所在分组
+    const section = navItem.closest('.nav-section');
+    if (section && section.classList.contains('collapsed')) {
+      section.classList.remove('collapsed');
+      persistNavCollapseState();
     }
   }
+
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const pageEl = document.getElementById('page-' + page);
   if (pageEl) pageEl.classList.add('active');
-  // 同步 URL hash，刷新后保持当前页面
-  if (location.hash !== '#' + page) {
-    location.hash = page;
+
+  if (page === 'research' && subTab) switchHubTab('research', subTab);
+  if (page === 'mine' && subTab) switchHubTab('mine', subTab);
+
+  const hash = buildHash(page, subTab);
+  if (location.hash !== '#' + hash) {
+    _skipHashChange = true;
+    location.hash = hash;
+    setTimeout(() => { _skipHashChange = false; }, 0);
   }
+
   setTimeout(initCharts, 150);
-  if (page === 'chat') initChat();
+  setCopilotContext(page);
+  loadPageData(page, subTab);
 }
+
+function isCurrentRoute(page, subTab) {
+  const active = document.querySelector('.page.active');
+  if (!active || active.id !== 'page-' + page) return false;
+  if (page === 'research' && subTab) {
+    const tab = document.querySelector('#research-tabs .tab.active');
+    return tab && tab.dataset.tab === subTab;
+  }
+  if (page === 'mine' && subTab) {
+    const tab = document.querySelector('#mine-tabs .tab.active');
+    return tab && tab.dataset.tab === subTab;
+  }
+  return true;
+}
+
+function loadPageData(page, subTab) {
+  switch(page) {
+    case 'today': loadToday(); break;
+    case 'dashboard': loadToday(); break;
+    case 'market-briefing': loadMarketBriefing(currentBriefingMarket); break;
+    case 'research':
+      if (subTab === 'analysis') loadHistory();
+      else if (subTab === 'signals') loadSignals();
+      break;
+    case 'analysis': loadHistory(); break;
+    case 'signals': loadSignals(); break;
+    case 'mine':
+      if (subTab === 'watchlist') loadWatchlist();
+      else if (subTab === 'paper-trading') loadPaperTrading();
+      else if (subTab === 'alerts') { loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); }
+      break;
+    case 'watchlist': loadWatchlist(); break;
+    case 'paper-trading': loadPaperTrading(); break;
+    case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
+    case 'usage': loadUsage(); break;
+    case 'backtest': initBacktestPage(); break;
+    case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); loadCustomStrategies(); loadStrategyTemplates(); initDebugStrategySelect(); break;
+    case 'loop-monitor': loadLoopStatus(); break;
+    case 'factor-evolution': loadEvolutionStatus(); break;
+    case 'autonomy': loadAutonomyStatus(); break;
+  }
+}
+
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => navigateTo(item.dataset.page));
-});
-
-// ===== Nav Section Collapse =====
-function toggleNavSection(titleEl) {
-  const section = titleEl.closest('.nav-section');
-  if (!section) return;
-  section.classList.toggle('collapsed');
-  const groupName = section.dataset.navGroup;
-  if (groupName) {
-    try {
-      const collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}');
-      collapsed[groupName] = section.classList.contains('collapsed');
-      localStorage.setItem('alphaforge-nav-collapsed', JSON.stringify(collapsed));
-    } catch(e) {}
-  }
-}
-
-// 页面加载时恢复折叠状态
-(function restoreNavCollapse() {
-  let collapsed = {};
-  try { collapsed = JSON.parse(localStorage.getItem('alphaforge-nav-collapsed') || '{}'); } catch(e) {}
-  document.querySelectorAll('.nav-section[data-nav-group]').forEach(section => {
-    const name = section.dataset.navGroup;
-    if (collapsed[name]) section.classList.add('collapsed');
+  item.addEventListener('click', () => {
+    const page = item.dataset.page;
+    const defaultTab = item.dataset.defaultTab || null;
+    navigateTo(page, defaultTab);
   });
-})();
-
-// 监听浏览器前进/后退，同步页面切换
-window.addEventListener('hashchange', () => {
-  const hashPage = location.hash.replace('#', '');
-  const activePage = document.querySelector('.page.active');
-  const activePageName = activePage ? activePage.id.replace('page-', '') : '';
-  if (hashPage && hashPage !== activePageName) {
-    navigateTo(hashPage);
-  }
 });
 
-// 页面加载时从 URL hash 恢复当前页面（刷新保持）
-// 用 setTimeout 延迟执行，确保所有 let/const 变量（如 chatInitialized）已完成初始化
+// ===== Nav Group Collapse =====
+const NAV_COLLAPSE_KEY = 'alphaforge-nav-collapsed';
+function loadNavCollapseState() {
+  let collapsed = [];
+  try { collapsed = JSON.parse(localStorage.getItem(NAV_COLLAPSE_KEY) || '[]'); } catch(e) {}
+  collapsed.forEach(key => {
+    const sec = document.querySelector(`.nav-section[data-group-key="${key}"]`);
+    if (sec) sec.classList.add('collapsed');
+  });
+}
+function persistNavCollapseState() {
+  const collapsed = [];
+  document.querySelectorAll('.nav-section[data-group-key].collapsed').forEach(sec => collapsed.push(sec.dataset.groupKey));
+  try { localStorage.setItem(NAV_COLLAPSE_KEY, JSON.stringify(collapsed)); } catch(e) {}
+}
+document.querySelectorAll('.nav-section-title[data-group-toggle]').forEach(title => {
+  title.addEventListener('click', () => {
+    const section = title.closest('.nav-section');
+    if (section) { section.classList.toggle('collapsed'); persistNavCollapseState(); }
+  });
+});
+loadNavCollapseState();
+
+// 监听浏览器前进/后退
+window.addEventListener('hashchange', () => {
+  if (_skipHashChange) return;
+  const { page, subTab } = resolveHash(location.hash);
+  const targetPage = page || 'today';
+  if (isCurrentRoute(targetPage, subTab)) return;
+  navigateTo(targetPage, subTab);
+});
+
+mountSubPages();
+applyUiMode(currentUiMode);
+
 setTimeout(() => {
-  const initialHash = location.hash.replace('#', '');
-  if (initialHash && document.getElementById('page-' + initialHash)) {
-    navigateTo(initialHash);
-  }
+  const { page, subTab } = resolveHash(location.hash);
+  navigateTo(page || 'today', subTab);
 }, 0);
 
 // ===== Tab System =====
@@ -151,78 +428,198 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // ===== Analysis Runner =====
-document.getElementById('btn-run-analysis').addEventListener('click', () => {
-  const input = document.getElementById('analysis-input').value.trim();
+function runAnalysisForCode(input, autoRun) {
   if (!input) { showToast('请输入股票代码或名称', 'warning'); return; }
+  setCopilotContext('research', { stock: input });
   const progressEl = document.getElementById('analysis-progress');
   const bar = document.getElementById('analysis-progress-bar');
   const stepText = document.getElementById('analysis-step-text');
   const statusText = document.getElementById('analysis-status-text');
+  const ctaEl = document.getElementById('analysis-complete-cta');
+  if (ctaEl) ctaEl.style.display = 'none';
   progressEl.style.display = 'block';
-  bar.style.width = '0%';
+  bar.style.width = '5%';
   bar.classList.add('animated');
   statusText.textContent = `正在分析 ${input}...`;
   stepText.textContent = '提交分析任务...';
 
-  // 调用真实API
   fetch('/api/v1/analysis/run', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({stock_code: input})
   }).then(r => r.json()).then(data => {
-    if (data.status === 'submitted') {
-      // 模拟进度（后端异步处理）
-      const steps = ['任务已提交...', '获取行情数据...', '技术面分析中...', '基本面分析中...', '舆情数据采集...', '生成综合评估报告...', '分析完成！'];
-      let i = 0;
-      const timer = setInterval(() => {
-        i++;
-        if (i < steps.length) { bar.style.width = Math.round((i / (steps.length-1)) * 100) + '%'; stepText.textContent = steps[i]; }
-        if (i >= steps.length) { clearInterval(timer); bar.classList.remove('animated'); statusText.textContent = `${input} 分析完成`; showToast(`${input} 分析报告已生成`, 'success'); }
-      }, 1200);
+    if (data.task_id || data.status === 'submitted') {
+      const taskId = data.task_id;
+      pollAnalysisTask(taskId, input, bar, stepText, statusText, progressEl);
     } else {
-      bar.classList.remove('animated'); statusText.textContent = '分析失败'; showToast(data.error || '分析请求失败', 'error');
+      bar.classList.remove('animated');
+      statusText.textContent = '分析失败';
+      showToast(data.error || '分析请求失败', 'error');
     }
   }).catch(err => {
-    bar.classList.remove('animated'); statusText.textContent = '分析失败'; showToast('网络错误: ' + err.message, 'error');
+    bar.classList.remove('animated');
+    statusText.textContent = '分析失败';
+    showToast('网络错误: ' + err.message, 'error');
   });
+}
+
+function pollAnalysisTask(taskId, input, bar, stepText, statusText, progressEl) {
+  let attempts = 0;
+  const maxAttempts = 120;
+  const timer = setInterval(() => {
+    attempts++;
+    fetch(`/api/v1/analysis/tasks/${taskId}`).then(r => r.json()).then(task => {
+      const status = task.status || '';
+      const progress = Math.min(90, 10 + attempts * 2);
+      bar.style.width = progress + '%';
+      stepText.textContent = task.message || task.step || `处理中 (${status})...`;
+      if (status === 'completed' || status === 'done' || status === 'success') {
+        clearInterval(timer);
+        bar.style.width = '100%';
+        bar.classList.remove('animated');
+        statusText.textContent = `${input} 分析完成`;
+        const ctaEl = document.getElementById('analysis-complete-cta');
+        if (ctaEl) ctaEl.style.display = 'block';
+        showToast(`${input} 分析报告已生成`, 'success');
+        loadHistory();
+        if (task.report_id) viewReport(task.report_id);
+        else fetch(`/api/v1/history?limit=1&stockCode=${encodeURIComponent(input)}`).then(r=>r.json()).then(reports => {
+          if (reports[0]) { viewReport(reports[0].id); renderAnalysisScores(reports[0]); }
+        }).catch(() => {});
+      } else if (status === 'failed' || status === 'error') {
+        clearInterval(timer);
+        bar.classList.remove('animated');
+        statusText.textContent = '分析失败';
+        showToast(task.error || '分析任务失败', 'error');
+      } else if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        bar.classList.remove('animated');
+        statusText.textContent = '分析超时';
+        showToast('分析任务超时，请稍后查看历史记录', 'warning');
+        loadHistory();
+      }
+    }).catch(() => {
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        bar.classList.remove('animated');
+        statusText.textContent = '轮询失败';
+      }
+    });
+  }, 2000);
+}
+
+function renderAnalysisScores(report) {
+  const cards = document.getElementById('analysis-score-cards');
+  if (!cards || !report) return;
+  cards.style.display = 'grid';
+  const parseScore = (jsonStr) => {
+    if (!jsonStr) return null;
+    try {
+      const obj = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+      return obj.score || obj.total_score || obj.totalScore || null;
+    } catch(e) { return null; }
+  };
+  const tech = parseScore(report.technicalAnalysis) || '-';
+  const fund = parseScore(report.fundamentalAnalysis) || '-';
+  const news = parseScore(report.newsAnalysis) || '-';
+  document.getElementById('score-technical').textContent = tech;
+  document.getElementById('score-fundamental').textContent = fund;
+  document.getElementById('score-sentiment').textContent = news;
+  if (report.totalScore) {
+    if (tech === '-') document.getElementById('score-technical').textContent = report.totalScore;
+  }
+  document.getElementById('score-technical-hint').textContent = report.signal || '-';
+  document.getElementById('score-fundamental-hint').textContent = report.confidence ? Math.round(report.confidence * 100) + '% 置信度' : '-';
+  document.getElementById('score-sentiment-hint').textContent = report.summary ? String(report.summary).substring(0, 40) : '-';
+}
+
+function startAnalysis(code) {
+  if (!code) return;
+  goToResearchTab('analysis');
+  setCopilotContext('research', { stock: code });
+  setTimeout(() => {
+    const input = document.getElementById('analysis-input');
+    if (input) input.value = code;
+    runAnalysisForCode(code);
+  }, 150);
+}
+
+function promptAndAnalyze() {
+  const code = prompt('请输入股票代码或名称：');
+  if (code) startAnalysis(code.trim());
+}
+
+document.getElementById('btn-run-analysis').addEventListener('click', () => {
+  const input = document.getElementById('analysis-input').value.trim();
+  runAnalysisForCode(input);
 });
 
 // ===== Signal Detail Modal =====
 let currentSignalFeedbackId = null;
 let _signalsCache = {};
 
-function openSignalDetail(name, code, action, id) {
+function openSignalDetail(name, code, action, id, signalData) {
   currentSignalFeedbackId = id || null;
-  document.getElementById('signal-detail-title').textContent = `${name} (${code}) 信号详情`;
+  currentSignalStockCode = code || null;
+  currentSignalStockName = name || null;
+  const s = signalData || _signalsCache[id] || {};
+  document.getElementById('signal-detail-title').textContent = `${name || s.stockName || ''} (${code || s.stockCode || ''}) 信号详情`;
   const actionLabels = { strong_buy: '强买入', buy: '买入', sell: '卖出', hold: '持有' };
   const actionColors = { strong_buy: 'success', buy: 'success', sell: 'danger', hold: 'warning' };
+  const act = action || s.action || 'hold';
+  const conf = s.confidence ? Math.round(s.confidence * 100) + '%' : '-';
   document.getElementById('signal-detail-content').innerHTML = `
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-      <span class="badge badge-${actionColors[action]}" style="font-size:13px;padding:5px 14px">${actionLabels[action]}</span>
-      <span class="badge badge-info" style="font-size:12px;padding:4px 10px">置信度 87%</span>
-      <span class="badge badge-primary" style="font-size:12px;padding:4px 10px">中期</span>
+      <span class="badge badge-${actionColors[act] || 'info'}" style="font-size:13px;padding:5px 14px">${actionLabels[act] || act}</span>
+      <span class="badge badge-info" style="font-size:12px;padding:4px 10px">置信度 ${conf}</span>
     </div>
     <div style="margin-bottom:16px">
       <div style="font-size:13px;color:var(--text-muted);line-height:1.7">
-        <strong style="color:var(--text)">推荐理由：</strong>基本面强劲（ROE>25%），技术面突破关键阻力位，放量突破20日均线。催化剂：年报超预期+机构增持。
+        <strong style="color:var(--text)">推荐理由：</strong>${escapeHtml(s.reason || s.summary || '暂无详情')}
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">入场下限</div><div style="font-size:16px;font-weight:600;margin-top:4px">1680</div></div>
-      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">入场上限</div><div style="font-size:16px;font-weight:600;margin-top:4px">1720</div></div>
-      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">止损</div><div style="font-size:16px;font-weight:600;margin-top:4px;color:var(--danger)">1620</div></div>
-      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim);text-transform:uppercase">目标价</div><div style="font-size:16px;font-weight:600;margin-top:4px;color:var(--success)">1900</div></div>
-    </div>
-    <div style="margin-bottom:12px">
-      <strong style="font-size:12px;color:var(--text-dim)">风险提示：</strong>
-      <span style="font-size:12px;color:var(--text-muted)">若跌破1620元止损位，信号失效。注意大盘系统性风险。</span>
-    </div>
-    <div>
-      <strong style="font-size:12px;color:var(--text-dim)">生成信息：</strong>
-      <span style="font-size:12px;color:var(--text-muted)">多Agent协作模式 | qwen-max | 2024-03-15 09:32 | Token: 4,521</span>
-    </div>
-  `;
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim)">入场下限</div><div style="font-size:16px;font-weight:600;margin-top:4px">${s.entryLow || s.entry_low || '-'}</div></div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim)">入场上限</div><div style="font-size:16px;font-weight:600;margin-top:4px">${s.entryHigh || s.entry_high || '-'}</div></div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim)">止损</div><div style="font-size:16px;font-weight:600;margin-top:4px;color:var(--danger)">${s.stopLoss || s.stop_loss || '-'}</div></div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:8px"><div style="font-size:10px;color:var(--text-dim)">目标价</div><div style="font-size:16px;font-weight:600;margin-top:4px;color:var(--success)">${s.targetPrice || s.target_price || '-'}</div></div>
+    </div>`;
   openModal('modal-signal');
+}
+
+function signalActionWatchlist() {
+  const code = currentSignalStockCode;
+  if (!code) { showToast('无法获取股票代码', 'warning'); return; }
+  fetch('/api/v1/watchlist', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ stock_code: code, stock_name: currentSignalStockName || code, market: 'A' })
+  }).then(() => { showToast('已加入自选股', 'success'); closeModal('modal-signal'); })
+    .catch(() => showToast('添加失败', 'error'));
+}
+
+function signalActionPaperBuy() {
+  const code = currentSignalStockCode;
+  if (!code) { showToast('无法获取股票代码', 'warning'); return; }
+  closeModal('modal-signal');
+  goToMineTab('paper-trading');
+  setTimeout(() => {
+    const el = document.getElementById('paper-order-code');
+    if (el) el.value = code;
+  }, 200);
+}
+
+function signalActionAlert() {
+  const code = currentSignalStockCode;
+  if (!code) { showToast('无法获取股票代码', 'warning'); return; }
+  openAlertModal(code);
+}
+
+function openAlertModal(stockCode) {
+  const note = document.getElementById('alert-note');
+  const codeEl = document.getElementById('alert-stock-code');
+  if (note) note.value = stockCode ? `${stockCode} 价格告警` : '';
+  if (codeEl) codeEl.value = stockCode || '';
+  openModal('modal-alert');
 }
 
 // ===== Chat System =====
@@ -232,8 +629,10 @@ let chatHistory = [];
 let currentSessionId = null;
 let chatInitialized = false;
 
-chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
-chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
+if (chatInput) {
+  chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px'; });
+  chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
+}
 
 /** 初始化聊天页面 - 加载会话列表 */
 function initChat() {
@@ -690,7 +1089,11 @@ function loadWatchlist() {
     const tbody = document.getElementById('watchlist-body');
     if (!tbody) return;
     if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">自选股列表为空，请在上方添加股票代码</td></tr>'; return; }
-    tbody.innerHTML = items.map(item => `<tr><td>${item.stockCode}</td><td><strong>${item.stockName||item.stockCode}</strong></td><td>${item.market||'A股'}</td><td>-</td><td>-</td><td>-</td><td>${item.addedAt?item.addedAt.substring(0,10):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="showToast('已加入分析队列','success')">分析</button> <button class="btn btn-sm btn-outline" onclick="openModal('modal-alert')">告警</button> <button class="btn btn-sm btn-ghost" onclick="removeWatchlistRow(this)" style="color:var(--danger)">删除</button></td></tr>`).join('');
+    tbody.innerHTML = items.map(item => {
+      const code = item.stockCode || item.stock_code || '';
+      const name = item.stockName || item.stock_name || code;
+      return `<tr><td>${code}</td><td><strong>${name}</strong></td><td>${item.market||'A股'}</td><td>-</td><td>-</td><td>-</td><td>${item.addedAt?item.addedAt.substring(0,10):'-'}</td><td><button class="btn btn-sm btn-outline" onclick="startAnalysis('${code}')">分析</button> <button class="btn btn-sm btn-outline" onclick="openAlertModal('${code}')">告警</button> <button class="btn btn-sm btn-ghost" onclick="removeWatchlistRow(this)" style="color:var(--danger)">删除</button></td></tr>`;
+    }).join('');
   }).catch(() => {});
 }
 function batchAnalyzeWatchlist() {
@@ -707,62 +1110,202 @@ function batchAnalyzeWatchlist() {
 
 // ===== Screening =====
 function runScreening() {
+  const strategy = document.getElementById('screening-strategy')?.value || 'value_growth';
+  const market = document.getElementById('screening-market')?.value || 'A';
+  const maxResults = parseInt(document.getElementById('screening-max')?.value || '10', 10);
   showToast('扫描任务已启动...', 'info');
   const card = document.getElementById('screening-progress-card');
-  const bar = card.querySelector('.progress-bar');
-  bar.style.width = '0%'; bar.classList.add('animated');
-  card.querySelector('.badge').textContent = '运行中'; card.querySelector('.badge').className = 'badge badge-warning';
+  card.style.display = 'block';
+  const bar = document.getElementById('screening-progress-bar');
+  const badge = document.getElementById('screening-status-badge');
+  bar.style.width = '10%'; bar.classList.add('animated');
+  if (badge) { badge.textContent = '运行中'; badge.className = 'badge badge-warning'; }
 
   fetch('/api/v1/screening/run', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({strategy: 'value_growth', market: 'A', max_results: 10})
+    body: JSON.stringify({ strategy, market, max_results: maxResults, sync: true })
   }).then(r => r.json()).then(data => {
     bar.style.width = '100%'; bar.classList.remove('animated');
-    card.querySelector('.badge').textContent = '已完成'; card.querySelector('.badge').className = 'badge badge-success';
+    if (badge) { badge.textContent = '已完成'; badge.className = 'badge badge-success'; }
+    const meta = document.getElementById('screening-meta');
+    if (meta) meta.textContent = `策略 ${strategy} · 市场 ${market} · 找到 ${(data.results||[]).length} 只`;
     const count = data.results ? data.results.length : 0;
+    renderScreeningResults(data.results || []);
     showToast(`扫描完成，找到${count}只潜力标的`, 'success');
   }).catch(err => {
     bar.classList.remove('animated');
-    card.querySelector('.badge').textContent = '失败'; card.querySelector('.badge').className = 'badge badge-danger';
+    if (badge) { badge.textContent = '失败'; badge.className = 'badge badge-danger'; }
     showToast('选股失败: ' + err.message, 'error');
   });
 }
 
-// ===== Global Search Shortcut =====
+function renderScreeningResults(results) {
+  const tbody = document.getElementById('screening-results-body');
+  if (!tbody) return;
+  if (!results.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">未找到符合条件的标的</td></tr>';
+    return;
+  }
+  tbody.innerHTML = results.map((r, i) => {
+    const code = r.stock_code || r.code || r.stockCode || '';
+    const name = r.stock_name || r.name || r.stockName || code;
+    const score = r.score || r.total_score || '-';
+    const signal = r.signal || '-';
+    const industry = r.industry || '-';
+    const reason = r.reason || r.summary || '-';
+    const pe = r.pe || r.pe_ratio || '-';
+    const pb = r.pb || r.pb_ratio || '-';
+    const growth = r.revenue_growth || r.revenueGrowth || '-';
+    return `<tr><td>${i+1}</td><td><strong>${name}</strong> ${code}</td><td>${industry}</td><td><span class="badge badge-success">${score}</span></td><td>${signal}</td><td>${pe}/${pb}</td><td>${growth}</td><td>${reason}</td><td><button class="btn btn-sm btn-primary" onclick="startAnalysis('${code}')">深度分析</button></td></tr>`;
+  }).join('');
+}
+
+// ===== Command Palette =====
+function openCommandPalette() {
+  const overlay = document.getElementById('command-palette');
+  const input = document.getElementById('command-palette-input');
+  if (!overlay || !input) return;
+  overlay.style.display = 'flex';
+  input.value = '';
+  commandPaletteIndex = 0;
+  renderCommandResults('');
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeCommandPalette() {
+  const overlay = document.getElementById('command-palette');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function renderCommandResults(query) {
+  const resultsEl = document.getElementById('command-palette-results');
+  if (!resultsEl) return;
+  const q = (query || '').trim().toLowerCase();
+  let items = [];
+  COMMAND_PAGES.forEach(p => {
+    if (!q || p.label.toLowerCase().includes(q)) items.push({ type: 'page', ...p });
+  });
+  _recentHistoryCache.forEach(r => {
+    const label = `${r.stockName || ''} ${r.stockCode || ''}`.trim();
+    if (!q || label.toLowerCase().includes(q) || (r.stockCode||'').includes(q)) {
+      items.push({ type: 'stock', label, code: r.stockCode, reportId: r.id });
+    }
+  });
+  if (q && /^[0-9a-zA-Z.]{2,10}$/.test(q)) {
+    items.unshift({ type: 'analyze', label: `分析 ${query}`, code: query });
+  }
+  if (!items.length) {
+    resultsEl.innerHTML = '<div class="command-item" style="color:var(--text-dim)">无匹配结果</div>';
+    return;
+  }
+  resultsEl.innerHTML = items.slice(0, 12).map((item, i) => {
+    const typeLabel = item.type === 'page' ? (item.type === 'page' ? '页面' : '') : item.type === 'analyze' ? '分析' : item.type === 'stock' ? '历史' : '命令';
+    return `<div class="command-item${i===commandPaletteIndex?' active':''}" data-idx="${i}" onclick="executeCommandItem(${i})"><span>${escapeHtml(item.label)}</span><span class="command-item-type">${typeLabel}</span></div>`;
+  }).join('');
+  window._commandItems = items.slice(0, 12);
+}
+
+function executeCommandItem(idx) {
+  const item = (window._commandItems || [])[idx];
+  if (!item) return;
+  closeCommandPalette();
+  if (item.type === 'analyze' || item.action === 'analyze') startAnalysis(item.code);
+  else if (item.type === 'stock') { if (item.reportId) { goToResearchTab('analysis'); viewReport(item.reportId); } else startAnalysis(item.code); }
+  else if (item.action === 'chat') openChatDrawer();
+  else if (item.page) navigateTo(item.page, item.subTab);
+}
+
+document.getElementById('global-search')?.addEventListener('focus', () => openCommandPalette());
+document.getElementById('command-palette-input')?.addEventListener('input', (e) => {
+  commandPaletteIndex = 0;
+  renderCommandResults(e.target.value);
+});
+document.getElementById('command-palette-input')?.addEventListener('keydown', (e) => {
+  const items = window._commandItems || [];
+  if (e.key === 'ArrowDown') { e.preventDefault(); commandPaletteIndex = Math.min(commandPaletteIndex + 1, items.length - 1); renderCommandResults(e.target.value); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); commandPaletteIndex = Math.max(commandPaletteIndex - 1, 0); renderCommandResults(e.target.value); }
+  else if (e.key === 'Enter') { e.preventDefault(); executeCommandItem(commandPaletteIndex); }
+  else if (e.key === 'Escape') closeCommandPalette();
+});
+document.getElementById('command-palette')?.addEventListener('click', (e) => {
+  if (e.target.id === 'command-palette') closeCommandPalette();
+});
+
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault();
-    document.getElementById('global-search').focus();
+    openCommandPalette();
   }
 });
 
 // ===== Page Data Loading =====
 
-/** 仪表盘加载 */
-function loadDashboard() {
+/** 今日首页加载 */
+function loadToday() {
   fetch('/api/v1/dashboard/stats').then(r => r.json()).then(data => {
-    const cards = document.querySelectorAll('#page-dashboard .stat-card');
-    if (cards[0]) cards[0].querySelector('.stat-value').textContent = data.total_reports || 0;
-    if (cards[1]) cards[1].querySelector('.stat-value').textContent = data.active_signals || 0;
-    // 渲染最新信号表格
-    const tbody = document.querySelector('#page-dashboard table tbody');
+    const activeSignals = data.active_signals || 0;
+    const el = document.getElementById('today-active-signals');
+    if (el) el.textContent = activeSignals;
+    const badge = document.getElementById('nav-signals-badge');
+    if (badge) {
+      badge.textContent = activeSignals;
+      badge.style.display = activeSignals > 0 ? '' : 'none';
+    }
+    const tbody = document.getElementById('today-signals-body');
     if (tbody) {
-      if (data.recent_signals && data.recent_signals.length > 0) {
-        tbody.innerHTML = data.recent_signals.slice(0, 5).map(s => {
-          const signalBadge = s.action === 'buy' ? '<span class="badge badge-success">买入</span>' : s.action === 'sell' ? '<span class="badge badge-danger">卖出</span>' : '<span class="badge badge-warning">持有</span>';
+      const signals = data.recent_signals || [];
+      if (!signals.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无决策信号，请先运行股票分析</td></tr>';
+      } else {
+        tbody.innerHTML = signals.slice(0, 5).map(s => {
+          const signalBadge = s.action === 'buy' || s.action === 'strong_buy' ? '<span class="badge badge-success">买入</span>' : s.action === 'sell' ? '<span class="badge badge-danger">卖出</span>' : '<span class="badge badge-warning">持有</span>';
           return `<tr><td><strong>${s.stockName||''}</strong> <span style="color:var(--text-dim)">${s.stockCode||''}</span></td><td>${signalBadge}</td><td>${s.confidence?Math.round(s.confidence*100)+'%':'-'}</td><td>${s.entryLow||'-'}-${s.entryHigh||'-'}</td><td>${s.stopLoss||'-'}</td><td>${s.targetPrice||'-'}</td><td>${s.createdAt?s.createdAt.substring(5,16):'-'}</td><td><span class="badge badge-info">${s.status||'active'}</span></td></tr>`;
         }).join('');
-      } else {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无决策信号，请先运行股票分析</td></tr>';
       }
     }
   }).catch(() => {});
+
+  fetch('/api/v1/history?limit=3').then(r => r.json()).then(reports => {
+    _recentHistoryCache = reports || [];
+    const el = document.getElementById('today-recent-reports');
+    const hint = document.getElementById('today-recent-hint');
+    if (el) el.textContent = reports.length;
+    if (hint && reports[0]) hint.textContent = `最近: ${reports[0].stockName || reports[0].stockCode || '-'}`;
+  }).catch(() => {});
+
+  fetch('/api/v1/watchlist').then(r => r.json()).then(items => {
+    const el = document.getElementById('today-watchlist-count');
+    if (el) el.textContent = items.length;
+  }).catch(() => {});
+
+  fetch('/api/v1/market/overview').then(r => r.json()).then(data => {
+    const light = data.light || {};
+    const colors = { green: '市场偏多，可积极关注', yellow: '市场谨慎，控制仓位', red: '市场风险较高，注意防守', gray: '暂无市场信号' };
+    const summary = document.getElementById('today-market-summary');
+    if (summary) summary.textContent = colors[light.color] || data.summary || '市场数据加载完成';
+  }).catch(() => {
+    const summary = document.getElementById('today-market-summary');
+    if (summary) summary.textContent = '市场概览暂不可用';
+  });
+
+  fetch('/api/v1/autonomy/status').then(r => r.json()).then(data => {
+    const el = document.getElementById('today-l4-status');
+    if (!el) return;
+    const enabled = data.enabled ? '已开启' : '已关闭';
+    const halt = data.halted ? ' · 熔断中' : '';
+    const acct = data.paper_account_id ? ` · 账户 ${data.paper_account_id}` : '';
+    el.textContent = `自主 ${enabled}${halt}${acct}`;
+  }).catch(() => {});
 }
+
+/** @deprecated use loadToday */
+function loadDashboard() { loadToday(); }
 
 /** 分析历史加载 */
 function loadHistory() {
   fetch('/api/v1/history?limit=20').then(r => r.json()).then(reports => {
+    _recentHistoryCache = reports || [];
     const tbody = document.getElementById('analysis-history-body');
     if (!tbody) return;
     if (!reports.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:24px">暂无分析记录，请在上方输入股票代码开始分析</td></tr>'; return; }
@@ -782,13 +1325,13 @@ function viewReport(id) {
     if (!detail || !content) return;
     title.textContent = `${report.stockName || ''} ${report.stockCode || ''} · 评分 ${report.totalScore || '-'} · 信号 ${report.signal || '-'}`;
     const reportText = report.fullReport || report.full_report || '无报告内容';
-    // 提取策略命中信息（如果报告文本中包含）
     let scoringHtml = '';
     if (reportText.includes('composite_scoring') || reportText.includes('策略命中') || reportText.includes('综合策略评分')) {
       scoringHtml = '<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-2);border-radius:6px;font-size:13px;color:var(--success)">✓ 本报告使用了策略引擎综合评分</div>';
     }
     content.innerHTML = scoringHtml + '<div style="font-size:13px;color:var(--text-muted);line-height:1.8">' + reportText.replace(/\n/g, '<br>') + '</div>';
     detail.style.display = 'block';
+    renderAnalysisScores(report);
     detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }).catch(() => showToast('加载报告失败', 'error'));
 }
@@ -817,11 +1360,12 @@ function openSignalDetailDyn(id) {
   if (!id) return;
   const cached = _signalsCache[id];
   if (cached) {
-    openSignalDetail(cached.stockName||'', cached.stockCode||'', cached.action||'', id);
+    openSignalDetail(cached.stockName||'', cached.stockCode||'', cached.action||'', id, cached);
     return;
   }
   fetch(`/api/v1/decision-signals/${id}`).then(r => r.json()).then(s => {
-    openSignalDetail(s.stockName||'', s.stockCode||'', s.action||'', s.id||id);
+    _signalsCache[id] = s;
+    openSignalDetail(s.stockName||'', s.stockCode||'', s.action||'', s.id||id, s);
   }).catch(() => showToast('加载信号详情失败', 'error'));
 }
 
@@ -1024,19 +1568,22 @@ function renderModelDistChart(dist) {
 /** 告警列表加载 */
 function loadAlerts() {
   fetch('/api/v1/alerts').then(r => r.json()).then(rules => {
-    const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="rules"] table tbody');
+    const tbody = document.getElementById('alerts-rules-body');
     if (!tbody) return;
+    const triggered = rules.filter(r => r.triggered).length;
+    const dot = document.getElementById('header-alert-dot');
+    if (dot) dot.style.display = triggered > 0 ? '' : 'none';
     if (!rules.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:24px">暂无告警规则，点击“新建规则”添加</td></tr>'; return; }
     tbody.innerHTML = rules.map(r => {
       const statusDot = r.enabled ? (r.triggered ? 'triggered' : 'active') : 'disabled';
       const statusText = r.enabled ? (r.triggered ? '已触发' : '启用') : '已禁用';
-      return `<tr><td><span class="status-dot ${statusDot}"></span>${statusText}</td><td>${r.note||'告警规则'}</td><td>${r.stockCode||'-'}</td><td>${r.alertType||'-'}</td><td>${r.alertType||''} ${r.thresholdValue||''}</td><td>${r.notifyChannels||'default'}</td><td><span class="badge badge-warning">中</span></td><td><button class="btn btn-sm btn-outline" onclick="openModal('modal-alert')">编辑</button> <button class="btn btn-sm btn-ghost" onclick="toggleAlert(${r.id},${!r.enabled})">${r.enabled?'禁用':'启用'}</button></td></tr>`;
+      return `<tr><td><span class="status-dot ${statusDot}"></span>${statusText}</td><td>${r.note||'告警规则'}</td><td>${r.stockCode||'-'}</td><td>${r.alertType||'-'}</td><td>${r.alertType||''} ${r.thresholdValue||''}</td><td>${r.notifyChannels||'default'}</td><td><span class="badge badge-warning">中</span></td><td><button class="btn btn-sm btn-outline" onclick="openAlertModal('${r.stockCode||''}')">编辑</button> <button class="btn btn-sm btn-ghost" onclick="toggleAlert(${r.id},${!r.enabled})">${r.enabled?'禁用':'启用'}</button></td></tr>`;
     }).join('');
   }).catch(() => {});
 }
 function loadAlertTriggers() {
   fetch('/api/v1/alerts/triggers').then(r => r.json()).then(triggers => {
-    const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="triggers"] table tbody');
+    const tbody = document.getElementById('alerts-triggers-body');
     if (!tbody) return;
     if (!triggers.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:24px">暂无触发记录</td></tr>'; return; }
     tbody.innerHTML = triggers.map(t => `<tr><td>${t.triggered_at?t.triggered_at.substring(5,16):'-'}</td><td>${t.rule_id||'-'}</td><td>${t.display_target||t.target||'-'}</td><td>${t.observed_value||'-'}</td><td>${t.threshold_value||'-'}</td><td>${t.message||'-'}</td><td><span class="badge badge-warning">${t.status||'triggered'}</span></td></tr>`).join('');
@@ -1044,7 +1591,7 @@ function loadAlertTriggers() {
 }
 function loadAlertNotifications() {
   fetch('/api/v1/alerts/notifications').then(r => r.json()).then(notifs => {
-    const tbody = document.querySelector('#page-alerts .tab-panel[data-panel="notifications"] table tbody');
+    const tbody = document.getElementById('alerts-notifications-body');
     if (!tbody) return;
     if (!notifs.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无通知记录</td></tr>'; return; }
     tbody.innerHTML = notifs.map(n => `<tr><td>${n.sent_at?n.sent_at.substring(5,16):'-'}</td><td><span class="badge badge-info">${n.channel||'-'}</span></td><td>${n.trigger_id||'-'}</td><td><span class="badge badge-${n.success?'success':'danger'}">${n.success?'成功':'失败'}</span></td><td>${n.error_message||'-'}</td></tr>`).join('');
@@ -1057,13 +1604,11 @@ function toggleAlert(id, enable) {
   }).catch(() => showToast('操作失败','error'));
 }
 function saveAlertRule() {
-  const modal = document.getElementById('modal-alert');
-  const inputs = modal.querySelectorAll('.form-input, .form-select');
   const rule = {
-    note: inputs[0]?.value || '',
-    stockCode: inputs[1]?.value || '',
-    alertType: inputs[2]?.value?.split('(')[1]?.replace(')','') || 'price_above',
-    thresholdValue: parseFloat(inputs[3]?.value) || 0,
+    note: document.getElementById('alert-note')?.value || '',
+    stockCode: document.getElementById('alert-stock-code')?.value || '',
+    alertType: 'price_above',
+    thresholdValue: 0,
     notifyChannels: 'default',
     enabled: true
   };
@@ -1228,7 +1773,7 @@ function renderMarketBriefing(container, data, market) {
       const turnRate = s.turnover_rate ? parseFloat(s.turnover_rate).toFixed(2) + '%' : '';
       const pe = s.pe ? parseFloat(s.pe).toFixed(1) : '';
       const sparkId = `spark-stock-${market}-${s.code || ''}`;
-      html += `<div class="stock-card" onclick="navigateTo('analysis');setTimeout(()=>{document.getElementById('analysis-input').value='${s.code||s.stock_code||''}'},100)">
+      html += `<div class="stock-card" onclick="startAnalysis('${s.code||s.stock_code||''}')">
         <div class="stock-card-header">
           <div>
             <div class="stock-card-name">${s.name || s.stock_name || ''}</div>
@@ -1925,17 +2470,32 @@ function showTransitionMenu(strategyId, currentState) {
   const labels = { DRAFT: '草稿', TESTING: '测试中', PUBLISHED: '已发布', DEPRECATED: '已废弃', ARCHIVED: '已归档' };
   const options = transitions[currentState] || [];
   if (!options.length) { showToast('当前状态不可转换', 'warning'); return; }
-  const choice = prompt(`选择目标状态:\n${options.map((s,i) => `${i+1}. ${labels[s]}`).join('\n')}\n\n输入序号:`);
+  let hint = '';
+  if (currentState === 'TESTING' && options.includes('PUBLISHED')) {
+    hint = '\n\n注意: 发布需通过晋升质量门（Grade≥B 且 Walk-Forward 通过）';
+  }
+  const choice = prompt(`选择目标状态:\n${options.map((s,i) => `${i+1}. ${labels[s]}`).join('\n')}${hint}\n\n输入序号:`);
   if (!choice) return;
   const target = options[parseInt(choice) - 1];
   if (!target) return;
   fetch('/api/v1/strategies/' + strategyId + '/transition', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({ target_state: target })
-  }).then(r => {
-    if (!r.ok) return r.json().then(e => { throw new Error(e.error || '状态转换失败'); });
-    return r.json();
+  }).then(async r => {
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.success === false || body.error) {
+      const msg = body.error || body.message || body.detail || '状态转换失败';
+      if (target === 'PUBLISHED') {
+        showToast('晋升失败: ' + msg, 'error');
+        alert('策略未能发布（PUBLISHED）。\n\n' + msg +
+          '\n\n若提示质量门/Grade/Walk-Forward：请先 Refine 或基准评估达标后再试。');
+        return null;
+      }
+      throw new Error(msg);
+    }
+    return body;
   }).then(data => {
+    if (!data) return;
     showToast(`策略已转换到: ${labels[target]}`, 'success');
     loadCustomStrategies();
   }).catch(e => showToast(e.message, 'error'));
@@ -2277,30 +2837,11 @@ function paperRepay() {
   }).catch(() => showToast('归还失败', 'error'));
 }
 
-// ===== 页面导航时加载数据 =====
-const originalNavigateTo = navigateTo;
-navigateTo = function(page) {
-  originalNavigateTo(page);
-  switch(page) {
-    case 'dashboard': loadDashboard(); break;
-        case 'market-briefing': loadMarketBriefing(currentBriefingMarket); break;
-    case 'analysis': loadHistory(); break;
-    case 'signals': loadSignals(); break;
-        case 'paper-trading': loadPaperTrading(); break;
-    case 'watchlist': loadWatchlist(); break;
-    case 'alerts': loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); break;
-    case 'usage': loadUsage(); break;
-    case 'backtest': initBacktestPage(); break;
-    case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); loadCustomStrategies(); loadStrategyTemplates(); initDebugStrategySelect(); break;
-    case 'loop-monitor': loadLoopStatus(); break;
-    case 'factor-evolution': loadEvolutionStatus(); break;
-  }
-};
-
 // ===== 初始加载 =====
 setTimeout(() => {
-  loadDashboard();
+  loadToday();
   loadMarketOverview();
+  loadAlerts();
 }, 500);
 
 // ===== Factor Evolution =====
@@ -2539,4 +3080,197 @@ function getDimLabel(key) {
     'consistency': '一致性'
   };
   return labels[key] || key;
+}
+
+// ===== L4 Autonomy Console =====
+function autonomyFlagBadge(on) {
+  return on
+    ? '<span class="badge badge-success">开</span>'
+    : '<span class="badge badge-neutral">关</span>';
+}
+
+function loadL4DashboardCard() {
+  fetch('/api/v1/autonomy/status').then(r => r.json()).then(resp => {
+    const d = resp.data || resp;
+    const el = document.getElementById('today-l4-status');
+    if (el) {
+      const enabled = d.enabled ? '已开启' : '已关闭';
+      const halt = d.halted ? ' · 熔断中' : '';
+      const acct = d.paper_account_id != null ? ` · 账户 ${d.paper_account_id}` : ' · 未绑定账户';
+      el.textContent = `自主 ${enabled}${halt}${acct}`;
+    }
+  }).catch(() => {});
+}
+
+function loadAutonomyStatus() {
+  fetch('/api/v1/autonomy/status').then(r => r.json()).then(resp => {
+    const d = resp.data || resp;
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setText('autonomy-enabled', d.enabled ? 'ON' : 'OFF');
+    setText('autonomy-halted', d.halted ? '熔断' : '正常');
+    setText('autonomy-account', d.paper_account_id != null ? String(d.paper_account_id) : '未绑定');
+    setText('autonomy-grade', d.min_promote_grade || 'B');
+
+    const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    setHtml('autonomy-flag-exec', autonomyFlagBadge(!!d.auto_execute_signals));
+    setHtml('autonomy-flag-promote', autonomyFlagBadge(!!d.auto_promote));
+    setHtml('autonomy-flag-demote', autonomyFlagBadge(!!d.auto_demote));
+    setHtml('autonomy-flag-apply', autonomyFlagBadge(!!d.auto_apply_params));
+
+    const reasonEl = document.getElementById('autonomy-halt-reason');
+    if (reasonEl) {
+      if (d.halted && d.halt_reason) {
+        reasonEl.style.display = 'block';
+        reasonEl.textContent = '熔断原因: ' + d.halt_reason;
+      } else {
+        reasonEl.style.display = 'none';
+        reasonEl.textContent = '';
+      }
+    }
+
+    const tbody = document.getElementById('autonomy-audit-body');
+    if (tbody) {
+      const audits = (d.recent_audit || []).slice().reverse();
+      if (!audits.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">暂无审计记录</td></tr>';
+      } else {
+        tbody.innerHTML = audits.map(a => `<tr>
+          <td style="white-space:nowrap">${(a.ts || '-').substring(0, 19)}</td>
+          <td><span class="badge badge-info">${a.action || '-'}</span></td>
+          <td>${a.entity_type || '-'}:${a.entity_id || '-'}</td>
+          <td>${a.from_state || '-'} → ${a.to_state || '-'}</td>
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis" title="${(a.reason || '').replace(/"/g, '&quot;')}">${a.reason || '-'}</td>
+        </tr>`).join('');
+      }
+    }
+
+    loadAutonomyAccountOptions(d.paper_account_id);
+    loadL4DashboardCard();
+  }).catch(e => showToast('加载自主状态失败: ' + e.message, 'error'));
+}
+
+function loadAutonomyAccountOptions(selectedId) {
+  const sel = document.getElementById('autonomy-account-select');
+  if (!sel) return;
+  fetch('/api/v1/paper-trading/accounts').then(r => r.json()).then(accounts => {
+    const list = Array.isArray(accounts) ? accounts : (accounts.data || accounts.items || []);
+    if (!list.length) {
+      sel.innerHTML = '<option value="">暂无模拟账户，请先创建</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— 选择账户 —</option>' + list.map(a => {
+      const id = a.id != null ? a.id : a.accountId;
+      const name = a.name || ('账户 ' + id);
+      const selected = selectedId != null && String(selectedId) === String(id) ? ' selected' : '';
+      return `<option value="${id}"${selected}>#${id} ${name}</option>`;
+    }).join('');
+  }).catch(() => {
+    sel.innerHTML = '<option value="">加载账户失败</option>';
+  });
+}
+
+function autonomyHalt() {
+  const reason = prompt('熔断原因（可选）:', 'manual web halt') || 'manual web halt';
+  fetch('/api/v1/autonomy/halt', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason })
+  }).then(r => r.json()).then(resp => {
+    if (resp.success === false) throw new Error(resp.error || '熔断失败');
+    showToast('已紧急熔断', 'warning');
+    loadAutonomyStatus();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+function autonomyResume() {
+  if (!confirm('确认恢复纸面交易？')) return;
+  fetch('/api/v1/autonomy/resume', { method: 'POST' })
+    .then(r => r.json()).then(resp => {
+      if (resp.success === false) throw new Error(resp.error || '恢复失败');
+      showToast('已恢复交易', 'success');
+      loadAutonomyStatus();
+    }).catch(e => showToast(e.message, 'error'));
+}
+
+function bindAutonomyPaperAccount() {
+  const sel = document.getElementById('autonomy-account-select');
+  const accountId = sel && sel.value ? sel.value : '';
+  if (!accountId) { showToast('请先选择模拟账户', 'warning'); return; }
+  const resultDiv = document.getElementById('autonomy-bind-result');
+  fetch('/api/v1/autonomy/bind-paper-account', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_id: Number(accountId) })
+  }).then(r => r.json()).then(resp => {
+    if (resp.success === false) throw new Error(resp.error || '绑定失败');
+    if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-success">已绑定账户 #${accountId}（运行时，重启后需重绑）</div>`;
+    showToast('纸面账户已绑定', 'success');
+    loadAutonomyStatus();
+  }).catch(e => {
+    if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    showToast(e.message, 'error');
+  });
+}
+
+function clearAutonomyPaperAccount() {
+  fetch('/api/v1/autonomy/bind-paper-account', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_id: null })
+  }).then(r => r.json()).then(resp => {
+    if (resp.success === false) throw new Error(resp.error || '清除失败');
+    showToast('已清除纸面账户绑定', 'info');
+    loadAutonomyStatus();
+  }).catch(e => showToast(e.message, 'error'));
+}
+
+/** 策略 Refine 闭环：生成→回测→改写 */
+function refineStrategyAI() {
+  const desc = document.getElementById('sc-ai-desc').value.trim();
+  if (!desc) { showToast('请输入策略描述', 'warning'); return; }
+  const stockCode = (document.getElementById('sc-refine-code')?.value || '600519').trim() || '600519';
+  const maxRounds = parseInt(document.getElementById('sc-refine-rounds')?.value || '3', 10) || 3;
+  const resultDiv = document.getElementById('sc-ai-result');
+  const btn = document.getElementById('sc-refine-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Refine 中...'; }
+  if (resultDiv) {
+    resultDiv.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim)"><span class="spinner"></span> 正在运行生成→回测→改写闭环...</div>';
+  }
+  fetch('/api/v1/ai-capability/strategy/refine', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: desc,
+      stock_code: stockCode,
+      max_rounds: maxRounds,
+      promote_to_testing: true
+    })
+  }).then(r => r.json()).then(resp => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refine 闭环'; }
+    if (resp.success === false) {
+      if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-danger">${resp.error || 'Refine 失败'}</div>`;
+      showToast(resp.error || 'Refine 失败', 'error');
+      return;
+    }
+    const d = resp.data || {};
+    let html = `<div class="alert ${d.saved ? 'alert-success' : 'alert-warning'}">`;
+    html += d.saved ? '✓ Refine 完成并已落库' : '⚠ Refine 结束但未保存有效策略';
+    html += '</div>';
+    if (d.strategy_id) {
+      html += `<div style="font-size:12px;margin-top:6px"><strong>ID:</strong> ${d.strategy_id} | <strong>状态:</strong> ${d.lifecycle_state || '-'} | <strong>TESTING:</strong> ${d.promoted_to_testing ? '是' : '否'}</div>`;
+    }
+    if (d.best_grade != null) {
+      html += `<div style="font-size:12px;margin-top:4px"><strong>最佳等级:</strong> ${d.best_grade} · 评分 ${d.best_score != null ? Number(d.best_score).toFixed(1) : '-'}</div>`;
+    }
+    if (Array.isArray(d.rounds) && d.rounds.length) {
+      html += '<div style="margin-top:8px;font-size:11px;color:var(--text-dim)">轮次:</div><ul style="margin:4px 0 0 16px;font-size:11px;color:var(--text-muted)">';
+      d.rounds.forEach(r => {
+        html += `<li>第${r.round}轮 · ${r.valid === false ? ('失败: ' + (r.error || '-')) : (`grade=${r.grade || '-'} score=${r.score != null ? Number(r.score).toFixed(1) : '-'}`)}</li>`;
+      });
+      html += '</ul>';
+    }
+    if (resultDiv) resultDiv.innerHTML = html;
+    showToast(d.saved ? 'Refine 成功' : 'Refine 未产出可保存策略', d.saved ? 'success' : 'warning');
+    if (d.saved) loadCustomStrategies();
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Refine 闭环'; }
+    if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${e.message}</div>`;
+    showToast('Refine 失败: ' + e.message, 'error');
+  });
 }

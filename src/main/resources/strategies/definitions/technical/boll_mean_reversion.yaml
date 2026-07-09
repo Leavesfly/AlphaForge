@@ -1,0 +1,55 @@
+# ──────────────────────────────────────────────────────────────
+# 布林带均值回归
+# 触及下轨做多，回到中轨或触及上轨离场；趋势市用动量过滤避免逆势
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: boll_mean_reversion
+label: 布林回归
+description: 价格触及布林下轨且非强下跌趋势时做多，回归中轨或触及上轨离场
+category: technical
+risk_level: medium
+applicable_market: [range]
+applicable_cap: [large, mid]
+tags: [均值回归, 布林带, 震荡, 短线]
+
+rules:
+  parameters:
+    boll_period: 20
+    boll_std: 2.0
+  param_space:
+    boll_period: [15, 20, 30]
+    boll_std: [1.5, 2.0, 2.5]
+
+  signal:
+    position_size: 0.65
+    entry:
+      - type: boll_lower_touch
+        period: 20
+        std_mult: 2.0
+      # regime 过滤：避免单边下跌中接飞刀（20 日动量不过分为负）
+      - type: factor
+        name: momentum_20
+        min: -0.08
+      - type: factor
+        name: rsi_14
+        max: 35
+    exit:
+      - type: boll_mid_reclaim
+        period: 20
+      - type: boll_upper_touch
+        period: 20
+        std_mult: 2.0
+      - type: stop_loss
+        pct: -8
+      - type: holding_days
+        max: 10
+
+  score:
+    weight: 12
+    when:
+      - type: boll_lower_touch
+        period: 20
+        std_mult: 2.0
+      - type: factor
+        name: rsi_14
+        max: 35

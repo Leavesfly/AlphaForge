@@ -1,6 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 双低策略（智能选股）
-# 由 ScreeningScoreEngine 读取 screening 段并打分
+# 双低策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: dual_low
@@ -12,31 +11,50 @@ applicable_market: [all]
 applicable_cap: [large, mid]
 tags: [价值, 低估值, PE, PB, 长线]
 
-screening:
-  # 策略参数（可供规则引用，也可作为文档说明）
+rules:
   parameters:
-    pe_max: 15   # 市盈率上限参考值
-    pb_max: 2    # 市净率上限参考值
+    max_pe: 15
+    lookback_days: 20
+    max_amplitude_pct: 25
+    support_ma: 60
+  param_space:
+    max_pe: [12, 15, 20]
+    max_amplitude_pct: [20, 25, 30]
 
-  # 打分规则：多条规则得分累加
-  # 公式（operator: lt）：得分 = (threshold - 实际值) × weight，越低越好
-  scoring_rules:
-    - metric: pe          # 市盈率
-      operator: lt         # 小于阈值时计分
-      threshold: 15        # PE < 15 才参与计分
-      weight: 3            # PE 每低 1，加 3 分
-    - metric: pb          # 市净率
-      operator: lt
-      threshold: 2         # PB < 2 才参与计分
-      weight: 20           # PB 每低 1，加 20 分
+  signal:
+    position_size: 0.85
+    entry:
+      - type: fundamental_filter
+        max_pe: 15
+      - type: amplitude_below
+        lookback: 20
+        max_pct: 25
+      - type: price_near_support
+        tolerance_pct: 3.0
+    exit:
+      - type: fundamental_deterioration
+      - type: stop_loss
+        pct: -12
+      - type: take_profit
+        pct: 30
 
-  # 推荐理由模板（由引擎按分数高低选用）
-  reason_templates:
-    high: 低估值优质标的   # 分数 > 60
-    low: 估值偏低          # 分数 ≤ 60
-
-  # 兜底：行情里没有 PE/PB 时，用股票代码生成 40~85 的稳定伪随机分
-  fallback:
-    metrics: [pe, pb]      # 这些字段任一存在则不走兜底
-    score_min: 40
-    score_max: 85
+  rank:
+    parameters:
+      pe_max: 15
+      pb_max: 2
+    scoring_rules:
+      - metric: pe
+        operator: lt
+        threshold: 15
+        weight: 3
+      - metric: pb
+        operator: lt
+        threshold: 2
+        weight: 20
+    reason_templates:
+      high: 低估值优质标的
+      low: 估值偏低
+    fallback:
+      metrics: [pe, pb]
+      score_min: 40
+      score_max: 85

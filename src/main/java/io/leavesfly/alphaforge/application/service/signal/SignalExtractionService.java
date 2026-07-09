@@ -194,6 +194,10 @@ public class SignalExtractionService {
     public void persistDecisionSignal(AnalysisReport report, AnalysisResult result) {
         if (result == null || result.signal == null) return;
         if ("neutral".equals(result.signal)) return;
+        if (result.blockSignal) {
+            log.info("[{}] 跳过信号落库：质量硬门阻断 (blockSignal=true)", report.getStockCode());
+            return;
+        }
 
         try {
             String action = result.signal.contains("buy") ? "buy"

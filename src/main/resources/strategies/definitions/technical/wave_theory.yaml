@@ -1,7 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 波浪理论策略
-# 引擎：backtest → BacktestSignalEngine | scoring → CompositeScoringEngine
-# 逻辑：第三浪起点买入、第五浪终点卖出
+# 波浪理论策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: wave_theory
@@ -10,24 +8,23 @@ description: 基于艾略特波浪理论判断浪型位置
 category: technical
 risk_level: medium
 
-backtest:
+rules:
   parameters:
-    wave_lookback: 60               # 浪型识别回溯天数
+    wave_lookback: 60
 
-  entry_conditions:
-    - type: wave_position
-      target: wave_3_start           # 第三浪起点
+  signal:
+    position_size: 0.70
+    entry:
+      - type: wave_position
+        target: wave_3_start
+    exit:
+      - type: wave_position
+        target: wave_5_end
+      - type: stop_loss
+        pct: -10
 
-  exit_conditions:
-    - type: wave_position
-      target: wave_5_end             # 第五浪终点
-    - type: stop_loss
-      pct: -10
-
-  position_size: 0.70
-
-scoring:
-  score_weight: 10
-  conditions:
-    wave_position: wave3_start
-    fibonacci_support: true          # 斐波那契支撑位确认
+  score:
+    weight: 10
+    conditions:
+      wave_position: wave3_start
+      fibonacci_support: true

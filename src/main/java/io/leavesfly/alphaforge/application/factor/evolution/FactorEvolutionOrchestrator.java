@@ -188,7 +188,24 @@ public class FactorEvolutionOrchestrator {
         FactorEvolutionRecord latest = history.get(history.size() - 1);
         if (!latest.isSuccessful()) return false;
 
-        return true;
+        // 已在库中则视为成功
+        if (evolvableLibrary.listEvolvedFactors().contains(latest.getFactorName())) {
+            return true;
+        }
+
+        FactorCandidate candidate = recordToCandidate(latest);
+        FactorEvaluation evaluation = new FactorEvaluation.Builder()
+                .factorId(latest.getFactorId())
+                .ic(latest.getIc())
+                .ir(latest.getIr())
+                .sharpeRatio(latest.getSharpeRatio())
+                .overallScore(latest.getEvaluationScore())
+                .build();
+        boolean registered = evolvableLibrary.registerFactor(candidate, evaluation);
+        if (registered) {
+            log.info("promoteFactor 已注册到可进化因子库: {}", latest.getFactorName());
+        }
+        return registered;
     }
 
     public String getEvolutionStatusSummary() {

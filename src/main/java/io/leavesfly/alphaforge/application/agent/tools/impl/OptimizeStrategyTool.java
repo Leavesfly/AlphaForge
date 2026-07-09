@@ -2,12 +2,15 @@ package io.leavesfly.alphaforge.application.agent.tools.impl;
 
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
 import io.leavesfly.alphaforge.application.agent.tools.ToolException;
+import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.engine.ParameterOptimizer;
+import io.leavesfly.alphaforge.application.strategy.lifecycle.StrategyParamWriteBackService;
 import io.leavesfly.alphaforge.application.strategy.model.OptimizationResult;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -27,6 +30,12 @@ public class OptimizeStrategyTool implements Tool {
     private final StrategyCatalog catalog;
     private final ParameterOptimizer optimizer;
     private final MarketDataPort dataFetcher;
+
+    @Autowired(required = false)
+    private AutonomyPolicy autonomyPolicy;
+
+    @Autowired(required = false)
+    private StrategyParamWriteBackService paramWriteBackService;
 
     public OptimizeStrategyTool(StrategyCatalog catalog, ParameterOptimizer optimizer,
                                  MarketDataPort dataFetcher) {
@@ -128,6 +137,21 @@ public class OptimizeStrategyTool implements Tool {
                         i + 1, c.params(), c.returnPct(), c.maxDrawdownPct(), c.winRatePct(), c.sharpeRatio()));
             }
         }
+
+        if (autonomyPolicy != null && autonomyPolicy.canAutoApplyParams()
+                && paramWriteBackService != null && !result.getBestParams().isEmpty()) {
+            try {
+                var updated = paramWriteBackService.apply(strategyName, result.getBestParams(), "auto-opt");
+                if (updated != null) {
+                    sb.append("\n已自动写回参数到自定义策略，当前状态: ").append(updated.getLifecycleState());
+                } else {
+                    sb.append("\n（内置策略未写回，仅返回优化结果）");
+                }
+            } catch (Exception e) {
+                sb.append("\n参数自动写回失败: ").append(e.getMessage());
+            }
+        }
         return sb.toString().trim();
     }
 }
+

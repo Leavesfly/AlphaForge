@@ -1,0 +1,87 @@
+# ──────────────────────────────────────────────────────────────
+# 多因子选股（动量 + 低波 + 均线乖离）
+# 接入 ClassicFactorLibrary，单票点时因子组合（截面排名由选股引擎完成）
+# ──────────────────────────────────────────────────────────────
+schema_version: 1
+id: multi_factor
+label: 多因子选股
+description: 动量、低波动与均线乖离的多因子组合，中期持仓追求稳健 Alpha
+category: fundamental
+risk_level: medium
+applicable_market: [bull, range]
+applicable_cap: [large, mid]
+tags: [多因子, 动量, 低波, 质量, 中线]
+
+rules:
+  parameters:
+    hold_days: 20
+  param_space:
+    hold_days: [10, 20, 40]
+
+  signal:
+    position_size: 0.85
+    entry:
+      - type: factor
+        name: momentum_20
+        min: 0.03
+      - type: factor
+        name: volatility_20
+        max: 0.04
+      - type: factor
+        name: ma_gap_20
+        min: -0.02
+        max: 0.08
+      - type: factor
+        name: rsi_14
+        min: 40
+        max: 70
+    exit:
+      - type: factor
+        name: momentum_20
+        max: -0.02
+      - type: factor
+        name: rsi_14
+        min: 75
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 20
+      - type: holding_days
+        max: 20
+
+  score:
+    weight: 16
+    when:
+      - type: factor
+        name: momentum_20
+        min: 0.03
+      - type: factor
+        name: volatility_20
+        max: 0.04
+      - type: factor
+        name: rsi_14
+        min: 40
+        max: 70
+
+  rank:
+    parameters:
+      cross_section_factors: [momentum_20, volatility_20, rsi_14]
+    scoring_rules:
+      - when: factor_rank_gte
+        factor: momentum_20
+        threshold: 0.6
+        formula: "40 + factor_rank * 50"
+      - metric: factor_volatility_20_rank
+        operator: lt
+        threshold: 0.4
+        weight: 30
+      - when: change_pct_gt
+        threshold: 0
+        formula: "30 + change_pct * 3"
+    reason_templates:
+      high: 多因子截面偏强
+      low: 因子组合尚可
+    fallback:
+      metrics: [pe, change_pct]
+      score_min: 40
+      score_max: 75

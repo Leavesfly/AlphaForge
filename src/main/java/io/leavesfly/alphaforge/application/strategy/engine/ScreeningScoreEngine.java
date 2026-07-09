@@ -58,7 +58,8 @@ public class ScreeningScoreEngine {
         if (total > 0) {
             return total;
         }
-        return 0;
+        // 主规则未命中时走 YAML fallback（行情缺 PE/PB 等字段时的降级分）
+        return fallbackScore(profile, stockCode, quote);
     }
 
     /**
@@ -79,6 +80,8 @@ public class ScreeningScoreEngine {
             case "value_growth" -> 50;
             case "momentum" -> 70;
             case "dividend" -> 50;
+            case "short_reversal" -> 55;
+            case "multi_factor" -> 55;
             default -> 60;
         };
         return score > threshold ? templates.getOrDefault("high", "策略推荐")
@@ -104,7 +107,41 @@ public class ScreeningScoreEngine {
         if ("change_pct_gt".equals(when) && changePct > threshold) {
             return evalFormula(stringVal(rule.get("formula")), changePct);
         }
+        if ("change_pct_lt".equals(when) && changePct < threshold) {
+            return evalFormula(stringVal(rule.get("formula")), changePct);
+        }
+        // 截面因子分位：factor_rank_gte / factor_rank_lte
+        if ("factor_rank_gte".equals(when) || "factor_rank_lte".equals(when)) {
+            String factor = stringVal(rule.get("factor"));
+            if (factor.isEmpty()) {
+                return null;
+            }
+            String rankKey = "factor_" + factor + "_rank";
+            if (!quote.containsKey(rankKey) || !(quote.get(rankKey) instanceof Number)) {
+                return null;
+            }
+            double rank = ((Number) quote.get(rankKey)).doubleValue();
+            double rankThreshold = doubleVal(rule.get("threshold"), 0.7);
+            boolean hit = "factor_rank_gte".equals(when) ? rank >= rankThreshold : rank <= rankThreshold;
+            if (!hit) {
+                return null;
+            }
+            String formula = stringVal(rule.get("formula"));
+            if (!formula.isEmpty()) {
+                return evalFactorRankFormula(formula, rank, changePct);
+            }
+            return "factor_rank_gte".equals(when) ? 40 + rank * 60 : 40 + (1 - rank) * 60;
+        }
         return null;
+    }
+
+    /** 解析含 factor_rank / change_pct 占位符的简单公式 */
+    private double evalFactorRankFormula(String formula, double factorRank, double changePct) {
+        String expr = formula
+                .replace("factor_rank", String.valueOf(factorRank))
+                .replace("change_pct", String.valueOf(changePct))
+                .replace(" ", "");
+        return evalFormula(expr, changePct);
     }
 
     // ── 指标规则（metric + operator + weight）────────────────────────
@@ -118,15 +155,24 @@ public class ScreeningScoreEngine {
                                       Map<String, Object> parameters) {
         String metricName = stringVal(rule.get("metric"));
         double value = resolveMetric(metricName, quote, parameters);
-        if (value <= 0 && !"peg".equals(metricName)) {
+        boolean isFactorRank = metricName.startsWith("factor_") && metricName.endsWith("_rank");
+        if (!isFactorRank && value <= 0 && !"peg".equals(metricName)) {
+            return 0;
+        }
+        if (isFactorRank && !quote.containsKey(metricName)) {
             return 0;
         }
         String operator = stringVal(rule.get("operator"));
         double threshold = doubleVal(rule.get("threshold"), 0);
         double weight = doubleVal(rule.get("weight"), 1);
         return switch (operator) {
-            case "lt" -> value > 0 && value < threshold ? (threshold - value) * weight : 0;
-            case "gt" -> value > threshold ? value * weight : 0;
+            case "lt" -> {
+                if (isFactorRank) {
+                    yield value < threshold ? (threshold - value) * weight : 0;
+                }
+                yield value > 0 && value < threshold ? (threshold - value) * weight : 0;
+            }
+            case "gt" -> value > threshold ? (isFactorRank ? (value - threshold) * weight : value * weight) : 0;
             default -> 0;
         };
     }
@@ -149,6 +195,10 @@ public class ScreeningScoreEngine {
         }
         if ("dividend_yield".equals(metricName)) {
             return metric(quote, "dividend_yield", "dy");
+        }
+        // 截面因子分位：factor_momentum_20_rank 等
+        if (metricName.startsWith("factor_") && metricName.endsWith("_rank")) {
+            return metric(quote, metricName);
         }
         return metric(quote, metricName, metricName + "_ratio");
     }

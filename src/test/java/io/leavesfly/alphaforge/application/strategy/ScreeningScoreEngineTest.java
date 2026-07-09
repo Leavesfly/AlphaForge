@@ -40,10 +40,34 @@ class ScreeningScoreEngineTest {
     }
 
     @Test
-    @DisplayName("缺失行情字段时应返回 0 分")
+    @DisplayName("缺失行情字段时应走 fallback 兜底分")
     void fallbackWhenMetricsMissing() {
         StrategyDefinition strategy = catalog.find("dual_low").orElseThrow();
         double score = engine.score(strategy, "600519", Map.of());
-        assertEquals(0, score);
+        assertTrue(score >= 40 && score < 85, "fallback score=" + score);
+    }
+
+    @Test
+    @DisplayName("短期反转策略应对大跌给出更高分")
+    void shortReversalScoresDeepDropHigher() {
+        StrategyDefinition strategy = catalog.find("short_reversal").orElseThrow();
+        double deep = engine.score(strategy, "600519", Map.of("change_pct", -10.0));
+        double mild = engine.score(strategy, "600519", Map.of("change_pct", -4.0));
+        assertTrue(deep > mild);
+    }
+
+    @Test
+    @DisplayName("截面因子分位规则应按 rank 打分")
+    void factorRankRuleShouldScore() {
+        StrategyDefinition strategy = catalog.find("multi_factor").orElseThrow();
+        double high = engine.score(strategy, "600519", Map.of(
+                "factor_momentum_20_rank", 0.9,
+                "factor_volatility_20_rank", 0.2,
+                "change_pct", 1.0));
+        double low = engine.score(strategy, "600519", Map.of(
+                "factor_momentum_20_rank", 0.3,
+                "factor_volatility_20_rank", 0.8,
+                "change_pct", 1.0));
+        assertTrue(high > low, "high=" + high + " low=" + low);
     }
 }

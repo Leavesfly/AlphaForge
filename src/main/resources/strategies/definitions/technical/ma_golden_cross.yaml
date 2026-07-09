@@ -1,7 +1,5 @@
 # ──────────────────────────────────────────────────────────────
-# 均线金叉策略（历史回测）
-# 引擎：BacktestSignalEngine
-# 逻辑：短期均线上穿长期均线买入，下穿卖出
+# 均线金叉策略（统一 rules DSL）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: ma_golden_cross
@@ -13,39 +11,33 @@ applicable_market: [bull, recovery]
 applicable_cap: [large, mid, small]
 tags: [趋势, 均线, 金叉, 中线]
 
-backtest:
+rules:
   parameters:
-    fast_period: 5    # 快线周期（日）
-    slow_period: 20   # 慢线周期（日）
-
-  # 参数搜索空间（供 ParameterOptimizer / OptimizeStrategyTool 使用）
+    fast_period: 5
+    slow_period: 20
   param_space:
     fast_period: [3, 5, 8, 10]
     slow_period: [15, 20, 30, 60]
+  position_sizing:
+    mode: atr
+    risk_fraction: 0.01
+    atr_period: 20
+    atr_multiplier: 2.0
 
-  # 入场条件：全部满足才买入（AND）
-  entry_conditions:
-    - type: ma_cross
-      fast: MA5
-      slow: MA20
-      direction: golden   # 金叉：前一日 MA5 ≤ MA20，当日 MA5 > MA20
-
-  # 出场条件：满足任一即卖出（OR）
-  exit_conditions:
-    - type: ma_cross
-      fast: MA5
-      slow: MA20
-      direction: death    # 死叉
-    - type: stop_loss
-      pct: -8             # 相对买入价亏损 8% 止损
-
-  position_size: 0.95     # 买入时使用可用资金的 95%
-
-  # 可选：覆盖默认仿真参数（A股默认次日开盘成交、万三佣金、千五印花税、T+1）
-  # simulation:
-  #   execution_mode: NEXT_OPEN   # NEXT_OPEN | CLOSE
-  #   commission_rate: 0.0003
-  #   stamp_tax_rate: 0.0005
-  #   slippage_rate: 0.001
-  #   t1_enabled: true
-  #   lot_size: 100
+  signal:
+    position_size: 0.95
+    entry:
+      - type: ma_cross
+        fast: MA5
+        slow: MA20
+        direction: golden
+    exit:
+      - type: ma_cross
+        fast: MA5
+        slow: MA20
+        direction: death
+      - type: atr_stop
+        period: 20
+        multiplier: 2.0
+      - type: stop_loss
+        pct: -8

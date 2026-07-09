@@ -15,8 +15,13 @@ public class BacktestProfile {
     private List<Map<String, Object>> entryConditions = Collections.emptyList();
     /** 出场条件列表，满足任一即卖出（OR 逻辑） */
     private List<Map<String, Object>> exitConditions = Collections.emptyList();
-    /** 买入仓位比例，0~1 之间的小数，如 0.95 表示 95% */
+    /** 买入仓位比例，0~1 之间的小数，如 0.95 表示 95%；ATR 模式下作为上限 */
     private double positionSize = 0.95;
+    /**
+     * 动态仓位配置。例：{@code {mode: atr, risk_fraction: 0.01, atr_period: 20, atr_multiplier: 2.0}}。
+     * 空则使用固定 {@link #positionSize}。
+     */
+    private Map<String, Object> positionSizing = Collections.emptyMap();
     /** 回测仿真参数覆盖，如 commission_rate、slippage_rate */
     private Map<String, Object> simulation = Collections.emptyMap();
     /** 参数搜索空间，如 {"fast_period": [3,5,8], "slow_period": [15,20,30]}，供 ParameterOptimizer 使用 */
@@ -39,6 +44,11 @@ public class BacktestProfile {
 
     public double getPositionSize() { return positionSize; }
     public void setPositionSize(double positionSize) { this.positionSize = positionSize; }
+
+    public Map<String, Object> getPositionSizing() { return positionSizing; }
+    public void setPositionSizing(Map<String, Object> positionSizing) {
+        this.positionSizing = positionSizing != null ? positionSizing : Collections.emptyMap();
+    }
 
     public Map<String, Object> getSimulation() { return simulation; }
     public void setSimulation(Map<String, Object> simulation) {

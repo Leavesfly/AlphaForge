@@ -1,7 +1,6 @@
 # ──────────────────────────────────────────────────────────────
-# 一阳穿三阴策略（综合分析评分）
-# 引擎：scoring → CompositeScoringEngine
-# 逻辑：一根阳线收复前三根阴线，伴随放量，视为强势反转
+# 一阳穿三阴策略（统一 rules DSL 试点）
+# signal → 回测 | score → 综合评分（when 与 entry 共用 type 条件）
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: one_yang_three_yin
@@ -9,9 +8,40 @@ label: 一阳穿三阴
 description: 一根阳线收复前三根阴线的失地，强势反转
 category: technical
 risk_level: medium
+applicable_market: [bear, range, recovery]
+applicable_cap: [mid, small]
+tags: [反转, 形态, 放量, 短线]
 
-scoring:
-  score_weight: 14
-  conditions:
-    yang_covers_yin_count: 3        # 阳线覆盖前 3 根阴线
-    volume_amplify: 1.5             # 成交量放大 1.5 倍
+rules:
+  parameters:
+    yin_count: 3
+    volume_amplify: 1.5
+  param_space:
+    yin_count: [2, 3, 4]
+    volume_amplify: [1.2, 1.5, 2.0]
+
+  signal:
+    position_size: 0.85
+    entry:
+      - type: yang_covers_yin
+        yin_count: 3
+      - type: volume_amplify
+        min_ratio: 1.5
+    exit:
+      - type: stop_loss
+        pct: -8
+      - type: take_profit
+        pct: 15
+      - type: change_below
+        pct: -5
+      - type: holding_days
+        max: 10
+
+  score:
+    weight: 14
+    # 与 signal.entry 同一套 type，加载时映射为评分 key
+    when:
+      - type: yang_covers_yin
+        yin_count: 3
+      - type: volume_amplify
+        min_ratio: 1.5

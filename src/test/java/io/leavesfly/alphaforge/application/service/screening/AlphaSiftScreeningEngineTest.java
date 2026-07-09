@@ -50,7 +50,8 @@ class AlphaSiftScreeningEngineTest {
                 Map.of("code", "000858", "name", "五粮液", "market", "A")
         ));
         engine = new AlphaSiftScreeningEngine(dataFetcher, config, envVarProvider, StrategyTestData.loadCatalog(),
-                new ScreeningScoreEngine(), watchlistService, taskRepo, new ObjectMapper());
+                new ScreeningScoreEngine(), new CrossSectionalFactorEnricher(dataFetcher),
+                watchlistService, taskRepo, new ObjectMapper());
     }
 
     @Test

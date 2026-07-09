@@ -1,7 +1,6 @@
 # ──────────────────────────────────────────────────────────────
-# 热点题材策略（综合分析评分）
-# 引擎：scoring → CompositeScoringEngine
-# 逻辑：跟踪市场主线题材，资金净流入的热门板块标的
+# 热点题材策略（统一 rules DSL）
+# 题材热度缺历史面板时，用放量上涨 + 动量作为可回测代理
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: hot_theme
@@ -9,9 +8,40 @@ label: 热点题材
 description: 跟踪市场热点题材轮动，参与主线题材
 category: sentiment
 risk_level: high
+applicable_market: [bull, range]
+applicable_cap: [mid, small]
+tags: [题材, 热点, 轮动, 短线]
 
-scoring:
-  score_weight: 12
-  conditions:
-    theme_heat_rank: 3              # 题材热度排名前 3
-    inflow_positive: true           # 资金净流入
+rules:
+  parameters:
+    volume_multiple: 2.0
+    min_change_pct: 3.0
+    ma_period: 20
+    strong_change_pct: 3.0
+  param_space:
+    volume_multiple: [1.5, 2.0, 2.5]
+    min_change_pct: [2.0, 3.0, 4.0]
+
+  signal:
+    position_size: 0.70
+    entry:
+      - type: volume_breakout
+        multiple: 2.0
+        min_change: 3.0
+      - type: momentum_up
+        min_change: 3.0
+    exit:
+      - type: change_below
+        pct: -5
+      - type: stop_loss
+        pct: -10
+      - type: take_profit
+        pct: 15
+      - type: holding_days
+        max: 8
+
+  score:
+    weight: 12
+    conditions:
+      theme_heat_rank: 3
+      inflow_positive: true

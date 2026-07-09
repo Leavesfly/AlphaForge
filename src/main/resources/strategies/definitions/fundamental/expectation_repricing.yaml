@@ -1,7 +1,6 @@
 # ──────────────────────────────────────────────────────────────
-# 预期重定价策略（综合分析评分）
-# 引擎：scoring → CompositeScoringEngine
-# 逻辑：盈利预期大幅上调或分析师集体看好，引发估值重估
+# 预期重定价策略（统一 rules DSL）
+# 缺 EPS/分析师历史时，用事件触发 + 放量突破代理「预期上修」
 # ──────────────────────────────────────────────────────────────
 schema_version: 1
 id: expectation_repricing
@@ -9,9 +8,45 @@ label: 预期重定价
 description: 基本面预期发生重大变化导致估值重估
 category: fundamental
 risk_level: medium
+applicable_market: [bull, recovery]
+applicable_cap: [large, mid]
+tags: [预期, 重定价, 事件, 中线]
 
-scoring:
-  score_weight: 12
-  conditions:
-    eps_revision_pct: 20            # EPS 预期上调幅度 ≥ 20%
-    analyst_upgrade: true           # 分析师评级上调
+rules:
+  parameters:
+    volume_multiple: 1.8
+    min_change_pct: 5.0
+    ma_period: 20
+  param_space:
+    min_change_pct: [4.0, 5.0, 6.0]
+    volume_multiple: [1.5, 1.8, 2.0]
+
+  signal:
+    position_size: 0.75
+    entry:
+      - type: event_trigger
+        category: positive
+        min_change: 5.0
+      - type: volume_breakout
+        multiple: 1.8
+        min_change: 5.0
+    exit:
+      - type: stop_loss
+        pct: -12
+      - type: take_profit
+        pct: 25
+      - type: change_below
+        pct: -6
+      - type: holding_days
+        max: 20
+
+  score:
+    weight: 12
+    # 与 signal 对齐：缺 EPS/分析师字段时用事件触发 + 放量突破代理
+    when:
+      - type: event_trigger
+        category: positive
+        min_change: 5.0
+      - type: volume_breakout
+        multiple: 1.8
+        min_change: 5.0

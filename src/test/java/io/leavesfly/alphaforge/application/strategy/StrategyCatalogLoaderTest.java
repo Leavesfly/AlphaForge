@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("StrategyCatalogLoader 策略目录加载测试")
@@ -19,17 +21,36 @@ class StrategyCatalogLoaderTest {
     }
 
     @Test
-    @DisplayName("应加载全部 19 个策略定义")
+    @DisplayName("应加载全部 23 个策略定义")
     void shouldLoadAllStrategies() {
-        assertEquals(19, catalog.listAll().size());
+        assertEquals(23, catalog.listAll().size());
     }
 
     @Test
-    @DisplayName("应按能力正确分类策略")
-    void shouldGroupByCapability() {
-        assertTrue(catalog.listByCapability("backtest").size() >= 10);
-        assertEquals(4, catalog.listByCapability("screening").size());
-        assertTrue(catalog.listByCapability("scoring").size() >= 10);
+    @DisplayName("全部 23 个策略应具备 backtest 能力且可用")
+    void allStrategiesShouldSupportBacktest() {
+        assertEquals(23, catalog.listByCapability("backtest").size());
+        for (StrategyDefinition strategy : catalog.listAll()) {
+            assertTrue(strategy.supports("backtest"), strategy.getId() + " 应声明 backtest");
+            assertTrue(strategy.hasBacktest(), strategy.getId() + " 应有 entry_conditions");
+            assertTrue(strategy.isAvailable(),
+                    strategy.getId() + " 应可用: " + strategy.getUnavailableReason());
+        }
+    }
+
+    @Test
+    @DisplayName("新策略 short_reversal / multi_factor / channel_breakout / boll_mean_reversion 应可用")
+    void newClassicStrategiesShouldBeAvailable() {
+        for (String id : List.of("short_reversal", "multi_factor", "channel_breakout", "boll_mean_reversion")) {
+            StrategyDefinition strategy = catalog.find(id).orElseThrow();
+            assertTrue(strategy.isAvailable(), id + ": " + strategy.getUnavailableReason());
+            assertTrue(strategy.hasBacktest());
+        }
+        assertTrue(catalog.find("short_reversal").orElseThrow().hasScoring());
+        assertTrue(catalog.find("short_reversal").orElseThrow().hasScreening());
+        assertTrue(catalog.find("multi_factor").orElseThrow().hasScoring());
+        assertTrue(catalog.find("channel_breakout").orElseThrow().hasScoring());
+        assertTrue(catalog.find("boll_mean_reversion").orElseThrow().hasScoring());
     }
 
     @Test

@@ -21,6 +21,14 @@ public interface BaseDataFetcher {
     String getName();
 
     /**
+     * 数据源族（同源底层接口应返回同一族名）。
+     * 交叉校验时跳过同族备源，避免东财系自证。
+     */
+    default String getDataFamily() {
+        return getName();
+    }
+
+    /**
      * 获取数据源优先级(越小越高)
      */
     int getPriority();

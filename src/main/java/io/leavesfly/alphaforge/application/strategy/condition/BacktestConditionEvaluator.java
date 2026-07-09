@@ -22,7 +22,17 @@ public class BacktestConditionEvaluator {
             "volume_shrink", "near_box_low", "near_box_high", "box_break_down",
             "consecutive_up", "first_pullback", "break_below_ma", "holding_days", "wave_position",
             "sentiment_extreme", "event_trigger", "fundamental_filter",
-            "price_near_support", "fundamental_deterioration"
+            "price_near_support", "fundamental_deterioration",
+            // 与综合评分共享的形态条件（见 BarPatternConditions）
+            "price_near_low", "consecutive_volume_days", "yang_covers_yin",
+            "volume_amplify", "momentum_up",
+            "macd_golden_cross", "macd_death_cross", "boll_upper_break", "amplitude_below",
+            // 经典因子库条件（见 FactorConditions / ClassicFactorLibrary）
+            "factor",
+            // 通道突破 / ATR（趋势跟踪）
+            "channel_breakout", "channel_breakdown", "atr_stop",
+            // 布林带均值回归
+            "boll_lower_touch", "boll_upper_touch", "boll_mid_reclaim"
     );
 
     public boolean evaluate(Map<String, Object> condition, List<StockDailyData> data, int index,
@@ -52,6 +62,22 @@ public class BacktestConditionEvaluator {
             case "fundamental_filter" -> evaluateFundamentalFilter(condition, parameters);
             case "price_near_support" -> evaluatePriceNearSupport(condition, data, index, parameters);
             case "fundamental_deterioration" -> evaluateFundamentalDeterioration(condition, parameters);
+            case "price_near_low" -> evaluatePriceNearLow(condition, data, index, parameters);
+            case "consecutive_volume_days" -> evaluateConsecutiveVolumeDays(condition, data, index, parameters);
+            case "yang_covers_yin" -> evaluateYangCoversYin(condition, data, index, parameters);
+            case "volume_amplify" -> evaluateVolumeAmplify(condition, data, index, parameters);
+            case "momentum_up" -> evaluateMomentumUp(condition, data, index, parameters);
+            case "macd_golden_cross" -> BarPatternConditions.macdGoldenCross(data, index);
+            case "macd_death_cross" -> BarPatternConditions.macdDeathCross(data, index);
+            case "boll_upper_break" -> evaluateBollUpperBreak(condition, data, index, parameters);
+            case "amplitude_below" -> evaluateAmplitudeBelow(condition, data, index, parameters);
+            case "factor" -> FactorConditions.evaluate(condition, data, index);
+            case "channel_breakout" -> evaluateChannelBreakout(condition, data, index, parameters);
+            case "channel_breakdown" -> evaluateChannelBreakdown(condition, data, index, parameters);
+            case "atr_stop" -> holding && evaluateAtrStop(condition, data, index, parameters, entryPrice);
+            case "boll_lower_touch" -> evaluateBollLowerTouch(condition, data, index, parameters);
+            case "boll_upper_touch" -> evaluateBollUpperTouch(condition, data, index, parameters);
+            case "boll_mid_reclaim" -> evaluateBollMidReclaim(condition, data, index, parameters);
             default -> false;
         };
     }
@@ -374,9 +400,19 @@ public class BacktestConditionEvaluator {
      * 注：backtest 环境下基本面数据从 parameters 注入
      */
     private boolean evaluateFundamentalFilter(Map<String, Object> condition, Map<String, Object> parameters) {
+        // 点时基本面明确不可用时，入场过滤失败（避免无数据却放行）
+        if (Boolean.FALSE.equals(parameters.get("fundamentals_available"))) {
+            return false;
+        }
         // 营收增速校验
         double revenueMin = doubleVal(condition.get("revenue_growth_min"),
                 doubleParam(parameters, "min_revenue_growth", 0));
+        if (revenueMin > 0 && !parameters.containsKey("actual_revenue_growth")) {
+            // 要求增速但未注入实际值：有点时框架时失败；无框架（单测）仍用旧默认放行
+            if (parameters.containsKey("fundamentals_available")) {
+                return false;
+            }
+        }
         double revenueActual = doubleParam(parameters, "actual_revenue_growth", Double.MAX_VALUE);
         if (revenueActual < revenueMin) {
             return false;
@@ -384,6 +420,10 @@ public class BacktestConditionEvaluator {
         // ROE 校验
         double roeMin = doubleVal(condition.get("roe_min"),
                 doubleParam(parameters, "min_roe", 0));
+        if (roeMin > 0 && !parameters.containsKey("actual_roe")
+                && parameters.containsKey("fundamentals_available")) {
+            return false;
+        }
         double roeActual = doubleParam(parameters, "actual_roe", Double.MAX_VALUE);
         if (roeActual < roeMin) {
             return false;
@@ -391,8 +431,12 @@ public class BacktestConditionEvaluator {
         // PE 上限校验
         double maxPe = doubleVal(condition.get("max_pe"),
                 doubleParam(parameters, "max_pe", Double.MAX_VALUE));
+        if (maxPe < Double.MAX_VALUE && parameters.containsKey("fundamentals_available")
+                && !parameters.containsKey("actual_pe")) {
+            return false;
+        }
         double peActual = doubleParam(parameters, "actual_pe", 0);
-        if (peActual > maxPe) {
+        if (maxPe < Double.MAX_VALUE && peActual > maxPe) {
             return false;
         }
         return true;
@@ -427,6 +471,9 @@ public class BacktestConditionEvaluator {
      * 检查 revenue_decline 或 profit_decline 标志
      */
     private boolean evaluateFundamentalDeterioration(Map<String, Object> condition, Map<String, Object> parameters) {
+        if (Boolean.FALSE.equals(parameters.get("fundamentals_available"))) {
+            return false;
+        }
         // 检查营收下滑
         boolean revenueDecline = Boolean.TRUE.equals(parameters.get("revenue_decline"));
         // 检查利润下滑
@@ -435,6 +482,103 @@ public class BacktestConditionEvaluator {
         boolean roeDecline = Boolean.TRUE.equals(parameters.get("roe_decline"));
         // 任一恶化信号触发即返回 true
         return revenueDecline || profitDecline || roeDecline;
+    }
+
+    // ==================== 共享形态条件（BarPatternConditions） ====================
+
+    private boolean evaluatePriceNearLow(Map<String, Object> condition, List<StockDailyData> data,
+                                         int index, Map<String, Object> parameters) {
+        int lookback = intVal(condition.get("lookback"), intParam(parameters, "lookback_days", 60));
+        double maxPosition = doubleVal(condition.get("max_position"),
+                doubleParam(parameters, "max_position", 0.25));
+        return BarPatternConditions.priceNearLow(data, index, lookback, maxPosition);
+    }
+
+    private boolean evaluateConsecutiveVolumeDays(Map<String, Object> condition, List<StockDailyData> data,
+                                                  int index, Map<String, Object> parameters) {
+        int days = intVal(condition.get("days"), intParam(parameters, "consecutive_days", 2));
+        double multiple = doubleVal(condition.get("multiple"),
+                doubleParam(parameters, "volume_multiple", 2.0));
+        int avgPeriod = intVal(condition.get("avg_period"), intParam(parameters, "ma_period", 20));
+        return BarPatternConditions.consecutiveVolumeDays(data, index, days, multiple, avgPeriod);
+    }
+
+    private boolean evaluateYangCoversYin(Map<String, Object> condition, List<StockDailyData> data,
+                                          int index, Map<String, Object> parameters) {
+        int yinCount = intVal(condition.get("yin_count"), intParam(parameters, "yin_count", 3));
+        return BarPatternConditions.oneYangCoversYin(data, index, yinCount);
+    }
+
+    private boolean evaluateVolumeAmplify(Map<String, Object> condition, List<StockDailyData> data,
+                                          int index, Map<String, Object> parameters) {
+        double minRatio = doubleVal(condition.get("min_ratio"),
+                doubleParam(parameters, "volume_amplify", 1.5));
+        return BarPatternConditions.volumeAmplify(data, index) >= minRatio;
+    }
+
+    private boolean evaluateMomentumUp(Map<String, Object> condition, List<StockDailyData> data,
+                                       int index, Map<String, Object> parameters) {
+        double minChange = doubleVal(condition.get("min_change"),
+                doubleParam(parameters, "strong_change_pct", 1.5));
+        return BarPatternConditions.momentumUp(data, index, minChange);
+    }
+
+    private boolean evaluateBollUpperBreak(Map<String, Object> condition, List<StockDailyData> data,
+                                           int index, Map<String, Object> parameters) {
+        int period = intVal(condition.get("period"), intParam(parameters, "boll_period", 20));
+        double stdMult = doubleVal(condition.get("std_mult"),
+                doubleParam(parameters, "boll_std", 2.0));
+        return BarPatternConditions.bollUpperBreak(data, index, period, stdMult);
+    }
+
+    private boolean evaluateAmplitudeBelow(Map<String, Object> condition, List<StockDailyData> data,
+                                           int index, Map<String, Object> parameters) {
+        int lookback = intVal(condition.get("lookback"), intParam(parameters, "lookback_days", 20));
+        double maxPct = doubleVal(condition.get("max_pct"),
+                doubleParam(parameters, "max_amplitude_pct", 25));
+        return BarPatternConditions.amplitudeBelow(data, index, lookback, maxPct);
+    }
+
+    private boolean evaluateChannelBreakout(Map<String, Object> condition, List<StockDailyData> data,
+                                            int index, Map<String, Object> parameters) {
+        int lookback = intVal(condition.get("lookback"), intParam(parameters, "entry_channel", 20));
+        return BarPatternConditions.channelBreakout(data, index, lookback);
+    }
+
+    private boolean evaluateChannelBreakdown(Map<String, Object> condition, List<StockDailyData> data,
+                                             int index, Map<String, Object> parameters) {
+        int lookback = intVal(condition.get("lookback"), intParam(parameters, "exit_channel", 10));
+        return BarPatternConditions.channelBreakdown(data, index, lookback);
+    }
+
+    private boolean evaluateAtrStop(Map<String, Object> condition, List<StockDailyData> data,
+                                    int index, Map<String, Object> parameters, double entryPrice) {
+        int period = intVal(condition.get("period"), intParam(parameters, "atr_period", 20));
+        double multiplier = doubleVal(condition.get("multiplier"),
+                doubleParam(parameters, "atr_multiplier", 2.0));
+        return BarPatternConditions.atrStop(data, index, period, multiplier, entryPrice);
+    }
+
+    private boolean evaluateBollLowerTouch(Map<String, Object> condition, List<StockDailyData> data,
+                                           int index, Map<String, Object> parameters) {
+        int period = intVal(condition.get("period"), intParam(parameters, "boll_period", 20));
+        double stdMult = doubleVal(condition.get("std_mult"),
+                doubleParam(parameters, "boll_std", 2.0));
+        return BarPatternConditions.bollLowerTouch(data, index, period, stdMult);
+    }
+
+    private boolean evaluateBollUpperTouch(Map<String, Object> condition, List<StockDailyData> data,
+                                           int index, Map<String, Object> parameters) {
+        int period = intVal(condition.get("period"), intParam(parameters, "boll_period", 20));
+        double stdMult = doubleVal(condition.get("std_mult"),
+                doubleParam(parameters, "boll_std", 2.0));
+        return BarPatternConditions.bollUpperTouch(data, index, period, stdMult);
+    }
+
+    private boolean evaluateBollMidReclaim(Map<String, Object> condition, List<StockDailyData> data,
+                                           int index, Map<String, Object> parameters) {
+        int period = intVal(condition.get("period"), intParam(parameters, "boll_period", 20));
+        return BarPatternConditions.bollMidReclaim(data, index, period);
     }
 
     // ==================== 辅助计算方法 ====================

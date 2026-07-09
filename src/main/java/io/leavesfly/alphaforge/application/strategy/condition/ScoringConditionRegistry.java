@@ -14,8 +14,22 @@ public final class ScoringConditionRegistry {
             "yang_covers_yin_count", "volume_amplify", "revenue_growth_min", "profit_growth_min", "roe_min",
             "limit_up", "is_sector_leader", "turnover_ratio_min", "wave_position", "fibonacci_support",
             "cycle_phase", "sentiment_score_min", "has_major_event", "event_freshness_days",
-            "divergence", "center_break", "eps_revision_pct", "analyst_upgrade", "theme_heat_rank", "inflow_positive"
+            "divergence", "center_break", "eps_revision_pct", "analyst_upgrade", "theme_heat_rank", "inflow_positive",
+            "channel_breakout", "channel_breakdown", "boll_lower_touch", "boll_upper_touch", "boll_mid_reclaim",
+            "momentum_up_min"
     );
+
+    /** 动态因子条件 key：factor_{name}_min / _max / _present */
+    public static boolean isSupportedKey(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        if (SUPPORTED_KEYS.contains(key)) {
+            return true;
+        }
+        return key.startsWith("factor_") && (key.endsWith("_min")
+                || key.endsWith("_max") || key.endsWith("_present"));
+    }
 
     private ScoringConditionRegistry() {
     }
