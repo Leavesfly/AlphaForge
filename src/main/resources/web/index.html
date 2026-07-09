@@ -153,7 +153,7 @@
     </div>
   </div>
   <div class="sidebar-footer">
-    <button class="btn btn-primary btn-sm sidebar-chat-btn" onclick="openChatDrawer()" type="button">
+    <button class="btn btn-primary btn-sm sidebar-chat-btn" onclick="navigateTo('copilot')" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
       AI Copilot
     </button>
@@ -826,32 +826,23 @@
   </div>
 </div>
 
-<!-- ===== Chat Drawer (global) ===== -->
-<div class="chat-drawer-overlay" id="chat-drawer-overlay" onclick="if(event.target===this)closeChatDrawer()">
-  <div class="chat-drawer" id="chat-drawer">
-    <div class="chat-drawer-header">
-      <div class="copilot-header-left">
-        <h3>AI Copilot</h3>
-        <span class="copilot-context-chip" id="copilot-context">通用助手</span>
-      </div>
-      <div class="copilot-header-actions">
-        <button class="btn btn-ghost btn-sm" onclick="newChatSession()" title="新建对话">＋</button>
-        <button class="btn btn-ghost btn-sm" id="copilot-dock-btn" onclick="toggleCopilotDock()" title="停靠到右侧">停靠</button>
-        <button class="modal-close" onclick="closeChatDrawer()">×</button>
-      </div>
+<!-- ===== AI Copilot Page ===== -->
+<div class="page" id="page-copilot">
+  <div class="page-header">
+    <div class="page-header-left"><h2>AI Copilot <span class="copilot-context-chip" id="copilot-context">通用助手</span></h2><p>你的 AI 量化研究搭子 · 分析个股 / 生成策略 / 解读信号</p></div>
+    <div><button class="btn btn-outline btn-sm" onclick="newChatSession()">+ 新建对话</button></div>
+  </div>
+  <div class="chat-layout copilot-page-layout">
+    <div class="chat-sidebar">
+      <div class="chat-sidebar-header"><h3>历史会话</h3><button class="btn btn-sm btn-primary" onclick="newChatSession()">+ 新建</button></div>
+      <div class="chat-session-list" id="chat-session-list"></div>
     </div>
-    <div class="chat-layout chat-drawer-layout">
-      <div class="chat-sidebar">
-        <div class="chat-sidebar-header"><h3>历史会话</h3><button class="btn btn-sm btn-primary" onclick="newChatSession()">+ 新建</button></div>
-        <div class="chat-session-list" id="chat-session-list"></div>
-      </div>
-      <div class="chat-main">
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="copilot-suggestions" id="copilot-suggestions"></div>
-        <div class="chat-input-area">
-          <textarea class="chat-input" id="chat-input" rows="1" placeholder="输入问题...（如：分析贵州茅台 / 查信号 / 熔断）"></textarea>
-          <button class="btn btn-primary" id="btn-send-chat" onclick="sendChatMessage()">发送</button>
-        </div>
+    <div class="chat-main">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="copilot-suggestions" id="copilot-suggestions"></div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chat-input" rows="1" placeholder="输入问题...（如：分析贵州茅台 / 查信号 / 熔断）"></textarea>
+        <button class="btn btn-primary" id="btn-send-chat" onclick="sendChatMessage()">发送</button>
       </div>
     </div>
   </div>

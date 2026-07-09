@@ -9,10 +9,11 @@
         VALUES (#{sessionId}, #{title}, 0, #{now}, #{now})
     </insert>
 
-    <!-- 更新会话活跃时间 -->
+    <!-- 更新会话活跃时间；title 为 null 时不覆盖（保留已有标题） -->
     <update id="updateSessionActive">
         UPDATE chat_sessions
-        SET message_count = #{messageCount}, title = #{title}, last_active = #{now}
+        SET message_count = #{messageCount}, last_active = #{now}
+        <if test="title != null">, title = #{title}</if>
         WHERE session_id = #{sessionId}
     </update>
 
@@ -21,11 +22,17 @@
         DELETE FROM chat_sessions WHERE session_id = #{sessionId}
     </delete>
 
-    <!-- 查询会话列表(按最近活跃排序) -->
+    <!-- 查询会话列表(按最近活跃排序)；标题缺失时回退为首条用户消息 -->
     <select id="findSessions" resultType="map">
-        SELECT session_id, title, message_count, created_at, last_active
-        FROM chat_sessions
-        ORDER BY last_active DESC
+        SELECT s.session_id,
+               CASE WHEN s.title IS NULL OR s.title = '' OR s.title = '新对话'
+                    THEN (SELECT m.content FROM chat_messages m
+                          WHERE m.session_id = s.session_id AND m.role = 'user'
+                          ORDER BY m.id ASC LIMIT 1)
+                    ELSE s.title END AS title,
+               s.message_count, s.created_at, s.last_active
+        FROM chat_sessions s
+        ORDER BY s.last_active DESC
         LIMIT #{limit}
     </select>
 

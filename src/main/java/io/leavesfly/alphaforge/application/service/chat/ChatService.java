@@ -210,8 +210,14 @@ public class ChatService {
 
     /** 持久化用户消息 */
     private void saveUserMessage(String sessionId, String message) {
+        int existing = chatRepository.countMessagesBySessionId(sessionId);
         String msgId = UUID.randomUUID().toString().replace("-", "");
         chatRepository.insertMessage(sessionId, msgId, "user", message, null, LocalDateTime.now());
+        // 首条用户消息：用其内容作为会话标题
+        if (existing == 0) {
+            int count = chatRepository.countMessagesBySessionId(sessionId);
+            chatRepository.updateSessionActive(sessionId, count, buildSessionTitle(message), LocalDateTime.now());
+        }
     }
 
     /** 持久化assistant消息并更新会话 */
@@ -226,13 +232,21 @@ public class ChatService {
     private Map<String, Object> formatSession(Map<String, Object> row) {
         Map<String, Object> session = new LinkedHashMap<>();
         session.put("sessionId", row.get("session_id"));
-        session.put("title", row.get("title") != null ? row.get("title") : "新对话");
+        session.put("title", buildSessionTitle(row.get("title") != null ? row.get("title").toString() : null));
         session.put("messageCount", row.get("message_count") != null ? row.get("message_count") : 0);
         Object createdAt = row.get("created_at");
         Object lastActive = row.get("last_active");
         session.put("createdAt", createdAt != null ? createdAt.toString() : null);
         session.put("lastActive", lastActive != null ? lastActive.toString() : null);
         return session;
+    }
+
+    /** 由文本生成简短的会话标题（去除多余空白并截断） */
+    private String buildSessionTitle(String raw) {
+        if (raw == null) return "新对话";
+        String t = raw.replaceAll("\\s+", " ").trim();
+        if (t.isEmpty() || "新对话".equals(t)) return "新对话";
+        return t.length() > 24 ? t.substring(0, 24) + "…" : t;
     }
 
     /**

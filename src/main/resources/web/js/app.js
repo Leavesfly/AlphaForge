@@ -125,31 +125,9 @@ const COPILOT_SUGGESTIONS = {
 };
 
 function openChatDrawer() {
-  document.getElementById('chat-drawer-overlay')?.classList.add('show');
-  if (copilotDockPref) document.body.classList.add('copilot-docked');
-  updateCopilotDockBtn();
-  initChat();
-  renderCopilotSuggestions();
+  navigateTo('copilot');
 }
-function closeChatDrawer() {
-  document.getElementById('chat-drawer-overlay')?.classList.remove('show');
-  document.body.classList.remove('copilot-docked');
-}
-function toggleCopilotDock() {
-  copilotDockPref = !copilotDockPref;
-  try { localStorage.setItem('alphaforge-copilot-dock', copilotDockPref ? '1' : '0'); } catch(e) {}
-  document.getElementById('chat-drawer-overlay')?.classList.add('show');
-  document.body.classList.toggle('copilot-docked', copilotDockPref);
-  updateCopilotDockBtn();
-  initChat();
-  renderCopilotSuggestions();
-}
-function updateCopilotDockBtn() {
-  const btn = document.getElementById('copilot-dock-btn');
-  if (!btn) return;
-  btn.textContent = copilotDockPref ? '浮动' : '停靠';
-  btn.title = copilotDockPref ? '切换为浮动窗口' : '停靠到右侧';
-}
+function closeChatDrawer() { /* Copilot 已改为独立页面，保留空实现以兼容旧调用 */ }
 
 /** 切换 Copilot 语境，联动上下文标签与快捷提问 */
 function setCopilotContext(key, meta) {
@@ -238,7 +216,7 @@ function buildHash(page, subTab) {
 
 // ===== Navigation =====
 function navigateTo(page, subTab) {
-  if (page === 'chat') { openChatDrawer(); return; }
+  if (page === 'chat') page = 'copilot';
 
   const resolved = resolveHash(page);
   if (!subTab && resolved.subTab && (page === resolved.page || HASH_ALIASES[page])) {
@@ -287,7 +265,7 @@ function navigateTo(page, subTab) {
   }
 
   setTimeout(initCharts, 150);
-  setCopilotContext(page);
+  if (page !== 'copilot') setCopilotContext(page);
   loadPageData(page, subTab);
 }
 
@@ -309,6 +287,7 @@ function loadPageData(page, subTab) {
   switch(page) {
     case 'today': loadToday(); break;
     case 'dashboard': loadToday(); break;
+    case 'copilot': initChat(); renderCopilotSuggestions(); break;
     case 'market-briefing': loadMarketBriefing(currentBriefingMarket); break;
     case 'research':
       if (subTab === 'analysis') loadHistory();
@@ -345,7 +324,12 @@ document.querySelectorAll('.nav-item').forEach(item => {
 const NAV_COLLAPSE_KEY = 'alphaforge-nav-collapsed';
 function loadNavCollapseState() {
   let collapsed = [];
-  try { collapsed = JSON.parse(localStorage.getItem(NAV_COLLAPSE_KEY) || '[]'); } catch(e) {}
+  try {
+    const raw = JSON.parse(localStorage.getItem(NAV_COLLAPSE_KEY) || '[]');
+    if (Array.isArray(raw)) collapsed = raw;
+    else if (raw && typeof raw === 'object') collapsed = Object.keys(raw).filter(k => raw[k]); // 兼容旧版对象格式
+  } catch(e) { collapsed = []; }
+  if (!Array.isArray(collapsed)) return;
   collapsed.forEach(key => {
     const sec = document.querySelector(`.nav-section[data-group-key="${key}"]`);
     if (sec) sec.classList.add('collapsed');
@@ -829,7 +813,7 @@ function refreshSessionItem(sessionId) {
       if (!s) return;
       const item = document.querySelector(`.chat-session-item[data-session-id="${sessionId}"]`);
       if (!item) return;
-      item.querySelector('.session-title').textContent = escapeHtml(s.title);
+      item.querySelector('.session-title').textContent = s.title;
       item.querySelector('.session-meta').innerHTML = `<span>${s.messageCount}条消息</span><span>${formatSessionTime(s.lastActive)}</span>`;
     })
     .catch(() => {});

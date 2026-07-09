@@ -674,6 +674,8 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 16px 20px; border-bottom: 1px solid var(--border);
 }
 .chat-drawer-layout { height: calc(100vh - 57px); border: none; border-radius: 0; }
+/* Copilot 作为独立页面时的布局高度 */
+.copilot-page-layout { height: calc(100vh - var(--header-h) - 150px); min-height: 420px; }
 
 .settings-section { margin-bottom: 24px; }
 .settings-section-title { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
