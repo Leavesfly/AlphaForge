@@ -1,13 +1,19 @@
 package io.leavesfly.alphaforge.config;
 
 import io.leavesfly.alphaforge.domain.service.NameToCodeResolver;
+import io.leavesfly.alphaforge.domain.service.SignalVerifier;
 import io.leavesfly.alphaforge.domain.service.TechnicalAnalysisService;
 import io.leavesfly.alphaforge.domain.service.TechnicalIndicatorCalculator;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import io.leavesfly.alphaforge.domain.service.factor.ClassicFactorLibrary;
+import io.leavesfly.alphaforge.domain.service.factor.DefaultFactorLibrary;
 import io.leavesfly.alphaforge.domain.service.factor.FactorLayerAnalyzer;
 import io.leavesfly.alphaforge.domain.service.performance.PerformanceAnalytics;
+import io.leavesfly.alphaforge.domain.service.port.FactorLibrary;
+import io.leavesfly.alphaforge.domain.service.port.SignalQualityPredictor;
 import io.leavesfly.alphaforge.domain.service.portfolio.PortfolioOptimizer;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -58,5 +64,18 @@ public class DomainServiceConfig {
     @Bean
     public FactorLayerAnalyzer factorLayerAnalyzer() {
         return new FactorLayerAnalyzer();
+    }
+
+    /** 默认因子库：当没有其它 FactorLibrary 实现时作为兜底（保留原 @ConditionalOnMissingBean 语义） */
+    @Bean
+    @ConditionalOnMissingBean(FactorLibrary.class)
+    public DefaultFactorLibrary defaultFactorLibrary() {
+        return new DefaultFactorLibrary();
+    }
+
+    /** 信号验证器：ML 信号质量预测器为可选依赖（保留原 @Autowired(required=false) 语义） */
+    @Bean
+    public SignalVerifier signalVerifier(ObjectProvider<SignalQualityPredictor> qualityPredictor) {
+        return new SignalVerifier(qualityPredictor.getIfAvailable());
     }
 }

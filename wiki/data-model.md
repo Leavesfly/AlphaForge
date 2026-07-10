@@ -205,3 +205,44 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true   # 下划线转驼峰
 ```
+
+## 持久化约定（架构取舍）
+
+> 本节记录一处**刻意保留**的架构取舍，供后续维护者理解其边界与演进路径。
+
+### 约定：领域 Repository 接口即 MyBatis Mapper
+
+`domain/repository/**` 下的仓储接口**直接标注** MyBatis 的 `@Mapper`（部分方法参数带 `@Param`），
+即「领域持久化端口」与「MyBatis 持久化适配器」合二为一，由 MyBatis 在运行期生成实现并绑定到
+`src/main/resources/mapper/*.xml`。全库约 20 个仓储接口均采用此形式。
+
+严格的六边形架构会要求：领域层只定义纯净的 `XxxRepository` 端口（不含任何框架注解），
+再在 `infrastructure` 层提供 `MyBatisXxxRepository implements XxxRepository` 适配器。本项目
+**未**引入这层适配器。
+
+### 为什么这样取舍
+
+- **单一持久化技术、单机 SQLite**：短期内没有多实现、多数据源或替换 ORM 的需求，
+  引入并行适配器层会让接口数量翻倍（20 → 40+），却不带来近期收益。
+- **SQL 已隔离**：真正的查询逻辑集中在 mapper XML 中，接口本身只是方法签名，
+  「泄漏」范围可控且表面化。
+- **代价明确且被接受**：领域层因此对 `org.apache.ibatis.annotations`（`@Mapper` / `@Param`）
+  产生编译期依赖，牺牲了领域层的框架无关性。这是本项目认可的务实取舍，而非疏忽。
+
+### 边界约束（防止取舍扩散）
+
+为把这处泄漏控制在最小面，约定如下：
+
+1. **仅** `domain/repository/**` 的仓储接口可出现 MyBatis 注解（`@Mapper` / `@Param`）。
+2. 领域**实体**（`domain/model/**`）与领域**服务**（`domain/service/**`）**不得**依赖任何 MyBatis / Spring Data 类型。
+3. 所有 SQL 与结果映射集中在 `mapper/*.xml`，接口不写内联 `@Select`/`@Insert` 等长 SQL。
+
+### 何时应升级为独立适配器
+
+出现以下任一情况时，应引入纯净领域端口 + `infrastructure` 适配器实现：
+
+- 需要为同一仓储提供多种实现（如内存版用于测试、远程版用于分库）；
+- 更换持久化技术栈（如 SQLite → PostgreSQL 且改用 JPA/Hibernate）；
+- 领域层需要作为独立模块被非 MyBatis 环境复用。
+
+在此之前，保持当前务实形式，不改动这 20 个仓储接口的代码。

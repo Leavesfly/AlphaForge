@@ -6,6 +6,7 @@ import io.leavesfly.alphaforge.application.service.portfolio.PortfolioOptimizati
 import io.leavesfly.alphaforge.application.service.portfolio.PortfolioRiskService;
 import io.leavesfly.alphaforge.application.service.portfolio.PortfolioService;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.*;
+import io.leavesfly.alphaforge.presentation.api.dto.PortfolioDtos;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -43,8 +44,8 @@ public class PortfolioController {
 
     /** 持仓列表 */
     @GetMapping("/positions")
-    public ResponseEntity<List<PortfolioPosition>> positions() {
-        return ResponseEntity.ok(portfolioService.getAllPositions());
+    public ResponseEntity<List<PortfolioDtos.PositionDto>> positions() {
+        return ResponseEntity.ok(PortfolioDtos.PositionDto.from(portfolioService.getAllPositions()));
     }
 
     /** 组合概要 */
@@ -77,9 +78,9 @@ public class PortfolioController {
 
     /** 账户列表 */
     @GetMapping("/accounts")
-    public ResponseEntity<List<PortfolioAccount>> accounts(
+    public ResponseEntity<List<PortfolioDtos.AccountDto>> accounts(
             @RequestParam(defaultValue = "false") boolean includeInactive) {
-        return ResponseEntity.ok(portfolioExtService.getAccounts(includeInactive));
+        return ResponseEntity.ok(PortfolioDtos.AccountDto.from(portfolioExtService.getAccounts(includeInactive)));
     }
 
     /** 创建账户 */
@@ -92,13 +93,13 @@ public class PortfolioController {
 
     /** 交易记录列表 */
     @GetMapping("/trades")
-    public ResponseEntity<List<PortfolioTrade>> trades(
+    public ResponseEntity<List<PortfolioDtos.TradeDto>> trades(
             @RequestParam(required = false) Long accountId,
             @RequestParam(required = false) String symbol,
             @RequestParam(required = false) String side,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ResponseEntity.ok(portfolioExtService.listTrades(accountId, symbol, side, page, pageSize));
+        return ResponseEntity.ok(PortfolioDtos.TradeDto.from(portfolioExtService.listTrades(accountId, symbol, side, page, pageSize)));
     }
 
     /** 录入交易 */
@@ -118,12 +119,12 @@ public class PortfolioController {
 
     /** 资金流水列表 */
     @GetMapping("/cash-ledger")
-    public ResponseEntity<List<CashLedgerEntry>> cashLedger(
+    public ResponseEntity<List<PortfolioDtos.CashLedgerDto>> cashLedger(
             @RequestParam(required = false) Long accountId,
             @RequestParam(required = false) String direction,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ResponseEntity.ok(portfolioExtService.listCashLedger(accountId, direction, page, pageSize));
+        return ResponseEntity.ok(PortfolioDtos.CashLedgerDto.from(portfolioExtService.listCashLedger(accountId, direction, page, pageSize)));
     }
 
     /** 记录出入金 */
@@ -136,13 +137,13 @@ public class PortfolioController {
 
     /** 公司行动列表 */
     @GetMapping("/corporate-actions")
-    public ResponseEntity<List<CorporateAction>> corporateActions(
+    public ResponseEntity<List<PortfolioDtos.CorporateActionDto>> corporateActions(
             @RequestParam(required = false) Long accountId,
             @RequestParam(required = false) String symbol,
             @RequestParam(required = false) String actionType,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ResponseEntity.ok(portfolioExtService.listCorporateActions(accountId, symbol, actionType, page, pageSize));
+        return ResponseEntity.ok(PortfolioDtos.CorporateActionDto.from(portfolioExtService.listCorporateActions(accountId, symbol, actionType, page, pageSize)));
     }
 
     /** 创建公司行动 */

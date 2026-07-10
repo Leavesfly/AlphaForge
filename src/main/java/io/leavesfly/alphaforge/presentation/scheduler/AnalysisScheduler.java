@@ -9,7 +9,7 @@ import io.leavesfly.alphaforge.config.SchedulerAuthConfig;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -40,21 +40,23 @@ public class AnalysisScheduler {
     private final LoopStateManager loopState;
     private volatile boolean running = false;
 
-    @Autowired(required = false)
-    private AutonomyPolicy autonomyPolicy;
+    private final AutonomyPolicy autonomyPolicy;
 
-    @Autowired(required = false)
-    private DecisionSignalService decisionSignalService;
+    private final DecisionSignalService decisionSignalService;
 
     public AnalysisScheduler(SchedulerAuthConfig schedulerAuthConfig, StockAnalysisPipeline pipeline,
                              TradingCalendar tradingCalendar,
                              SignalOutcomeEvaluator outcomeEvaluator,
-                             LoopStateManager loopState) {
+                             LoopStateManager loopState,
+                             ObjectProvider<AutonomyPolicy> autonomyPolicy,
+                             ObjectProvider<DecisionSignalService> decisionSignalService) {
         this.schedulerAuthConfig = schedulerAuthConfig;
         this.pipeline = pipeline;
         this.tradingCalendar = tradingCalendar;
         this.outcomeEvaluator = outcomeEvaluator;
         this.loopState = loopState;
+        this.autonomyPolicy = autonomyPolicy.getIfAvailable();
+        this.decisionSignalService = decisionSignalService.getIfAvailable();
     }
 
     /**

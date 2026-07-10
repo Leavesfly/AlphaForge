@@ -4,8 +4,6 @@ import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.FactorLibrary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 import java.util.*;
 
@@ -15,8 +13,6 @@ import java.util.*;
  * 提供常用的动量/均值回归/波动率/量价因子计算。
  * 生产环境可替换为专业因子库（含 IC/IR 分析、因子衰减监控等）。
  */
-@Component
-@ConditionalOnMissingBean(FactorLibrary.class)
 public class DefaultFactorLibrary implements FactorLibrary {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultFactorLibrary.class);

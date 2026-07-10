@@ -2,7 +2,9 @@
 
 ## 概述
 
-AlphaForge 的 Agent 系统基于多 Agent 协作架构，支持四种分析模式，并内置完整的降级链，确保即便高级功能不可用时系统也能正常工作。
+AlphaForge 的 Agent 系统以 **AgentKernel（认知轨中枢）** 为统一入口，基于多 Agent 协作架构，支持四种分析模式，并内置完整的降级链，确保即便高级功能不可用时系统也能正常工作。
+
+> **认知轨统一入口**：对话、深度分析、策略生成、自治研判等认知型任务均经 `AgentKernel`（`Planner → Guardrail → dispatch → Critic`）编排；下文的四种分析模式与降级链，作为 `STOCK_ANALYSIS` 任务由内核委托的 `AgentAnalysisService` 实现。功能性/确定性交互走功能轨，直连领域服务、不经内核。
 
 ## Agent 模式与降级链
 

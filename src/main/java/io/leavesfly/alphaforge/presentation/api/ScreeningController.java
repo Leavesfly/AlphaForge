@@ -1,7 +1,6 @@
 package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.screening.AlphaSiftScreeningEngine;
-import io.leavesfly.alphaforge.domain.model.entity.screening.AlphaSiftTask;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,7 +39,7 @@ public class ScreeningController {
                     "results", results));
         }
 
-        AlphaSiftTask task = screeningEngine.submitScreening(strategy, market, maxResults);
+        var task = screeningEngine.submitScreening(strategy, market, maxResults);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("task_id", task.getTaskId());
         resp.put("status", task.getStatus());

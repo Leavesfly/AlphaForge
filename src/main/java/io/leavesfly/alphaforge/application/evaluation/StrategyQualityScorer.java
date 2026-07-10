@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.application.evaluation;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 import io.leavesfly.alphaforge.application.strategy.engine.StrategyPerformanceTracker;
 import io.leavesfly.alphaforge.application.strategy.model.WalkForwardResult;
 import org.slf4j.Logger;

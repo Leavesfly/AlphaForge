@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.alert.AlertService;
 import io.leavesfly.alphaforge.domain.model.entity.alert.AlertRule;
+import io.leavesfly.alphaforge.presentation.api.dto.AlertRuleDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,14 +24,14 @@ public class AlertController {
 
     /** 获取活跃告警规则列表 */
     @GetMapping
-    public ResponseEntity<List<AlertRule>> listAlerts() {
-        return ResponseEntity.ok(alertService.getActiveAlerts());
+    public ResponseEntity<List<AlertRuleDto>> listAlerts() {
+        return ResponseEntity.ok(AlertRuleDto.from(alertService.getActiveAlerts()));
     }
 
     /** 创建告警规则 */
     @PostMapping
-    public ResponseEntity<AlertRule> createAlert(@RequestBody AlertRule rule) {
-        return ResponseEntity.ok(alertService.createAlert(rule));
+    public ResponseEntity<AlertRuleDto> createAlert(@RequestBody AlertRule rule) {
+        return ResponseEntity.ok(AlertRuleDto.from(alertService.createAlert(rule)));
     }
 
     /** 更新告警规则 */
@@ -38,7 +39,7 @@ public class AlertController {
     public ResponseEntity<?> updateAlert(@PathVariable Long id, @RequestBody AlertRule rule) {
         AlertRule updated = alertService.updateAlert(id, rule);
         if (updated == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(AlertRuleDto.from(updated));
     }
 
     /** 删除告警规则 */
@@ -70,8 +71,8 @@ public class AlertController {
 
     /** 获取指定股票的告警 */
     @GetMapping("/stock/{stockCode}")
-    public ResponseEntity<List<AlertRule>> alertsByStock(@PathVariable String stockCode) {
-        return ResponseEntity.ok(alertService.getAlertsByStock(stockCode));
+    public ResponseEntity<List<AlertRuleDto>> alertsByStock(@PathVariable String stockCode) {
+        return ResponseEntity.ok(AlertRuleDto.from(alertService.getAlertsByStock(stockCode)));
     }
 
     /** 触发记录 */

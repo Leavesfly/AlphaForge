@@ -10,7 +10,8 @@
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
 │                    Application Layer（应用层）                │
-│  StockAnalysisPipeline │ MultiAgentOrchestrator              │
+│  ★ AgentKernel（认知轨中枢：Planner→Guardrail→dispatch→Critic）│
+│  StockAnalysisPipeline │ MultiAgentOrchestrator（功能/能力轨） │
 │  AgentDebateOrchestrator │ FactorEvolutionOrchestrator       │
 │  BacktestSimulator │ AlphaSiftScreeningEngine                │
 │  各类 Service（Alert、Chat、Portfolio、Signal 等）             │
@@ -62,7 +63,27 @@
 
 应用层是系统的核心编排层，不包含业务规则，只负责把领域服务、基础设施能力按业务流程串联起来。
 
-#### 2.1 流水线模块（pipeline）
+#### 2.1 Agent 内核（kernel）— 认知轨中枢
+
+`AgentKernel` 是所有**认知型任务**的统一入口，实现 `Planner → Guardrail → dispatch → Critic` 执行闭环：
+
+| 组件 | 实现 | 职责 |
+|---|---|---|
+| Planner | `HybridPlanner`（`SopPlanner` + `LlmPlanner`） | 生成执行计划；SOP 骨架外置于 `resources/plans/*.yaml` |
+| Guardrail | `AgentGuardrail` | 统一治理闸；状态变更步骤须经任务授权 + 自治开关 + 熔断校验（默认关闭即拦截） |
+| Critic | `PassThroughCritic` | 结果评审（质量校验暂内置于能力实现，后续收敛至此） |
+
+**已接入任务类型**：`CHAT`、`STOCK_ANALYSIS`、`STRATEGY_GENERATE`、`AUTONOMY_DECISION`。
+
+**双轨架构：**
+
+- **认知轨**：对话（含流式）、深度分析推理、策略生成/优化、自治研判 → 统一经 `AgentKernel`
+- **功能轨**：CRUD、查询、事务、定时编排（如 `StockAnalysisPipeline`）→ 直连领域服务，零 LLM 开销
+- 两轨共享同一能力层（Tool 薄封装 AppService）与统一 Guardrail 治理闸
+
+`StockAnalysisPipeline` 等确定性编排器保留在功能轨，其**推理子步骤委托 `AgentKernel` 执行**——内核为系统唯一认知权威，`AgentAnalysisService`（含四级降级链）仅经内核触达。
+
+#### 2.2 流水线模块（pipeline）
 
 `StockAnalysisPipeline` 是系统的核心编排器，执行完整的 30+ 步骤分析流程：
 
@@ -78,7 +99,7 @@ runFullAnalysis()
      ├── 新闻情报检索
      └── 大盘环境评估
   6. 信号学习注入（SignalLearningService → Few-shot）
-  7. Agent 分析（AgentAnalysisService，含降级链）
+  7. Agent 分析（经 AgentKernel 认知轨；降级链 debate→multi→react→llm 由内核委托的 AgentAnalysisService 实现）
   8. 结果聚合（AnalysisResultAggregator）
   9. 结果后处理（AnalysisPostProcessor）
      ├── 信号提取（SignalExtractionService）
@@ -93,29 +114,29 @@ runFullAnalysis()
 |---|---|
 | `AnalysisContextBuilder` | 从 K 线和技术指标构建标准化分析上下文 |
 | `AnalysisContextEnhancer` | 注入筹码、板块、新闻、大盘信息 |
-| `AgentAnalysisService` | 封装四级降级链（debate→multi→react→llm） |
+| `AgentAnalysisService` | 封装四级降级链（debate→multi→react→llm）；现由 AgentKernel 委托调用，Pipeline 不再直连 |
 | `AnalysisResultAggregator` | 聚合多维度分析结果，计算综合评分 |
 | `AnalysisPostProcessor` | 后处理（信号提取、Fallback 补全、Dashboard 回填） |
 | `PipelineMetrics` | 流水线运行指标收集 |
 | `DiagnosticContext` | 运行时诊断快照（用于调试） |
 
-#### 2.2 Agent 模块（agent）
+#### 2.3 Agent 模块（agent）
 
 详见 [agent-system.md](agent-system.md)。
 
-#### 2.3 策略模块（strategy）
+#### 2.4 策略模块（strategy）
 
 详见 [strategy-system.md](strategy-system.md)。
 
-#### 2.4 回测模块（backtest）
+#### 2.5 回测模块（backtest）
 
 详见 [backtest-system.md](backtest-system.md)。
 
-#### 2.5 因子进化模块（factor/evolution）
+#### 2.6 因子进化模块（factor/evolution）
 
 详见 [factor-evolution.md](factor-evolution.md)。
 
-#### 2.6 业务服务模块（service）
+#### 2.7 业务服务模块（service）
 
 | 包名 | 核心类 | 职责 |
 |---|---|---|

@@ -9,10 +9,14 @@ import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionConfi
 import io.leavesfly.alphaforge.application.factor.evolution.FactorEvolutionOrchestrator;
 import io.leavesfly.alphaforge.application.factor.evolution.model.EvolutionResult;
 import io.leavesfly.alphaforge.application.strategy.generator.StrategyRefineLoop;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentKernel;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentResult;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTask;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTaskType;
 import io.leavesfly.alphaforge.presentation.api.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,16 +38,20 @@ public class AiCapabilityController {
     private final FactorEvolutionOrchestrator evolutionOrchestrator;
     private final BenchmarkSuite benchmarkSuite;
     private final FactorAnalysisService factorAnalysisService;
+    private final AgentKernel agentKernel;
 
-    @Autowired(required = false)
-    private StrategyRefineLoop strategyRefineLoop;
+    private final StrategyRefineLoop strategyRefineLoop;
 
     public AiCapabilityController(FactorEvolutionOrchestrator evolutionOrchestrator,
                                    BenchmarkSuite benchmarkSuite,
-                                   FactorAnalysisService factorAnalysisService) {
+                                   FactorAnalysisService factorAnalysisService,
+                                   AgentKernel agentKernel,
+                                   ObjectProvider<StrategyRefineLoop> strategyRefineLoop) {
         this.evolutionOrchestrator = evolutionOrchestrator;
         this.benchmarkSuite = benchmarkSuite;
         this.factorAnalysisService = factorAnalysisService;
+        this.agentKernel = agentKernel;
+        this.strategyRefineLoop = strategyRefineLoop.getIfAvailable();
     }
 
     /**
@@ -65,7 +73,20 @@ public class AiCapabilityController {
         boolean toTesting = !body.containsKey("promote_to_testing")
                 || Boolean.TRUE.equals(body.get("promote_to_testing"));
         try {
-            Map<String, Object> result = strategyRefineLoop.run(description, stockCode, maxRounds, toTesting);
+            // 认知轨：策略生成/优化经 AgentKernel 执行
+            AgentResult agentResult = agentKernel.run(
+                    AgentTask.of(AgentTaskType.STRATEGY_GENERATE)
+                            .goal(description)
+                            .input("description", description)
+                            .input("stockCode", stockCode)
+                            .input("maxRounds", maxRounds)
+                            .input("promoteToTesting", toTesting)
+                            .build());
+            if (!agentResult.isSuccess()) {
+                return ResponseEntity.ok(ApiResponse.error(500, "策略 refine 失败: " + agentResult.getError()));
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = (Map<String, Object>) agentResult.data("refineResult");
             return ResponseEntity.ok(ApiResponse.ok(result, "策略 refine 完成"));
         } catch (Exception e) {
             log.error("策略 refine 失败", e);

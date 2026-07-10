@@ -1,7 +1,11 @@
 package io.leavesfly.alphaforge.application.backtest.pairs;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestDailySnapshot;
-import io.leavesfly.alphaforge.application.backtest.BacktestTrade;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestDailySnapshot;
+import io.leavesfly.alphaforge.application.simulation.BacktestTrade;
+
+import io.leavesfly.alphaforge.application.simulation.BacktestDailySnapshot;
+import io.leavesfly.alphaforge.application.simulation.BacktestTrade;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -1,8 +1,8 @@
 package io.leavesfly.alphaforge.application.strategy.engine;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
 import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
 import io.leavesfly.alphaforge.application.strategy.model.OptimizationResult;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
@@ -34,9 +34,9 @@ public class WalkForwardValidator {
     private static final double DEFAULT_TRAIN_RATIO = 0.7;
 
     private final ParameterOptimizer optimizer;
-    private final BacktestSimulator simulator;
+    private final BacktestRunner simulator;
 
-    public WalkForwardValidator(ParameterOptimizer optimizer, BacktestSimulator simulator) {
+    public WalkForwardValidator(ParameterOptimizer optimizer, BacktestRunner simulator) {
         this.optimizer = optimizer;
         this.simulator = simulator;
     }

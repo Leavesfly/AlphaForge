@@ -5,7 +5,6 @@ import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.config.DataProviderConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.model.enums.AdjustType;
-import io.leavesfly.alphaforge.domain.model.enums.DataProviderType;
 import io.leavesfly.alphaforge.domain.model.enums.KLineFrequency;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
@@ -20,7 +19,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 数据源管理器 - 策略模式 + 熔断器 + 限流 + 数据质量校验 + 多源交叉校验
@@ -40,25 +38,14 @@ public class DataFetcherManager implements MarketDataPort {
     private static final Logger log = LoggerFactory.getLogger(DataFetcherManager.class);
 
     private final DataProviderConfig dataProviderConfig;
-    private final List<BaseDataFetcher> fetchers;
+    private final FetcherFailoverExecutor failover;
     private final StockDailyDataRepository dailyDataRepo;
     private final TradingCalendar tradingCalendar;
     private final DataQualityValidator qualityValidator;
     private final CrossSourceValidator crossSourceValidator;
     
-    /** 熔断器状态: 数据源名称 -> 熔断信息 */
-    private final Map<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
-
-    /** 限流器状态: 数据源名称 -> 限流器 */
-    private final Map<String, RateLimiter> rateLimiters = new ConcurrentHashMap<>();
-    /** 滑动窗口限流器: 东财系数据源专用（名称 -> 限流器） */
-    private final Map<String, SlidingWindowRateLimiter> slidingWindowLimiters = new ConcurrentHashMap<>();
-
     /** TTL缓存: 缓存键 -> 缓存条目 */
     private final Map<String, TtlCacheEntry<?>> cache = new ConcurrentHashMap<>();
-    
-    /** 随机抖动范围(毫秒)，叠加在限流间隔之上，防止规律性请求被识别 */
-    private static final long JITTER_MS = 200;
 
     // 缓存TTL常量（毫秒）
     private static final long CACHE_TTL_HOUR = 3600_000L;       // 1小时
@@ -66,26 +53,26 @@ public class DataFetcherManager implements MarketDataPort {
 
     @Autowired
     public DataFetcherManager(DataProviderConfig dataProviderConfig,
-                              List<BaseDataFetcher> fetchers,
+                              FetcherFailoverExecutor failover,
                               StockDailyDataRepository dailyDataRepo,
                               @Autowired(required = false) TradingCalendar tradingCalendar,
                               @Autowired(required = false) DataQualityValidator qualityValidator,
                               @Autowired(required = false) CrossSourceValidator crossSourceValidator) {
         this.dataProviderConfig = dataProviderConfig;
-        this.fetchers = fetchers;
+        this.failover = failover;
         this.dailyDataRepo = dailyDataRepo;
         this.tradingCalendar = tradingCalendar;
         this.qualityValidator = qualityValidator;
         this.crossSourceValidator = crossSourceValidator;
         log.info("数据源管理器初始化完成, 已注册 {} 个数据源, 交易日历: {}, 质量校验: {}, 交叉校验: {}",
-                fetchers.size(), tradingCalendar != null, qualityValidator != null,
+                failover.fetcherCount(), tradingCalendar != null, qualityValidator != null,
                 crossSourceValidator != null && dataProviderConfig.isCrossCheckEnabled()
                         ? dataProviderConfig.getCrossCheckMode() : "off");
     }
 
     // 测试用构造器(无Spring环境)
     public DataFetcherManager(List<BaseDataFetcher> fetchers, DataProviderConfig dataProviderConfig) {
-        this(dataProviderConfig, fetchers, null, null, null, null);
+        this(dataProviderConfig, new FetcherFailoverExecutor(fetchers, dataProviderConfig), null, null, null, null);
     }
 
     /**
@@ -134,20 +121,20 @@ public class DataFetcherManager implements MarketDataPort {
         }
 
         // 3. 调用数据源获取数据（使用显式指定的市场类型路由）
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(marketType);
+        List<BaseDataFetcher> orderedFetchers = failover.getOrderedFetchers(marketType);
         Set<String> rejectedPrimaries = new HashSet<>();
         
         for (BaseDataFetcher fetcher : orderedFetchers) {
             String fetcherName = fetcher.getName();
             
             // 检查熔断器状态
-            if (isCircuitOpen(fetcherName)) {
+            if (failover.isCircuitOpen(fetcherName)) {
                 log.debug("数据源 {} 处于熔断状态, 跳过", fetcherName);
                 continue;
             }
 
             // 限流检查
-            if (!tryAcquire(fetcher)) {
+            if (!failover.tryAcquire(fetcher)) {
                 log.debug("数据源 {} 限流等待中, 跳过本轮", fetcherName);
                 continue;
             }
@@ -161,11 +148,11 @@ public class DataFetcherManager implements MarketDataPort {
                     if (!crossCheckOrAllow(data, fetcher, stockCode, marketType, rejectedPrimaries)) {
                         log.warn("数据源 {} 交叉校验未通过(reject)，切换下一数据源: {}", fetcherName, stockCode);
                         rejectedPrimaries.add(fetcherName);
-                        recordFailure(fetcherName);
+                        failover.recordFailure(fetcherName);
                         continue;
                     }
                     // 记录成功
-                    recordSuccess(fetcherName);
+                    failover.recordSuccess(fetcherName);
                     // 写入缓存
                     saveToCache(data);
                     // 合并增量数据
@@ -178,7 +165,7 @@ public class DataFetcherManager implements MarketDataPort {
                 }
             } catch (Exception e) {
                 log.warn("数据源 {} 获取历史数据失败: {} - {}", fetcherName, stockCode, e.getMessage());
-                recordFailure(fetcherName);
+                failover.recordFailure(fetcherName);
             }
         }
         
@@ -189,122 +176,6 @@ public class DataFetcherManager implements MarketDataPort {
         }
         log.error("所有数据源均无法获取历史数据: {}", stockCode);
         return Collections.emptyList();
-    }
-
-    // ==================== 通用故障切换模板 ====================
-
-    /** 单数据源最大重试次数 */
-    private static final int MAX_RETRY = 1;
-    /** 限流等待最大毫秒数 */
-    private static final long RATE_LIMIT_WAIT_MS = 2000;
-
-    /**
-     * 通用数据获取模板 — 统一封装熔断器 + 限流等待 + 自动重试 + 故障切换
-     *
-     * 高可用策略：
-     * 1. 限流器返回 false 时等待而非跳过（最多等 2s）
-     * 2. 单数据源异常时重试 1 次再切换
-     * 3. 熔断器状态下跳过该数据源
-     * 4. 所有数据源失败时返回空默认值
-     */
-    private <T> T executeWithFailover(String stockCode,
-                                       java.util.function.Function<BaseDataFetcher, T> fetcherCall,
-                                       java.util.function.Predicate<T> isEmpty,
-                                       T emptyDefault) {
-        return executeWithFailover(MarketType.detectFromCode(stockCode), fetcherCall, isEmpty, emptyDefault);
-    }
-
-    /** 通用数据获取模板（显式指定市场类型） */
-    private <T> T executeWithFailover(MarketType market,
-                                       java.util.function.Function<BaseDataFetcher, T> fetcherCall,
-                                       java.util.function.Predicate<T> isEmpty,
-                                       T emptyDefault) {
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(market);
-        for (BaseDataFetcher fetcher : orderedFetchers) {
-            String fetcherName = fetcher.getName();
-            if (isCircuitOpen(fetcherName)) {
-                log.debug("数据源 {} 熔断中，跳过", fetcherName);
-                continue;
-            }
-            // 限流等待：tryAcquire 返回 false 时短暂等待重试，而非直接跳过
-            if (!tryAcquire(fetcher)) {
-                if (!waitForRateLimit(fetcher, RATE_LIMIT_WAIT_MS)) {
-                    log.debug("数据源 {} 限流等待超时，切换到下一个数据源", fetcherName);
-                    continue;
-                }
-            }
-            // 调用 + 重试
-            for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
-                try {
-                    T result = fetcherCall.apply(fetcher);
-                    if (!isEmpty.test(result)) {
-                        recordSuccess(fetcherName);
-                        return result;
-                    }
-                    // 空结果不算失败，直接切换
-                    break;
-                } catch (Exception e) {
-                    log.warn("数据源 {} 获取数据失败(尝试 {}/{}): {}", fetcherName, attempt + 1, MAX_RETRY + 1, e.getMessage());
-                    if (attempt < MAX_RETRY) {
-                        sleepQuiet(fetcher.getRateLimitMs());
-                    } else {
-                        recordFailure(fetcherName);
-                    }
-                }
-            }
-        }
-        return emptyDefault;
-    }
-
-    /** 通用数据获取模板（无 stockCode 版本，用于北向资金等全局数据） */
-    private <T> T executeWithFailoverNoStock(
-            java.util.function.Function<BaseDataFetcher, T> fetcherCall,
-            java.util.function.Predicate<T> isEmpty,
-            T emptyDefault) {
-        List<BaseDataFetcher> orderedFetchers = getOrderedFetchers(MarketType.A);
-        for (BaseDataFetcher fetcher : orderedFetchers) {
-            String fetcherName = fetcher.getName();
-            if (isCircuitOpen(fetcherName)) continue;
-            if (!tryAcquire(fetcher)) {
-                if (!waitForRateLimit(fetcher, RATE_LIMIT_WAIT_MS)) continue;
-            }
-            for (int attempt = 0; attempt <= MAX_RETRY; attempt++) {
-                try {
-                    T result = fetcherCall.apply(fetcher);
-                    if (!isEmpty.test(result)) {
-                        recordSuccess(fetcherName);
-                        return result;
-                    }
-                    break;
-                } catch (Exception e) {
-                    log.warn("数据源 {} 获取数据失败(尝试 {}/{}): {}", fetcherName, attempt + 1, MAX_RETRY + 1, e.getMessage());
-                    if (attempt < MAX_RETRY) {
-                        sleepQuiet(fetcher.getRateLimitMs());
-                    } else {
-                        recordFailure(fetcherName);
-                    }
-                }
-            }
-        }
-        return emptyDefault;
-    }
-
-    /**
-     * 限流等待 — 在指定时间内循环尝试获取许可
-     * @return true=获取成功，false=超时
-     */
-    private boolean waitForRateLimit(BaseDataFetcher fetcher, long maxWaitMs) {
-        long deadline = System.currentTimeMillis() + maxWaitMs;
-        while (System.currentTimeMillis() < deadline) {
-            sleepQuiet(Math.min(fetcher.getRateLimitMs(), 200));
-            if (tryAcquire(fetcher)) return true;
-        }
-        return false;
-    }
-
-    /** 静默睡眠 */
-    private void sleepQuiet(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
     // ==================== 行情数据 ====================
@@ -323,7 +194,7 @@ public class DataFetcherManager implements MarketDataPort {
             Map<String, Object> cachedResult = (Map<String, Object>) cached.getValue();
             return cachedResult;
         }
-        Map<String, Object> result = executeWithFailover(stockCode,
+        Map<String, Object> result = failover.executeWithFailover(stockCode,
                 f -> f.getRealtimeQuote(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
@@ -352,7 +223,7 @@ public class DataFetcherManager implements MarketDataPort {
             Map<String, Object> cachedResult = (Map<String, Object>) cached.getValue();
             return cachedResult;
         }
-        Map<String, Object> result = executeWithFailover(marketType,
+        Map<String, Object> result = failover.executeWithFailover(marketType,
                 f -> f.getRealtimeQuote(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
@@ -392,7 +263,7 @@ public class DataFetcherManager implements MarketDataPort {
             return result;
         }
         // 调用批量接口
-        Map<String, Map<String, Object>> fetched = executeWithFailover(needFetch.get(0),
+        Map<String, Map<String, Object>> fetched = failover.executeWithFailover(needFetch.get(0),
                 f -> f.getBatchRealtimeQuotes(needFetch),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
@@ -408,46 +279,17 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取股票基本信息 */
     public Map<String, Object> getStockInfo(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getStockInfo(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyMap());
-    }
-
-    /**
-     * 获取排序后的数据源列表(根据市场类型和优先级)
-     * 能力感知路由：过滤掉不支持当前市场的数据源，避免无效请求
-     */
-    private List<BaseDataFetcher> getOrderedFetchers(MarketType market) {
-        // 如果配置了指定数据源
-        String configProvider = dataProviderConfig.getDataProvider();
-        if (!"auto".equalsIgnoreCase(configProvider)) {
-            return fetchers.stream()
-                    .filter(f -> f.getName().equalsIgnoreCase(configProvider))
-                    .findFirst()
-                    .map(List::of)
-                    .orElse(fetchers);
-        }
-
-        // 按优先级排序 + 能力感知过滤（仅保留支持当前市场的数据源）
-        List<BaseDataFetcher> sorted = new ArrayList<>(fetchers);
-        sorted.removeIf(f -> !f.getSupportedMarkets().contains(market));
-        sorted.sort(Comparator.comparingInt(BaseDataFetcher::getPriority));
-
-        if (sorted.isEmpty()) {
-            // 降级：如果按市场过滤后为空，回退到全部数据源
-            log.warn("无数据源支持市场 {}，回退到全部数据源", market);
-            sorted = new ArrayList<>(fetchers);
-            sorted.sort(Comparator.comparingInt(BaseDataFetcher::getPriority));
-        }
-        return sorted;
     }
 
     // ==================== 板块与分钟数据 ====================
 
     /** 获取股票所属板块 */
     public List<String> getStockBoards(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getStockBoards(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -455,7 +297,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取分钟级K线数据 */
     public List<Map<String, Object>> getMinuteData(String stockCode, int period, int count) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getMinuteData(stockCode, period, count),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -472,7 +314,7 @@ public class DataFetcherManager implements MarketDataPort {
             return getHistoryData(stockCode, startDate, endDate);
         }
         // 非日频：直接走数据源故障切换，不走DB缓存
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getHistoryData(stockCode, startDate, endDate, frequency, adjust),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -483,7 +325,7 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取日级资金流数据（带缓存） */
     public List<Map<String, Object>> getFundFlow(String stockCode, int days) {
         return getOrFetch("fundflow:" + stockCode + ":" + days, CACHE_TTL_HOUR, () ->
-                executeWithFailover(stockCode,
+                failover.executeWithFailover(stockCode,
                         f -> f.getFundFlow(stockCode, days),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
@@ -499,7 +341,7 @@ public class DataFetcherManager implements MarketDataPort {
             return getFundFlow(stockCode, days);
         }
         // 分钟级：直接走数据源故障切换
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> {
                     if (f instanceof io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher ef) {
                         return ef.getFundFlow(stockCode, days, true);
@@ -515,7 +357,7 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取财报三表数据（带缓存） */
     public List<Map<String, Object>> getFinancialStatements(String stockCode, String statementType) {
         return getOrFetch("financials:" + stockCode + ":" + statementType, CACHE_TTL_DAY, () ->
-                executeWithFailover(stockCode,
+                failover.executeWithFailover(stockCode,
                         f -> f.getFinancialStatements(stockCode, statementType),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
@@ -523,7 +365,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取关键财务指标 */
     public List<Map<String, Object>> getKeyIndicators(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getKeyIndicators(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -533,7 +375,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取龙虎榜数据 */
     public List<Map<String, Object>> getDragonTigerList(String stockCode, int days) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getDragonTigerList(stockCode, days),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -541,7 +383,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取北向资金流向 */
     public List<Map<String, Object>> getNorthboundFlow(int days) {
-        return executeWithFailoverNoStock(
+        return failover.executeWithFailoverNoStock(
                 f -> f.getNorthboundFlow(days),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -549,7 +391,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取个股板块归属详情 */
     public List<Map<String, Object>> getStockBoardsDetail(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getStockBoardsDetail(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -559,7 +401,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取融资融券明细 */
     public List<Map<String, Object>> getMarginTrading(String stockCode, int days) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getMarginTrading(stockCode, days),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -567,7 +409,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取股东户数变化 */
     public List<Map<String, Object>> getShareholderCount(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getShareholderCount(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -575,7 +417,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取分红送转历史 */
     public List<Map<String, Object>> getDividendHistory(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getDividendHistory(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -585,7 +427,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取个股研报列表 */
     public List<Map<String, Object>> getResearchReports(String stockCode, int count) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getResearchReports(stockCode, count),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -593,7 +435,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取机构一致预期EPS */
     public List<Map<String, Object>> getConsensusEPS(String stockCode) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getConsensusEPS(stockCode),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -601,7 +443,7 @@ public class DataFetcherManager implements MarketDataPort {
 
     /** 获取个股公告列表 */
     public List<Map<String, Object>> getAnnouncements(String stockCode, int count) {
-        return executeWithFailover(stockCode,
+        return failover.executeWithFailover(stockCode,
                 f -> f.getAnnouncements(stockCode, count),
                 r -> r == null || r.isEmpty(),
                 Collections.emptyList());
@@ -612,7 +454,7 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取大宗交易数据 */
     public List<Map<String, Object>> getBlockTrades(String stockCode, int days) {
         return getOrFetch("blocktrade:" + stockCode + ":" + days, CACHE_TTL_DAY, () ->
-                executeWithFailover(stockCode,
+                failover.executeWithFailover(stockCode,
                         f -> f.getBlockTrades(stockCode, days),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
@@ -621,7 +463,7 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取限售解禁日历 */
     public List<Map<String, Object>> getRestrictedShareUnlock(String stockCode, int days) {
         return getOrFetch("unlock:" + stockCode + ":" + days, CACHE_TTL_DAY, () ->
-                executeWithFailover(stockCode,
+                failover.executeWithFailover(stockCode,
                         f -> f.getRestrictedShareUnlock(stockCode, days),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
@@ -630,7 +472,7 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取行业板块排名 */
     public List<Map<String, Object>> getIndustryRanking() {
         return getOrFetch("industry_ranking", CACHE_TTL_HOUR, () ->
-                executeWithFailoverNoStock(
+                failover.executeWithFailoverNoStock(
                         f -> f.getIndustryRanking(),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
@@ -639,81 +481,10 @@ public class DataFetcherManager implements MarketDataPort {
     /** 获取全市场龙虎榜 */
     public List<Map<String, Object>> getMarketDragonTiger(LocalDate date) {
         return getOrFetch("market_dragon_tiger:" + date, CACHE_TTL_DAY, () ->
-                executeWithFailoverNoStock(
+                failover.executeWithFailoverNoStock(
                         f -> f.getMarketDragonTiger(date),
                         r -> r == null || r.isEmpty(),
                         Collections.emptyList()));
-    }
-
-    // ========== 熔断器逻辑 ==========
-
-    /**
-     * 检查熔断器是否打开
-     */
-    private boolean isCircuitOpen(String fetcherName) {
-        CircuitBreaker cb = circuitBreakers.get(fetcherName);
-        if (cb == null) return false;
-        
-        // 检查是否到了恢复时间
-        if (cb.isOpen() && System.currentTimeMillis() > cb.getRecoveryTime()) {
-            cb.halfOpen();
-            return false;
-        }
-        return cb.isOpen();
-    }
-
-    /**
-     * 记录成功调用
-     */
-    private void recordSuccess(String fetcherName) {
-        CircuitBreaker cb = circuitBreakers.get(fetcherName);
-        if (cb != null) {
-            cb.recordSuccess();
-        }
-    }
-
-    /**
-     * 记录失败调用
-     */
-    private void recordFailure(String fetcherName) {
-        CircuitBreaker cb = circuitBreakers.computeIfAbsent(fetcherName, k -> new CircuitBreaker());
-        cb.recordFailure();
-        
-        if (cb.getFailureCount() >= 3) {
-            cb.open();
-            log.warn("数据源 {} 触发熔断, 将在 {}秒 后恢复", fetcherName, cb.getBackoffSeconds());
-        }
-    }
-
-    // ========== 限流器逻辑 ==========
-
-    /**
-     * 尝试获取请求许可（差异化限流）
-     * - 东财系数据源（名称含 efinance）：使用滑动窗口限流器（1分钟≤180次/5分钟≤280次）
-     * - 其他数据源：使用简单限流器（单次间隔 + 随机抖动）
-     */
-    private boolean tryAcquire(BaseDataFetcher fetcher) {
-        String fetcherName = fetcher.getName();
-        long rateLimitMs = fetcher.getRateLimitMs();
-
-        // 东财系数据源使用滑动窗口限流器
-        if (fetcherName != null && fetcherName.toLowerCase().contains("efinance")) {
-            SlidingWindowRateLimiter swLimiter = slidingWindowLimiters.computeIfAbsent(
-                    fetcherName, k -> new SlidingWindowRateLimiter(rateLimitMs));
-            if (swLimiter.getMinIntervalMs() != rateLimitMs) {
-                swLimiter = new SlidingWindowRateLimiter(rateLimitMs);
-                slidingWindowLimiters.put(fetcherName, swLimiter);
-            }
-            return swLimiter.tryAcquire();
-        }
-
-        // 其他数据源使用简单限流器
-        RateLimiter limiter = rateLimiters.computeIfAbsent(fetcherName, k -> new RateLimiter(rateLimitMs, JITTER_MS));
-        if (limiter.getMinIntervalMs() != rateLimitMs) {
-            limiter = new RateLimiter(rateLimitMs, JITTER_MS);
-            rateLimiters.put(fetcherName, limiter);
-        }
-        return limiter.tryAcquire();
     }
 
     // ========== 缓存层（交易日感知） ==========
@@ -874,11 +645,11 @@ public class DataFetcherManager implements MarketDataPort {
         LocalDate sampleStart = samplePrimary.get(0).getTradeDate();
         LocalDate sampleEnd = samplePrimary.get(samplePrimary.size() - 1).getTradeDate();
 
-        if (isCircuitOpen(secondary.getName())) {
+        if (failover.isCircuitOpen(secondary.getName())) {
             log.debug("[{}] 备源 {} 熔断中，跳过交叉校验", stockCode, secondary.getName());
             return true;
         }
-        if (!tryAcquire(secondary) && !waitForRateLimit(secondary, RATE_LIMIT_WAIT_MS)) {
+        if (!failover.tryAcquire(secondary) && !failover.waitForRateLimit(secondary)) {
             log.debug("[{}] 备源 {} 限流，跳过交叉校验", stockCode, secondary.getName());
             return true;
         }
@@ -898,7 +669,7 @@ public class DataFetcherManager implements MarketDataPort {
 
             if (result.isPassed()) {
                 if (result.getComparedDays() > 0) {
-                    recordSuccess(secondary.getName());
+                    failover.recordSuccess(secondary.getName());
                 }
                 return true;
             }
@@ -909,7 +680,7 @@ public class DataFetcherManager implements MarketDataPort {
             return true;
         } catch (Exception e) {
             log.warn("[{}] 交叉校验拉取备源 {} 失败，跳过: {}", stockCode, secondary.getName(), e.getMessage());
-            recordFailure(secondary.getName());
+            failover.recordFailure(secondary.getName());
             return true;
         }
     }
@@ -921,12 +692,12 @@ public class DataFetcherManager implements MarketDataPort {
     private BaseDataFetcher pickCrossCheckFetcher(BaseDataFetcher primary, MarketType market,
                                                   Set<String> rejectedPrimaries) {
         String primaryFamily = primary.getDataFamily();
-        return getOrderedFetchers(market).stream()
+        return failover.getOrderedFetchers(market).stream()
                 .filter(f -> !f.getName().equalsIgnoreCase(primary.getName()))
                 .filter(f -> rejectedPrimaries == null || !rejectedPrimaries.contains(f.getName()))
                 .filter(f -> !Objects.equals(f.getDataFamily(), primaryFamily))
                 .filter(BaseDataFetcher::isAvailable)
-                .filter(f -> !isCircuitOpen(f.getName()))
+                .filter(f -> !failover.isCircuitOpen(f.getName()))
                 .findFirst()
                 .orElse(null);
     }

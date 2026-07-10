@@ -1,0 +1,7 @@
+taskType: CHAT
+steps:
+  - id: react
+    name: react_loop
+    kind: LLM_REASONING
+    description: ReAct 工具循环，自主调用工具后回复
+    mutating: false

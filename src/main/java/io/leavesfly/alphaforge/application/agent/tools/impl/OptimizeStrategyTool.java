@@ -10,7 +10,7 @@ import io.leavesfly.alphaforge.application.strategy.model.OptimizationResult;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -31,17 +31,19 @@ public class OptimizeStrategyTool implements Tool {
     private final ParameterOptimizer optimizer;
     private final MarketDataPort dataFetcher;
 
-    @Autowired(required = false)
-    private AutonomyPolicy autonomyPolicy;
+    private final AutonomyPolicy autonomyPolicy;
 
-    @Autowired(required = false)
-    private StrategyParamWriteBackService paramWriteBackService;
+    private final StrategyParamWriteBackService paramWriteBackService;
 
     public OptimizeStrategyTool(StrategyCatalog catalog, ParameterOptimizer optimizer,
-                                 MarketDataPort dataFetcher) {
+                                 MarketDataPort dataFetcher,
+                                 ObjectProvider<AutonomyPolicy> autonomyPolicy,
+                                 ObjectProvider<StrategyParamWriteBackService> paramWriteBackService) {
         this.catalog = catalog;
         this.optimizer = optimizer;
         this.dataFetcher = dataFetcher;
+        this.autonomyPolicy = autonomyPolicy.getIfAvailable();
+        this.paramWriteBackService = paramWriteBackService.getIfAvailable();
     }
 
     @Override

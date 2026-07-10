@@ -1,0 +1,7 @@
+taskType: PORTFOLIO_REVIEW
+steps:
+  - id: review
+    name: review_portfolio
+    kind: LLM_REASONING
+    description: 组合持仓审查与建议
+    mutating: false

@@ -1,9 +1,9 @@
 package io.leavesfly.alphaforge.application.strategy.lifecycle;
 
 import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScore;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScorer;
 import io.leavesfly.alphaforge.application.strategy.engine.WalkForwardValidator;
@@ -38,7 +38,7 @@ public class StrategyPromotionGate {
     private final AutonomyPolicy policy;
     private final StrategyQualityScorer qualityScorer;
     private final WalkForwardValidator walkForwardValidator;
-    private final BacktestSimulator simulator;
+    private final BacktestRunner simulator;
     private final StrategyValidator validator;
     private final MarketDataPort marketDataPort;
     private final Map<String, PromotionDecision> decisionCache = new ConcurrentHashMap<>();
@@ -46,7 +46,7 @@ public class StrategyPromotionGate {
     public StrategyPromotionGate(AutonomyPolicy policy,
                                  StrategyQualityScorer qualityScorer,
                                  WalkForwardValidator walkForwardValidator,
-                                 BacktestSimulator simulator,
+                                 BacktestRunner simulator,
                                  StrategyValidator validator,
                                  MarketDataPort marketDataPort) {
         this.policy = policy;

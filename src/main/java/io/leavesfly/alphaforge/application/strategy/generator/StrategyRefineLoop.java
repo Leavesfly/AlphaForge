@@ -1,9 +1,9 @@
 package io.leavesfly.alphaforge.application.strategy.generator;
 
 import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScore;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScorer;
 import io.leavesfly.alphaforge.application.strategy.lifecycle.StrategyLifecycleService;
@@ -34,7 +34,7 @@ public class StrategyRefineLoop {
 
     private final StrategyGeneratorAgent generator;
     private final StrategyValidator validator;
-    private final BacktestSimulator simulator;
+    private final BacktestRunner simulator;
     private final StrategyQualityScorer qualityScorer;
     private final MarketDataPort marketDataPort;
     private final StrategyLifecycleService lifecycleService;
@@ -42,7 +42,7 @@ public class StrategyRefineLoop {
 
     public StrategyRefineLoop(StrategyGeneratorAgent generator,
                               StrategyValidator validator,
-                              BacktestSimulator simulator,
+                              BacktestRunner simulator,
                               StrategyQualityScorer qualityScorer,
                               MarketDataPort marketDataPort,
                               StrategyLifecycleService lifecycleService,

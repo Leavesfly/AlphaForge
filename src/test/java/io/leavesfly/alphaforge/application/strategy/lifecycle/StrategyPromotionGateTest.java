@@ -2,7 +2,7 @@ package io.leavesfly.alphaforge.application.strategy.lifecycle;
 
 import io.leavesfly.alphaforge.application.autonomy.AutonomyAuditLog;
 import io.leavesfly.alphaforge.application.autonomy.AutonomyPolicy;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScore;
 import io.leavesfly.alphaforge.application.evaluation.StrategyQualityScorer;

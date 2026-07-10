@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.watchlist.WatchlistService;
-import io.leavesfly.alphaforge.domain.model.entity.watchlist.WatchlistItem;
+import io.leavesfly.alphaforge.presentation.api.dto.WatchlistItemDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,14 +22,14 @@ public class WatchlistController {
     }
 
     @GetMapping
-    public ResponseEntity<List<WatchlistItem>> list() {
-        return ResponseEntity.ok(watchlistService.listAll());
+    public ResponseEntity<List<WatchlistItemDto>> list() {
+        return ResponseEntity.ok(WatchlistItemDto.from(watchlistService.listAll()));
     }
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> add(@RequestBody Map<String, Object> body) {
         try {
-            WatchlistItem item = watchlistService.add(
+            var item = watchlistService.add(
                     (String) body.get("stock_code"),
                     (String) body.get("stock_name"),
                     (String) body.get("market"));

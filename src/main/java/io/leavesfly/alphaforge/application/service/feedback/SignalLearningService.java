@@ -9,7 +9,7 @@ import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository
 import io.leavesfly.alphaforge.domain.model.feedback.ErrorPattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -49,21 +49,23 @@ public class SignalLearningService {
     /**
      * 可选依赖：因子进化记忆（因子级经验注入）
      */
-    @Autowired(required = false)
-    private FactorEvolutionMemory factorEvolutionMemory;
+    private final FactorEvolutionMemory factorEvolutionMemory;
 
     /**
      * 可选依赖：可进化因子库（因子推荐）
      */
-    @Autowired(required = false)
-    private EvolvableFactorLibrary factorLibrary;
+    private final EvolvableFactorLibrary factorLibrary;
 
     public SignalLearningService(ExperienceMemory experienceMemory,
                                  DecisionSignalRepository signalRepository,
-                                 DecisionSignalOutcomeRepository outcomeRepository) {
+                                 DecisionSignalOutcomeRepository outcomeRepository,
+                                 ObjectProvider<FactorEvolutionMemory> factorEvolutionMemory,
+                                 ObjectProvider<EvolvableFactorLibrary> factorLibrary) {
         this.experienceMemory = experienceMemory;
         this.signalRepository = signalRepository;
         this.outcomeRepository = outcomeRepository;
+        this.factorEvolutionMemory = factorEvolutionMemory.getIfAvailable();
+        this.factorLibrary = factorLibrary.getIfAvailable();
     }
 
     // ==================== 信号级经验 ====================

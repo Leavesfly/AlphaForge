@@ -1,6 +1,9 @@
 package io.leavesfly.alphaforge.application.pipeline;
 
-import io.leavesfly.alphaforge.application.service.AgentAnalysisService;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentKernel;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentResult;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTask;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTaskType;
 import io.leavesfly.alphaforge.config.LlmConfig;
 import io.leavesfly.alphaforge.config.AppConfig;
 
@@ -26,7 +29,7 @@ import io.leavesfly.alphaforge.domain.service.TechnicalAnalysisService;
 import io.leavesfly.alphaforge.domain.service.SignalVerifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -64,7 +67,7 @@ public class StockAnalysisPipeline {
     private final AnalysisHistoryService historyService;
     private final AnalysisContextBuilder contextBuilder;
     private final AnalysisResultAggregator resultAggregator;
-    private final AgentAnalysisService agentAnalysisService;
+    private final AgentKernel agentKernel;
     private final MarketAnalysisService marketAnalysisService;
     private final NameToCodeResolver nameResolver;
     private final AnalysisPostProcessor postProcessor;
@@ -75,9 +78,8 @@ public class StockAnalysisPipeline {
     private final SignalLearningService signalLearningService;
     private final SignalExtractionService signalExtractionService;
 
-    /** 可选依赖：分析记忆服务（字段注入，避免构造函数过度膨胀） */
-    @Autowired(required = false)
-    private AnalysisMemoryService analysisMemoryService;
+    /** 可选依赖：分析记忆服务 */
+    private final AnalysisMemoryService analysisMemoryService;
 
 
 
@@ -91,13 +93,15 @@ public class StockAnalysisPipeline {
             TechnicalAnalysisService technicalAnalysisService, NewsSearchService newsSearchService,
             NotificationPort notificationService,
             AnalysisHistoryService historyService, AnalysisContextBuilder contextBuilder,
-            AnalysisResultAggregator resultAggregator, AgentAnalysisService agentAnalysisService,
+            AnalysisResultAggregator resultAggregator,
+            AgentKernel agentKernel,
             MarketAnalysisService marketAnalysisService,
             NameToCodeResolver nameResolver,
             AnalysisPostProcessor postProcessor, AnalysisContextEnhancer contextEnhancer,
             PipelineMetrics pipelineMetrics, SignalVerifier signalVerifier,
             LoopStateManager loopStateManager, SignalLearningService signalLearningService,
-            SignalExtractionService signalExtractionService) {
+            SignalExtractionService signalExtractionService,
+            ObjectProvider<AnalysisMemoryService> analysisMemoryService) {
         this.config = config;
         this.llmConfig = llmConfig;
         this.schedulerAuthConfig = schedulerAuthConfig;
@@ -108,7 +112,7 @@ public class StockAnalysisPipeline {
         this.historyService = historyService;
         this.contextBuilder = contextBuilder;
         this.resultAggregator = resultAggregator;
-        this.agentAnalysisService = agentAnalysisService;
+        this.agentKernel = agentKernel;
         this.marketAnalysisService = marketAnalysisService;
         this.nameResolver = nameResolver;
         this.postProcessor = postProcessor;
@@ -118,6 +122,7 @@ public class StockAnalysisPipeline {
         this.loopStateManager = loopStateManager;
         this.signalLearningService = signalLearningService;
         this.signalExtractionService = signalExtractionService;
+        this.analysisMemoryService = analysisMemoryService.getIfAvailable();
         this.executorService = Executors.newFixedThreadPool(
                 Math.min(Runtime.getRuntime().availableProcessors(), 4));
     }
@@ -290,7 +295,7 @@ public class StockAnalysisPipeline {
                 log.debug("[{}] 因子经验注入失败: {}", stockCode, e.getMessage());
             }
 
-            // ===== Step 8: LLM分析(统一使用ReactAgent) =====
+            // ===== Step 8: LLM分析(经 AgentKernel 认知轨，内核为唯一认知权威) =====
             diag.stage("llm_analysis");
             AnalysisResult analysisResult;
             long llmStart = System.currentTimeMillis();
@@ -298,7 +303,20 @@ public class StockAnalysisPipeline {
             if (dryRun) {
                 analysisResult = AnalysisResult.dryRun(stockCode, stockName);
             } else {
-                analysisResult = agentAnalysisService.analyze(stockCode, stockName, enhancedContext, diag);
+                // 认知轨：定时深度分析的推理子步骤经 AgentKernel 执行（保留 Pipeline 确定性骨架）
+                // 降级链 debate→multi→react→llm 已内置于内核委托的 AgentAnalysisService，Pipeline 不再直连推理实现
+                AgentResult agentResult = agentKernel.run(
+                        AgentTask.of(AgentTaskType.STOCK_ANALYSIS)
+                                .input("stockCode", stockCode)
+                                .input("stockName", stockName)
+                                .input("context", enhancedContext)
+                                .input("diagnosticContext", diag)
+                                .build());
+                if (!(agentResult.data("analysisResult") instanceof AnalysisResult ar)) {
+                    throw new IllegalStateException("Agent 分析未返回结果: "
+                            + (agentResult.getError() != null ? agentResult.getError() : "unknown"));
+                }
+                analysisResult = ar;
             }
 
             long llmDuration = System.currentTimeMillis() - llmStart;

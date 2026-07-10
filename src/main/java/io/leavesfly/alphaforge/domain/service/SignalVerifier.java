@@ -5,8 +5,6 @@ import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.SignalQualityPredictor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 import java.util.*;
 
@@ -24,7 +22,6 @@ import java.util.*;
  * 4. 大盘环境门控 —— 市场情绪极端时拦截高置信度信号
  * 5. 信号稳定性检验 —— 历史信号频繁反转则降低本次置信度
  */
-@Component
 public class SignalVerifier {
 
     private static final Logger log = LoggerFactory.getLogger(SignalVerifier.class);
@@ -39,8 +36,7 @@ public class SignalVerifier {
     // 可选：ML 信号质量预测器
     private final SignalQualityPredictor qualityPredictor;
 
-    @Autowired
-    public SignalVerifier(@Autowired(required = false) SignalQualityPredictor qualityPredictor) {
+    public SignalVerifier(SignalQualityPredictor qualityPredictor) {
         this.qualityPredictor = qualityPredictor;
         if (qualityPredictor != null && qualityPredictor.isReady()) {
             log.info("SignalVerifier 已集成 ML 信号质量预测器: {}", qualityPredictor.getClass().getSimpleName());

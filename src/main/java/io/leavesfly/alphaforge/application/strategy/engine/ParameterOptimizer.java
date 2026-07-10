@@ -1,8 +1,8 @@
 package io.leavesfly.alphaforge.application.strategy.engine;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
 import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
 import io.leavesfly.alphaforge.application.strategy.model.OptimizationResult;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
@@ -37,9 +37,9 @@ public class ParameterOptimizer {
     private static final int MAX_TOP_CANDIDATES = 10;
     private static final int MAX_COMBINATIONS = 500;
 
-    private final BacktestSimulator simulator;
+    private final BacktestRunner simulator;
 
-    public ParameterOptimizer(BacktestSimulator simulator) {
+    public ParameterOptimizer(BacktestRunner simulator) {
         this.simulator = simulator;
     }
 

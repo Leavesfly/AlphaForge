@@ -1,6 +1,8 @@
 package io.leavesfly.alphaforge.application.backtest.pairs;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import org.slf4j.Logger;

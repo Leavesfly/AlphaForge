@@ -1,5 +1,7 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;

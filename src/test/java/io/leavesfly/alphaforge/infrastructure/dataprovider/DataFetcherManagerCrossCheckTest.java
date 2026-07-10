@@ -48,7 +48,7 @@ class DataFetcherManagerCrossCheckTest {
 
         DataFetcherManager manager = new DataFetcherManager(
                 config,
-                List.of(primary, secondary, fallback),
+                new FetcherFailoverExecutor(List.of(primary, secondary, fallback), config),
                 null,
                 null,
                 null,
@@ -86,7 +86,7 @@ class DataFetcherManagerCrossCheckTest {
 
         DataFetcherManager manager = new DataFetcherManager(
                 config,
-                List.of(efinance, akshare),
+                new FetcherFailoverExecutor(List.of(efinance, akshare), config),
                 null,
                 null,
                 null,

@@ -1,5 +1,8 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.PointInTimeFundamentals;
+import io.leavesfly.alphaforge.application.strategy.simulation.FundamentalSnapshotProvider;
+
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import org.slf4j.Logger;
@@ -13,7 +16,7 @@ import java.util.Map;
  * 为需要基本面条件的回测策略加载点时财务指标。
  */
 @Component
-public class FundamentalSnapshotLoader {
+public class FundamentalSnapshotLoader implements FundamentalSnapshotProvider {
 
     private static final Logger log = LoggerFactory.getLogger(FundamentalSnapshotLoader.class);
     /** 报告期末到可交易使用的滞后天数（季报披露近似） */

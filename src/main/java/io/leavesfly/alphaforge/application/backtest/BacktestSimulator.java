@@ -1,5 +1,13 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestDailySnapshot;
+import io.leavesfly.alphaforge.application.simulation.BacktestTrade;
+import io.leavesfly.alphaforge.application.simulation.ExecutionMode;
+import io.leavesfly.alphaforge.application.simulation.PointInTimeFundamentals;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
+
 import io.leavesfly.alphaforge.application.strategy.engine.BacktestSignalEngine;
 import io.leavesfly.alphaforge.application.strategy.model.BacktestProfile;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
@@ -16,7 +24,7 @@ import java.util.Map;
  * 真实感回测仿真器：次日开盘成交、T+1、交易成本、涨跌停与停牌约束。
  */
 @Component
-public class BacktestSimulator {
+public class BacktestSimulator implements BacktestRunner {
 
     /** 统一绩效分析器（纯算法、无状态，复用领域实现避免口径分叉） */
     private static final PerformanceAnalytics PERF = new PerformanceAnalytics();

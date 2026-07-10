@@ -1,0 +1,7 @@
+taskType: FACTOR_EVOLUTION
+steps:
+  - id: evolve
+    name: run_evolution_cycle
+    kind: TOOL
+    description: 触发一轮因子进化
+    mutating: false

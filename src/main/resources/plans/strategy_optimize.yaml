@@ -1,0 +1,12 @@
+taskType: STRATEGY_OPTIMIZE
+steps:
+  - id: optimize
+    name: optimize_strategy
+    kind: LLM_REASONING
+    description: 参数寻优与迭代改写
+    mutating: false
+  - id: apply
+    name: apply_params
+    kind: DETERMINISTIC
+    description: 写回策略参数（状态变更，必经 Guardrail）
+    mutating: true

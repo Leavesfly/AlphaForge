@@ -1,0 +1,12 @@
+taskType: STRATEGY_GENERATE
+steps:
+  - id: gen
+    name: generate_strategy
+    kind: LLM_REASONING
+    description: 根据目标生成策略定义
+    mutating: false
+  - id: backtest
+    name: run_backtest
+    kind: TOOL
+    description: 对生成策略跑基准回测
+    mutating: false

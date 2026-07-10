@@ -1,5 +1,6 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.PointInTimeFundamentals;
 import io.leavesfly.alphaforge.application.strategy.condition.BacktestConditionEvaluator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

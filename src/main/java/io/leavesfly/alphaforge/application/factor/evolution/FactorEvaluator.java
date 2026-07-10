@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.application.factor.evolution;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
 import io.leavesfly.alphaforge.application.factor.evolution.model.FactorCandidate;
 import io.leavesfly.alphaforge.application.factor.evolution.model.FactorEvaluation;

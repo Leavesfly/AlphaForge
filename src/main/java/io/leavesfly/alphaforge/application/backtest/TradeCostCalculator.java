@@ -1,5 +1,7 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+
 /**
  * 交易成本计算：佣金、印花税、滑点。
  */

@@ -6,7 +6,7 @@ import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
 import io.leavesfly.alphaforge.domain.repository.signal.DecisionSignalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,14 +23,16 @@ public class DecisionSignalService {
     private static final Logger log = LoggerFactory.getLogger(DecisionSignalService.class);
     private final DecisionSignalRepository signalRepo;
 
-    @Autowired(required = false)
-    private AutonomyPolicy autonomyPolicy;
+    private final AutonomyPolicy autonomyPolicy;
 
-    @Autowired(required = false)
-    private SignalToPortfolioExecutor signalExecutor;
+    private final SignalToPortfolioExecutor signalExecutor;
 
-    public DecisionSignalService(DecisionSignalRepository signalRepo) {
+    public DecisionSignalService(DecisionSignalRepository signalRepo,
+                                 ObjectProvider<AutonomyPolicy> autonomyPolicy,
+                                 ObjectProvider<SignalToPortfolioExecutor> signalExecutor) {
         this.signalRepo = signalRepo;
+        this.autonomyPolicy = autonomyPolicy.getIfAvailable();
+        this.signalExecutor = signalExecutor.getIfAvailable();
     }
 
     /** 创建决策信号 */

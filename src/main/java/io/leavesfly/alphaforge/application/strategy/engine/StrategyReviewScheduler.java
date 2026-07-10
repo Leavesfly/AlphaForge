@@ -10,7 +10,7 @@ import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -28,17 +28,19 @@ public class StrategyReviewScheduler {
     private final StrategyPerformanceTracker performanceTracker;
     private final StrategyParameterTuner parameterTuner;
 
-    @Autowired(required = false)
-    private AutonomyPolicy autonomyPolicy;
+    private final AutonomyPolicy autonomyPolicy;
 
-    @Autowired(required = false)
-    private StrategyLifecycleService lifecycleService;
+    private final StrategyLifecycleService lifecycleService;
 
     public StrategyReviewScheduler(StrategyCatalog catalog, StrategyPerformanceTracker performanceTracker,
-                                    StrategyParameterTuner parameterTuner) {
+                                    StrategyParameterTuner parameterTuner,
+                                    ObjectProvider<AutonomyPolicy> autonomyPolicy,
+                                    ObjectProvider<StrategyLifecycleService> lifecycleService) {
         this.catalog = catalog;
         this.performanceTracker = performanceTracker;
         this.parameterTuner = parameterTuner;
+        this.autonomyPolicy = autonomyPolicy.getIfAvailable();
+        this.lifecycleService = lifecycleService.getIfAvailable();
     }
 
     @Scheduled(cron = "${strategy.review.cron:0 30 18 * * MON-FRI}")

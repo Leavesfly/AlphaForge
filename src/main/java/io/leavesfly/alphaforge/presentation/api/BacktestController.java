@@ -1,7 +1,7 @@
 package io.leavesfly.alphaforge.presentation.api;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
 import io.leavesfly.alphaforge.application.backtest.BacktestService;
 import io.leavesfly.alphaforge.application.backtest.BacktestVisualizationService;
@@ -13,7 +13,6 @@ import io.leavesfly.alphaforge.application.strategy.engine.WalkForwardValidator;
 import io.leavesfly.alphaforge.application.strategy.model.OptimizationResult;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.application.strategy.model.WalkForwardResult;
-import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
 import io.leavesfly.alphaforge.presentation.api.dto.BacktestRequest;
 import jakarta.validation.Valid;
@@ -108,7 +107,7 @@ public class BacktestController {
         }
 
         LocalDate end = LocalDate.now();
-        List<StockDailyData> data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
+        var data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
         if (data == null || data.isEmpty()) {
             return ResponseEntity.ok(Map.of("error", "无法获取历史数据: " + code));
         }
@@ -135,7 +134,7 @@ public class BacktestController {
         }
 
         LocalDate end = LocalDate.now();
-        List<StockDailyData> data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
+        var data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
         if (data == null || data.isEmpty()) {
             return ResponseEntity.ok(Map.of("error", "无法获取历史数据: " + code));
         }
@@ -162,7 +161,7 @@ public class BacktestController {
         }
 
         LocalDate end = LocalDate.now();
-        List<StockDailyData> data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
+        var data = dataFetcher.getHistoryData(code, end.minusDays(days), end);
         if (data == null || data.isEmpty()) {
             return ResponseEntity.ok(Map.of("error", "无法获取历史数据: " + code));
         }

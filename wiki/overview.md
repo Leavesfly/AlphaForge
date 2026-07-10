@@ -76,14 +76,15 @@ REST API (AnalysisController)
     ↓
 TaskService（异步任务提交）
     ↓
-StockAnalysisPipeline（30+ 步骤编排）
+StockAnalysisPipeline（30+ 步骤编排，功能轨确定性骨架）
     ├── AnalysisContextBuilder   → 构建分析上下文（K线、技术指标）
     ├── AnalysisContextEnhancer  → 增强上下文（筹码、板块、新闻、大盘）
-    ├── AgentAnalysisService     → Agent 模式分析
-    │   ├── debate 模式          → AgentDebateOrchestrator（三轮辩论）
-    │   ├── multi 模式           → MultiAgentOrchestrator（并行分析）
-    │   ├── react 模式           → ReActAgent（工具调用）
-    │   └── llm 模式（降级）      → 直接 LLM 调用
+    ├── AgentKernel              → 认知轨：推理子步骤统一入口（Planner→Guardrail→Critic）
+    │   └── AgentAnalysisService → 内核委托的分析实现（含四级降级链）
+    │       ├── debate 模式      → AgentDebateOrchestrator（三轮辩论）
+    │       ├── multi 模式       → MultiAgentOrchestrator（并行分析）
+    │       ├── react 模式       → ReActAgent（工具调用）
+    │       └── llm 模式（降级） → 直接 LLM 调用
     ├── AnalysisResultAggregator → 聚合多维分析结果
     └── AnalysisPostProcessor    → 后处理（信号提取、通知、存储）
             ↓

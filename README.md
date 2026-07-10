@@ -25,6 +25,7 @@ AlphaForge 是一个基于 Java 17 + Spring Boot 3.2 构建的全栈量化分析
 ## 核心特性
 
 ### 🤖 AI 智能分析
+- **统一 Agent 内核（AgentKernel）**：认知型任务经 Planner→Guardrail→dispatch→Critic 编排，双轨架构隔离功能性交互
 - 多 Agent 协作 / 单 Agent / 编排模式，灵活选择分析深度
 - LLM 驱动的技术面、基本面、舆情三维综合研判
 - 结构化决策信号输出（含入场区间、止损、目标价、置信度）
@@ -73,9 +74,13 @@ AlphaForge 是一个基于 Java 17 + Spring Boot 3.2 构建的全栈量化分析
 │  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │                    Application Layer                      │
-│  ┌────────┐  ┌──────────┐  ┌────────┐  ┌───────────┐  │
-│  │Pipeline│  │  Agent   │  │Backtest│  │  Strategy │  │
-│  └────────┘  └──────────┘  └────────┘  └───────────┘  │
+│  ┌───────────────────────────────────────────────────┐ │
+│  │  AgentKernel (Cognitive Track)                      │ │
+│  │  Planner -> Guardrail -> Dispatch -> Critic         │ │
+│  └───────────────────────────────────────────────────┘ │
+│  ┌────────┐  ┌──────────┐  ┌────────┐  ┌───────────┐ │
+│  │Pipeline│  │  Agent   │  │Backtest│  │  Strategy │ │
+│  └────────┘  └──────────┘  └────────┘  └───────────┘ │
 │  ┌────────────────┐  ┌───────────────────────────────┐  │
 │  │    Services    │  │     Skills (Prompt-driven)    │  │
 │  └────────────────┘  └───────────────────────────────┘  │
@@ -91,6 +96,8 @@ AlphaForge 是一个基于 Java 17 + Spring Boot 3.2 构建的全栈量化分析
 │  └────────┘ └─────┘ └────────────┘ └──────┘ └──────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+> **双轨架构**：认知型任务（对话、深度分析、策略生成、自治研判）统一经 `AgentKernel` 编排（Planner→Guardrail→dispatch→Critic）；功能/确定性任务（CRUD、查询、事务、定时编排如 `StockAnalysisPipeline`）仍直连领域服务、零 LLM 开销。两轨共享同一能力层（Tool 薄封装）与统一治理闸（Guardrail）。
 
 ---
 
@@ -244,11 +251,12 @@ AlphaForge 支持多种运行模式，通过命令行参数切换：
 ```
 src/main/java/io/leavesfly/alphaforge/
 ├── application/                   # 应用层
-│   ├── agent/                     # AI Agent（ReAct 模式）
+│   ├── agent/                     # AI Agent
+│   │   ├── kernel/                # Agent 内核（认知轨：Planner/Guardrail/Critic/Kernel）
 │   │   ├── skills/                # Agent 技能（Prompt 模板）
 │   │   └── tools/                 # Agent 工具集
 │   ├── backtest/                  # 回测模拟器
-│   ├── pipeline/                  # 分析流水线（编排）
+│   ├── pipeline/                  # 分析流水线（功能轨确定性编排，推理委托内核）
 │   ├── service/                   # 应用服务
 │   │   ├── portfolio/             # 组合管理
 │   │   ├── report/                # 报告生成

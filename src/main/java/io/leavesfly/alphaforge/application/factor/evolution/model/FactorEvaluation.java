@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.application.factor.evolution.model;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;

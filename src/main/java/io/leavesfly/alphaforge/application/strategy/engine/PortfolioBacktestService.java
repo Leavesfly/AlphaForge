@@ -1,10 +1,10 @@
 package io.leavesfly.alphaforge.application.strategy.engine;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationResult;
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulator;
-import io.leavesfly.alphaforge.application.backtest.FundamentalSnapshotLoader;
-import io.leavesfly.alphaforge.application.backtest.PointInTimeFundamentals;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationResult;
+import io.leavesfly.alphaforge.application.strategy.simulation.BacktestRunner;
+import io.leavesfly.alphaforge.application.strategy.simulation.FundamentalSnapshotProvider;
+import io.leavesfly.alphaforge.application.simulation.PointInTimeFundamentals;
 import io.leavesfly.alphaforge.application.strategy.StrategyCatalog;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
@@ -33,13 +33,13 @@ public class PortfolioBacktestService {
     private static final Logger log = LoggerFactory.getLogger(PortfolioBacktestService.class);
 
     private final StrategyCatalog catalog;
-    private final BacktestSimulator simulator;
+    private final BacktestRunner simulator;
     private final MarketDataPort dataFetcher;
-    private final FundamentalSnapshotLoader fundamentalLoader;
+    private final FundamentalSnapshotProvider fundamentalLoader;
 
-    public PortfolioBacktestService(StrategyCatalog catalog, BacktestSimulator simulator,
+    public PortfolioBacktestService(StrategyCatalog catalog, BacktestRunner simulator,
                                      MarketDataPort dataFetcher,
-                                     FundamentalSnapshotLoader fundamentalLoader) {
+                                     FundamentalSnapshotProvider fundamentalLoader) {
         this.catalog = catalog;
         this.simulator = simulator;
         this.dataFetcher = dataFetcher;

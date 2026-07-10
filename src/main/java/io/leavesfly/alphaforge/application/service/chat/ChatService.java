@@ -1,7 +1,9 @@
 package io.leavesfly.alphaforge.application.service.chat;
 
-import io.leavesfly.alphaforge.application.agent.LlmToolAdapter;
-import io.leavesfly.alphaforge.application.agent.ReActAgent;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentKernel;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentResult;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTask;
+import io.leavesfly.alphaforge.application.agent.kernel.AgentTaskType;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.domain.repository.chat.ChatRepository;
 import org.slf4j.Logger;
@@ -18,15 +20,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 对话服务 - AI对话的核心业务逻辑
+ * 对话服务 - AI对话的应用编排与会话管理
  *
- * 从ChatController下沉的职责：
+ * 职责：
  * - 会话管理CRUD（创建/查询/删除会话和消息）
- * - 消息构建（system prompt + history + user）
- * - 对话执行（普通对话 + 流式对话含工具调用循环）
+ * - 对话执行委托 AgentKernel 认知轨（普通对话 + 流式对话，含工具调用循环）
  * - 消息持久化（用户消息 + assistant消息 + 会话更新）
  *
  * 流式对话通过 StreamCallback 回调通知调用方发送SSE事件，
+ * 内部则通过 {@link AgentKernel.StreamListener} 与内核桥接，
  * 使Controller只需关注HTTP协议和事件推送。
  */
 @Service
@@ -36,13 +38,13 @@ public class ChatService {
 
     private final LlmPort llmService;
     private final ChatRepository chatRepository;
-    private final ReActAgent reactAgent;
+    private final AgentKernel agentKernel;
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public ChatService(LlmPort llmService, ChatRepository chatRepository, ReActAgent reactAgent) {
+    public ChatService(LlmPort llmService, ChatRepository chatRepository, AgentKernel agentKernel) {
         this.llmService = llmService;
         this.chatRepository = chatRepository;
-        this.reactAgent = reactAgent;
+        this.agentKernel = agentKernel;
     }
 
     /** 优雅关闭线程池，避免应用停止时线程泄漏 */
@@ -117,10 +119,15 @@ public class ChatService {
 
     // ===== 对话 =====
 
-    /** 普通对话（非流式，无工具调用） */
+    /** 普通对话（非流式）— 经 AgentKernel 认知轨执行（含 ReAct 工具循环，无工具时回退普通对话） */
     public String chat(String message, String sessionId, List<Map<String, String>> history) {
-        List<Map<String, String>> messages = buildMessages(message, history);
-        String reply = llmService.chatWithMessages(messages);
+        AgentTask task = AgentTask.of(AgentTaskType.CHAT)
+                .goal(message)
+                .input("history", history)
+                .maxToolCalls(5)
+                .build();
+        AgentResult result = agentKernel.run(task);
+        String reply = result.getOutput();
 
         if (sessionId != null) {
             saveUserMessage(sessionId, message);
@@ -145,7 +152,12 @@ public class ChatService {
      */
     public void chatStream(String message, String sessionId, List<Map<String, String>> history,
                            StreamCallback callback) {
-        List<Map<String, String>> messages = buildMessages(message, history);
+        // 认知轨：流式对话统一经 AgentKernel 执行（工具循环 + 最终回复流式输出）
+        AgentTask task = AgentTask.of(AgentTaskType.CHAT)
+                .goal(message)
+                .input("history", history)
+                .maxToolCalls(5)
+                .build();
 
         // 先持久化用户消息
         if (sessionId != null) {
@@ -153,34 +165,22 @@ public class ChatService {
         }
 
         executor.execute(() -> {
-            StringBuilder fullReply = new StringBuilder();
             try {
-                // 阶段1: 工具调用循环（非流式），通过回调发送 tool 事件
-                List<Map<String, String>> workingMessages = new ArrayList<>(messages);
-                LlmToolAdapter.ToolCallSession toolSession = reactAgent.execute(workingMessages, 5,
-                        (toolName, args, result, durationMs) -> callback.onToolCall(toolName, args, result, durationMs));
-
-                // 有工具调用时分块发送，没有工具调用时走真正的流式 API
-                String response = toolSession.getFinalResponse();
-                if (response != null) {
-                    // 工具调用后的最终回复，分块发送模拟流式
-                    fullReply.append(response);
-                    int chunkSize = 8;
-                    for (int i = 0; i < response.length(); i += chunkSize) {
-                        int end = Math.min(i + chunkSize, response.length());
-                        callback.onChunk(response.substring(i, end));
+                String fullReply = agentKernel.runChatStreaming(task, new AgentKernel.StreamListener() {
+                    @Override
+                    public void onToolCall(String toolName, Map<String, Object> args, String result, long durationMs) {
+                        callback.onToolCall(toolName, args, result, durationMs);
                     }
-                } else {
-                    // 没有工具调用，走真正的流式 API（逐字输出）
-                    llmService.streamChatWithMessages(workingMessages, chunk -> {
-                        fullReply.append(chunk);
+
+                    @Override
+                    public void onChunk(String chunk) {
                         callback.onChunk(chunk);
-                    });
-                }
+                    }
+                });
 
                 // 持久化 assistant 消息
                 if (sessionId != null) {
-                    saveAssistantMessage(sessionId, fullReply.toString());
+                    saveAssistantMessage(sessionId, fullReply);
                 }
 
                 callback.onComplete();
@@ -192,21 +192,6 @@ public class ChatService {
     }
 
     // ===== 内部方法 =====
-
-    /** 构建消息列表（system prompt + history + user） */
-    private List<Map<String, String>> buildMessages(String userMessage, List<Map<String, String>> history) {
-        List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", reactAgent.buildSystemPrompt()));
-        if (history != null && !history.isEmpty()) {
-            for (Map<String, String> msg : history) {
-                if (msg.containsKey("role") && msg.containsKey("content")) {
-                    messages.add(msg);
-                }
-            }
-        }
-        messages.add(Map.of("role", "user", "content", userMessage));
-        return messages;
-    }
 
     /** 持久化用户消息 */
     private void saveUserMessage(String sessionId, String message) {

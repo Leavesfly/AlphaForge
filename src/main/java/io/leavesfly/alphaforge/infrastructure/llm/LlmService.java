@@ -12,8 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -31,7 +29,6 @@ public class LlmService implements LlmPort {
     private static final Logger log = LoggerFactory.getLogger(LlmService.class);
 
     private final LlmConfig config;
-    private final OkHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final LlmUsageTracker usageTracker;
     private final LlmRetryExecutor retryExecutor;
@@ -39,6 +36,7 @@ public class LlmService implements LlmPort {
     private final LlmResponseParser responseParser;
     private final LlmChannelManager channelManager;
     private final LlmRequestBuilder requestBuilder;
+    private final LlmHttpClient http;
 
     /** 可选依赖：监控指标埋点 */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -53,12 +51,12 @@ public class LlmService implements LlmPort {
         this.config = config;
         this.usageTracker = usageTracker;
         this.objectMapper = objectMapper;
-        this.httpClient = httpClient;
         this.retryExecutor = new LlmRetryExecutor();
         this.tokenEstimator = new LlmTokenEstimator();
         this.responseParser = new LlmResponseParser(objectMapper, tokenEstimator);
         this.channelManager = new LlmChannelManager(config.getLlmChannels());
         this.requestBuilder = new LlmRequestBuilder(objectMapper);
+        this.http = new LlmHttpClient(httpClient, objectMapper, requestBuilder);
     }
 
     /**
@@ -101,7 +99,7 @@ public class LlmService implements LlmPort {
         final String finalCacheKey = cacheKey;
         String result = executeWithChannelFailover(
                 channel -> retryExecutor.executeWithRetry(
-                        () -> executeApiCall(() -> callLlmApi(channel, messages), channel.getModel()),
+                        () -> http.executeApiCall(() -> callLlmApi(channel, messages), channel.getModel()),
                         "chatWithMessages:" + channel.getModel()),
                 r -> r != null && !r.isEmpty(),
                 "chatWithMessages",
@@ -122,7 +120,7 @@ public class LlmService implements LlmPort {
         requestBuilder.addStringMessages(requestBody, messages);
 
         log.debug("调用LLM: model={}", channel.getModel());
-        CallResult cr = executeHttpRequest(channel, requestBody);
+        var cr = http.executeHttpRequest(channel, requestBody);
 
         // OpenAI格式
         JsonNode choices = cr.root().path("choices");
@@ -165,7 +163,7 @@ public class LlmService implements LlmPort {
                                                         List<Map<String, Object>> tools) {
         return executeWithChannelFailover(
                 channel -> retryExecutor.executeWithRetry(
-                        () -> executeApiCall(() -> callLlmApiWithTools(channel, messages, tools), channel.getModel()),
+                        () -> http.executeApiCall(() -> callLlmApiWithTools(channel, messages, tools), channel.getModel()),
                         "chatWithFunctionCalling:" + channel.getModel()),
                 r -> r != null && (r.hasToolCalls()
                         || (r.getContent() != null && !r.getContent().isEmpty())),
@@ -192,7 +190,7 @@ public class LlmService implements LlmPort {
 
         log.debug("调用LLM(FC): model={}, tools={}", channel.getModel(),
                 tools != null ? tools.size() : 0);
-        CallResult cr = executeHttpRequest(channel, requestBody);
+        var cr = http.executeHttpRequest(channel, requestBody);
 
         JsonNode choices = cr.root().path("choices");
         if (choices.isArray() && !choices.isEmpty()) {
@@ -240,7 +238,7 @@ public class LlmService implements LlmPort {
                                            Map<String, Object> jsonSchema) {
         return executeWithChannelFailover(
                 channel -> retryExecutor.executeWithRetry(
-                        () -> executeApiCall(() -> callLlmApiForJson(channel, messages, jsonSchema), channel.getModel()),
+                        () -> http.executeApiCall(() -> callLlmApiForJson(channel, messages, jsonSchema), channel.getModel()),
                         "chatForStructuredOutput:" + channel.getModel()),
                 r -> r != null && !r.isEmpty() && !"{}".equals(r),
                 "结构化输出",
@@ -262,7 +260,7 @@ public class LlmService implements LlmPort {
         requestBody.putObject("response_format").put("type", "json_object");
 
         log.debug("调用LLM(JSON): model={}", channel.getModel());
-        CallResult cr = executeHttpRequest(channel, requestBody);
+        var cr = http.executeHttpRequest(channel, requestBody);
 
         JsonNode choices = cr.root().path("choices");
         if (choices.isArray() && !choices.isEmpty()) {
@@ -316,7 +314,7 @@ public class LlmService implements LlmPort {
      */
     public String streamChatWithMessages(List<Map<String, String>> messages, Consumer<String> onChunk) {
         return executeWithChannelFailover(
-                channel -> executeApiCall(
+                channel -> http.executeApiCall(
                         () -> callLlmStreamApi(channel, messages, onChunk), channel.getModel()),
                 r -> r != null && !r.isEmpty(),
                 "流式",
@@ -334,64 +332,22 @@ public class LlmService implements LlmPort {
         requestBuilder.addStringMessages(requestBody, messages);
         requestBuilder.enableStream(requestBody);
 
-        Request request = requestBuilder.buildRequest(
-                resolveApiUrl(channel), channel.getApiKey(), requestBody);
+        LlmHttpClient.StreamResult sr = http.executeStreamRequest(channel, requestBody, onChunk);
 
-        log.debug("流式调用LLM: model={}", channel.getModel());
-        long startTime = System.currentTimeMillis();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw buildHttpException(response, channel.getModel());
-            }
-
-            StringBuilder fullContent = new StringBuilder();
-            int streamPromptTokens = 0;
-            int streamCompletionTokens = 0;
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(response.body().byteStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("data: ")) {
-                        String data = line.substring(6).trim();
-                        if ("[DONE]".equals(data)) break;
-
-                        try {
-                            JsonNode node = objectMapper.readTree(data);
-                            JsonNode delta = node.path("choices").path(0).path("delta").path("content");
-                            if (!delta.isMissingNode() && !delta.isNull()) {
-                                String chunk = delta.asText();
-                                fullContent.append(chunk);
-                                onChunk.accept(chunk);
-                            }
-                            // 解析最后一个chunk中的usage信息
-                            JsonNode usageNode = node.path("usage");
-                            if (!usageNode.isMissingNode()) {
-                                streamPromptTokens = usageNode.path("prompt_tokens").asInt();
-                                streamCompletionTokens = usageNode.path("completion_tokens").asInt();
-                            }
-                        } catch (Exception e) {
-                            // 忽略解析失败的行（如空行、注释等）
-                        }
-                    }
-                }
-            }
-            long durationMs = System.currentTimeMillis() - startTime;
-            // 记录token使用量
-            if (streamPromptTokens > 0 || streamCompletionTokens > 0) {
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        streamPromptTokens, streamCompletionTokens, durationMs);
-                log.info("流式Token使用: prompt={}, completion={}", streamPromptTokens, streamCompletionTokens);
-            } else {
-                // 供应商未返回usage，粗略估算
-                int estPrompt = estimateTokens(messages);
-                int estCompletion = estimateTokens(fullContent.toString());
-                usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
-                        estPrompt, estCompletion, durationMs);
-                log.debug("流式Token估算: prompt~={}, completion~={}", estPrompt, estCompletion);
-            }
-            return fullContent.toString();
+        // 记录token使用量
+        if (sr.promptTokens() > 0 || sr.completionTokens() > 0) {
+            usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                    sr.promptTokens(), sr.completionTokens(), sr.durationMs());
+            log.info("流式Token使用: prompt={}, completion={}", sr.promptTokens(), sr.completionTokens());
+        } else {
+            // 供应商未返回usage，粗略估算
+            int estPrompt = estimateTokens(messages);
+            int estCompletion = estimateTokens(sr.content());
+            usageTracker.recordUsage(channel.getModel(), channel.getProvider(),
+                    estPrompt, estCompletion, sr.durationMs());
+            log.debug("流式Token估算: prompt~={}, completion~={}", estPrompt, estCompletion);
         }
+        return sr.content();
     }
 
     // ==================== 渠道故障切换模板 ====================
@@ -466,112 +422,7 @@ public class LlmService implements LlmPort {
         }
     }
 
-    // ==================== 异常处理辅助方法 ====================
-
-    /**
-     * 根据 HTTP 响应构建对应的 LLM 异常类型
-     * - 401/403 → LlmAuthException（不可重试）
-     * - 429 → LlmRateLimitException（可重试，含 Retry-After）
-     * - 5xx → LlmException（可重试）
-     * - 其他 → LlmException（不可重试）
-     */
-    private LlmException buildHttpException(Response response, String model) {
-        int code = response.code();
-        String errorBody = "unknown";
-        try {
-            if (response.body() != null) {
-                errorBody = response.body().string();
-            }
-        } catch (Exception ignored) {
-            // 响应体读取失败时使用默认值
-        }
-
-        String msg = String.format("LLM API返回错误: %d - %s", code,
-                errorBody.length() > 500 ? errorBody.substring(0, 500) : errorBody);
-
-        return switch (code) {
-            case 401, 403 -> new LlmException.LlmAuthException(msg, model);
-            case 429 -> {
-                long retryAfter = parseRetryAfter(response);
-                yield new LlmException.LlmRateLimitException(msg, model, retryAfter);
-            }
-            case 500, 502, 503, 504 ->
-                    new LlmException(msg, model, new RuntimeException("服务端错误: " + code));
-            default -> new LlmException(msg, model);
-        };
-    }
-
-    /** 从响应头解析 Retry-After 值（秒转毫秒） */
-    private long parseRetryAfter(Response response) {
-        String retryAfter = response.header("Retry-After");
-        if (retryAfter != null && !retryAfter.isEmpty()) {
-            try {
-                return Long.parseLong(retryAfter) * 1000L;
-            } catch (NumberFormatException ignored) {
-                // 可能是 HTTP-date 格式，暂不解析
-            }
-        }
-        return 0;
-    }
-
-    /**
-     * 函数式接口：允许抛出 checked exception 的 LLM API 调用
-     */
-    @FunctionalInterface
-    private interface LlmApiCall<T> {
-        T call() throws Exception;
-    }
-
-    /**
-     * 执行 API 调用，将 checked exception 包装为 LlmException
-     * 使其可在 Supplier<T> lambda 中使用（配合 retryExecutor）
-     */
-    private <T> T executeApiCall(LlmApiCall<T> call, String model) {
-        try {
-            return call.call();
-        } catch (LlmException e) {
-            throw e;
-        } catch (java.net.SocketTimeoutException e) {
-            throw new LlmException.LlmTimeoutException("请求超时: " + e.getMessage(), model, e);
-        } catch (java.io.IOException e) {
-            throw new LlmException("网络IO异常: " + e.getMessage(), model, e);
-        } catch (Exception e) {
-            throw new LlmException("LLM调用异常: " + e.getMessage(), model, e);
-        }
-    }
-
     // ==================== 公共调用辅助方法 ====================
-
-    /** HTTP 调用结果 */
-    private record CallResult(JsonNode root, long durationMs) {}
-
-    /**
-     * 构建 HTTP 请求并执行，返回解析后的 JSON 响应
-     * 统一 3 种调用模式中重复的 HTTP 请求构建 + 执行 + 响应解析逻辑
-     */
-    private CallResult executeHttpRequest(LlmConfig.LlmChannelConfig channel,
-                                            ObjectNode requestBody) throws Exception {
-        String apiUrl = resolveApiUrl(channel);
-        RequestBody body = RequestBody.create(
-                objectMapper.writeValueAsString(requestBody),
-                MediaType.get("application/json"));
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + channel.getApiKey())
-                .header("Content-Type", "application/json")
-                .post(body)
-                .build();
-
-        long startTime = System.currentTimeMillis();
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw buildHttpException(response, channel.getModel());
-            }
-            String responseBody = response.body().string();
-            JsonNode root = objectMapper.readTree(responseBody);
-            return new CallResult(root, System.currentTimeMillis() - startTime);
-        }
-    }
 
     /**
      * 从响应中记录 Token 使用量（供应商未返回 usage 时使用估算值）
@@ -612,24 +463,6 @@ public class LlmService implements LlmPort {
                 }
             }
         }
-    }
-
-    /**
-     * 解析API URL
-     */
-    private String resolveApiUrl(LlmConfig.LlmChannelConfig channel) {
-        String api = channel.getApi();
-        if (api == null || api.isEmpty()) {
-            // 默认OpenAI
-            return "https://api.openai.com/v1/chat/completions";
-        }
-        // 确保URL以/chat/completions结尾
-        if (!api.endsWith("/chat/completions")) {
-            if (!api.endsWith("/")) api += "/";
-            if (!api.contains("/v1/")) api += "v1/";
-            api += "chat/completions";
-        }
-        return api;
     }
 
 }

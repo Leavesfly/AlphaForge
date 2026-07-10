@@ -48,7 +48,7 @@ class DataFetcherManagerIntegrationTest {
 
         manager = new DataFetcherManager(
                 mockDataProviderConfig,
-                List.of(fetcher),
+                new FetcherFailoverExecutor(List.<BaseDataFetcher>of(fetcher), mockDataProviderConfig),
                 null,       // 无 SQLite 缓存，直连 API
                 calendar,
                 validator,

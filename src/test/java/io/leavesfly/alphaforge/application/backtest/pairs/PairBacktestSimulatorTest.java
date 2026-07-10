@@ -1,6 +1,6 @@
 package io.leavesfly.alphaforge.application.backtest.pairs;
 
-import io.leavesfly.alphaforge.application.backtest.BacktestSimulationConfig;
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

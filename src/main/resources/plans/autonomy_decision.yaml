@@ -1,0 +1,12 @@
+taskType: AUTONOMY_DECISION
+steps:
+  - id: judge
+    name: judge_signal
+    kind: LLM_REASONING
+    description: 研判信号是否执行
+    mutating: false
+  - id: execute
+    name: execute_signal
+    kind: TOOL
+    description: 纸面执行信号（状态变更，必经 Guardrail）
+    mutating: true

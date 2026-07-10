@@ -10,7 +10,7 @@ import io.leavesfly.alphaforge.domain.model.entity.strategy.CustomStrategy;
 import io.leavesfly.alphaforge.domain.repository.strategy.CustomStrategyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -35,20 +35,22 @@ public class StrategyLifecycleService {
     private final StrategyCatalog catalog;
     private final ObjectMapper jsonMapper;
 
-    @Autowired(required = false)
-    private StrategyPromotionGate promotionGate;
+    private final StrategyPromotionGate promotionGate;
 
-    @Autowired(required = false)
-    private AutonomyPolicy autonomyPolicy;
+    private final AutonomyPolicy autonomyPolicy;
 
     public StrategyLifecycleService(CustomStrategyRepository repository,
                                    StrategyValidator validator,
                                    StrategyCatalog catalog,
-                                   ObjectMapper jsonMapper) {
+                                   ObjectMapper jsonMapper,
+                                   ObjectProvider<StrategyPromotionGate> promotionGate,
+                                   ObjectProvider<AutonomyPolicy> autonomyPolicy) {
         this.repository = repository;
         this.validator = validator;
         this.catalog = catalog;
         this.jsonMapper = jsonMapper;
+        this.promotionGate = promotionGate.getIfAvailable();
+        this.autonomyPolicy = autonomyPolicy.getIfAvailable();
     }
 
     /**

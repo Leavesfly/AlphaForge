@@ -4,9 +4,8 @@ import io.leavesfly.alphaforge.application.service.report.AnalysisHistoryService
 import io.leavesfly.alphaforge.application.service.market.MarketAnalysisService;
 import io.leavesfly.alphaforge.application.service.task.TaskService;
 import io.leavesfly.alphaforge.application.pipeline.StockAnalysisPipeline;
-import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisReport;
-import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisTask;
 import io.leavesfly.alphaforge.domain.model.enums.MarketType;
+import io.leavesfly.alphaforge.presentation.api.dto.AnalysisReportDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -46,7 +45,7 @@ public class AnalysisController {
         }
         boolean dryRun = Boolean.TRUE.equals(body.get("dry_run"));
         try {
-            AnalysisTask task = taskService.submitAnalysis(stockCode.trim(), dryRun);
+            var task = taskService.submitAnalysis(stockCode.trim(), dryRun);
             return ResponseEntity.ok(Map.of(
                     "task_id", task.getTaskId(),
                     "status", task.getStatus(),
@@ -68,16 +67,16 @@ public class AnalysisController {
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<AnalysisReport>> history(
+    public ResponseEntity<List<AnalysisReportDto>> history(
             @RequestParam(required = false) String stockCode,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(historyService.getRecentReports(stockCode, limit));
+        return ResponseEntity.ok(AnalysisReportDto.from(historyService.getRecentReports(stockCode, limit)));
     }
 
     @GetMapping("/history/{id}")
     public ResponseEntity<?> historyDetail(@PathVariable Long id) {
         return historyService.getReportById(id)
-                .map(r -> ResponseEntity.ok((Object) r))
+                .map(r -> ResponseEntity.ok((Object) AnalysisReportDto.from(r)))
                 .orElse(ResponseEntity.notFound().build());
     }
 

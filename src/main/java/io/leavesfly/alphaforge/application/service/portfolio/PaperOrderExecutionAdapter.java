@@ -1,6 +1,5 @@
-package io.leavesfly.alphaforge.infrastructure.portfolio;
+package io.leavesfly.alphaforge.application.service.portfolio;
 
-import io.leavesfly.alphaforge.application.service.portfolio.PaperTradingService;
 import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
 import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import io.leavesfly.alphaforge.domain.service.port.OrderExecutionPort;

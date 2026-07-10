@@ -1,5 +1,7 @@
 package io.leavesfly.alphaforge.application.backtest;
 
+import io.leavesfly.alphaforge.application.simulation.BacktestSimulationConfig;
+
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 
 /**

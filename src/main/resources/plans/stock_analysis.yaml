@@ -1,0 +1,22 @@
+taskType: STOCK_ANALYSIS
+steps:
+  - id: prepare
+    name: prepare_context
+    kind: DETERMINISTIC
+    description: 装配上下文与学习提示
+    mutating: false
+  - id: gather
+    name: gather_data
+    kind: TOOL
+    description: 获取行情/技术/新闻数据
+    mutating: false
+  - id: analyze
+    name: analyze
+    kind: LLM_REASONING
+    description: 多维研判并产出结构化结论
+    mutating: false
+  - id: extract
+    name: extract_signal
+    kind: DETERMINISTIC
+    description: 抽取决策信号（受质量门约束）
+    mutating: false

@@ -1,0 +1,12 @@
+taskType: NL_SCREENING
+steps:
+  - id: parse
+    name: parse_criteria
+    kind: LLM_REASONING
+    description: 解析自然语言选股条件
+    mutating: false
+  - id: screen
+    name: run_screening
+    kind: TOOL
+    description: 执行全市场扫描与排名
+    mutating: false
