@@ -21,6 +21,7 @@ public class AgentResult {
     private final int toolCalls;
     private final long durationMs;
     private final String error;
+    private final List<NextStep> nextSteps;
 
     private AgentResult(Builder b) {
         this.success = b.success;
@@ -32,6 +33,8 @@ public class AgentResult {
         this.toolCalls = b.toolCalls;
         this.durationMs = b.durationMs;
         this.error = b.error;
+        this.nextSteps = b.nextSteps != null
+                ? Collections.unmodifiableList(b.nextSteps) : Collections.emptyList();
     }
 
     public boolean isSuccess() {
@@ -70,6 +73,16 @@ public class AgentResult {
         return error;
     }
 
+    /** 链式引导建议（可空列表，由 NextStepAdvisor 在 run 尾部填充） */
+    public List<NextStep> getNextSteps() {
+        return nextSteps;
+    }
+
+    /** 建议的 Map 形态（REST/SSE 下发用） */
+    public List<Map<String, Object>> nextStepsAsMaps() {
+        return nextSteps.stream().map(NextStep::toMap).collect(java.util.stream.Collectors.toList());
+    }
+
     public static Builder ok(AgentTaskType type) {
         return new Builder().success(true).taskType(type);
     }
@@ -87,6 +100,7 @@ public class AgentResult {
         private int toolCalls;
         private long durationMs;
         private String error;
+        private List<NextStep> nextSteps;
 
         public Builder success(boolean success) {
             this.success = success;
@@ -125,6 +139,11 @@ public class AgentResult {
 
         public Builder error(String error) {
             this.error = error;
+            return this;
+        }
+
+        public Builder nextSteps(List<NextStep> nextSteps) {
+            this.nextSteps = nextSteps;
             return this;
         }
 

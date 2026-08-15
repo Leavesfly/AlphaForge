@@ -759,3 +759,32 @@ body.copilot-docked .main { margin-right: var(--copilot-w); transition: margin-r
 .next-action:hover { border-color: var(--primary); background: rgba(99,102,241,0.06); transform: translateY(-2px); }
 .next-action strong { font-size: 13px; font-weight: 600; color: var(--text); }
 .next-action span { font-size: 11px; color: var(--text-dim); }
+
+/* ===== Decision Desk (买点三灯决策台，灯色语义与涨跌色分离) ===== */
+.decision-verdict { border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); padding: 16px 20px; margin-bottom: 16px; }
+.decision-lights-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.decision-light-card { background: var(--bg-card); border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); padding: 14px 16px; transition: var(--transition); }
+.decision-light-card:hover { box-shadow: var(--shadow); }
+.decision-light-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 999px; }
+.decision-light-reasons { margin: 10px 0 0 0; padding-left: 16px; font-size: 12px; color: var(--text-muted); line-height: 1.8; }
+.decision-plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.decision-plan-cell { text-align: center; padding: 10px 8px; background: var(--bg); border-radius: var(--radius-sm); }
+.decision-plan-cell span { display: block; font-size: 10px; color: var(--text-dim); margin-bottom: 4px; }
+.decision-plan-cell strong { font-size: 15px; font-weight: 600; }
+
+/* ===== Next Steps 链式引导建议按钮组 ===== */
+.next-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+.next-steps-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.next-step-btn {
+  border-radius: 999px;
+  white-space: nowrap;
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 用户风险画像 Mapper：单行记录（id=1），UPSERT 语义 -->
+<mapper namespace="io.leavesfly.alphaforge.domain.repository.user.UserRiskProfileRepository">
+
+    <!-- 结果映射：数据库字段 ↔ UserRiskProfile 实体属性 -->
+    <resultMap id="profileMap" type="io.leavesfly.alphaforge.domain.model.entity.user.UserRiskProfile">
+        <id property="id" column="id"/>
+        <result property="riskTolerance" column="risk_tolerance"/>
+        <result property="capitalAmount" column="capital_amount"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 查询画像（单行表） -->
+    <select id="find" resultMap="profileMap">
+        SELECT * FROM user_risk_profile WHERE id = 1
+    </select>
+
+    <!-- 保存画像：存在则更新（SQLite UPSERT） -->
+    <insert id="upsert">
+        INSERT INTO user_risk_profile (id, risk_tolerance, capital_amount, created_at, updated_at)
+        VALUES (1, #{riskTolerance}, #{capitalAmount}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            risk_tolerance = excluded.risk_tolerance,
+            capital_amount = excluded.capital_amount,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+</mapper>

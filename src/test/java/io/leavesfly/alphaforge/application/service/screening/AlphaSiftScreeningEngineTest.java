@@ -5,6 +5,8 @@ import io.leavesfly.alphaforge.application.strategy.StrategyTestData;
 import io.leavesfly.alphaforge.application.strategy.engine.ScreeningScoreEngine;
 import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.config.EnvVarProvider;
+import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.DataFetcherManager;
 import io.leavesfly.alphaforge.domain.repository.screening.AlphaSiftTaskRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +41,8 @@ class AlphaSiftScreeningEngineTest {
     private WatchlistService watchlistService;
     @Mock
     private AlphaSiftTaskRepository taskRepo;
+    @Mock
+    private PortfolioRepository portfolioRepository;
 
     private AlphaSiftScreeningEngine engine;
 
@@ -49,9 +53,10 @@ class AlphaSiftScreeningEngineTest {
                 Map.of("code", "600519", "name", "贵州茅台", "market", "A"),
                 Map.of("code", "000858", "name", "五粮液", "market", "A")
         ));
+        when(portfolioRepository.findAll()).thenReturn(List.of());
         engine = new AlphaSiftScreeningEngine(dataFetcher, config, envVarProvider, StrategyTestData.loadCatalog(),
                 new ScreeningScoreEngine(), new CrossSectionalFactorEnricher(dataFetcher),
-                watchlistService, taskRepo, new ObjectMapper());
+                watchlistService, taskRepo, new ObjectMapper(), portfolioRepository);
     }
 
     @Test
@@ -91,5 +96,30 @@ class AlphaSiftScreeningEngineTest {
 
         assertFalse(results.isEmpty());
         assertEquals("600519", results.get(0).get("stock_code"));
+    }
+
+    @Test
+    @DisplayName("持仓联动：已持有候选标注 held=true 与成本价")
+    void heldCandidatesAnnotated() {
+        when(dataFetcher.getRealtimeQuote(anyString())).thenReturn(Map.of("change_pct", 0.2));
+        when(dataFetcher.getRealtimeQuote("600519")).thenReturn(Map.of("change_pct", 3.5, "price", 100));
+        when(dataFetcher.getRealtimeQuote("000858")).thenReturn(Map.of("change_pct", 2.0, "price", 150));
+
+        PortfolioPosition held = new PortfolioPosition();
+        held.setStockCode("600519");
+        held.setQuantity(100);
+        held.setCostPrice(1750.0);
+        when(portfolioRepository.findAll()).thenReturn(List.of(held));
+
+        List<Map<String, Object>> results = engine.screen("momentum", "A", 10);
+
+        Map<String, Object> heldItem = results.stream()
+                .filter(r -> "600519".equals(r.get("stock_code"))).findFirst().orElseThrow();
+        assertEquals(Boolean.TRUE, heldItem.get("held"));
+        assertEquals(1750.0, (Double) heldItem.get("held_cost_price"), 1e-9);
+
+        Map<String, Object> notHeld = results.stream()
+                .filter(r -> "000858".equals(r.get("stock_code"))).findFirst().orElseThrow();
+        assertFalse(Boolean.TRUE.equals(notHeld.get("held")), "未持有候选不应标 held");
     }
 }

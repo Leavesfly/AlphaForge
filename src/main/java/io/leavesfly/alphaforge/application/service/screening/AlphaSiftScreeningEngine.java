@@ -6,8 +6,10 @@ import io.leavesfly.alphaforge.application.strategy.engine.ScreeningScoreEngine;
 import io.leavesfly.alphaforge.application.strategy.model.StrategyDefinition;
 import io.leavesfly.alphaforge.config.AppConfig;
 import io.leavesfly.alphaforge.config.EnvVarProvider;
+import io.leavesfly.alphaforge.domain.model.entity.portfolio.PortfolioPosition;
 import io.leavesfly.alphaforge.domain.model.entity.screening.AlphaSiftTask;
 import io.leavesfly.alphaforge.domain.service.port.MarketDataPort;
+import io.leavesfly.alphaforge.domain.repository.portfolio.PortfolioRepository;
 import io.leavesfly.alphaforge.domain.repository.screening.AlphaSiftTaskRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,7 @@ public class AlphaSiftScreeningEngine {
     private final WatchlistService watchlistService;
     private final AlphaSiftTaskRepository taskRepo;
     private final ObjectMapper objectMapper;
+    private final PortfolioRepository portfolioRepository;
 
     /** 默认兜底股票池（自选为空且未配置时使用） */
     private static final List<Map<String, String>> DEFAULT_POOL = List.of(
@@ -60,7 +63,8 @@ public class AlphaSiftScreeningEngine {
                                     CrossSectionalFactorEnricher factorEnricher,
                                     WatchlistService watchlistService,
                                     AlphaSiftTaskRepository taskRepo,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    PortfolioRepository portfolioRepository) {
         this.dataFetcher = dataFetcher;
         this.config = config;
         this.envVarProvider = envVarProvider;
@@ -70,6 +74,7 @@ public class AlphaSiftScreeningEngine {
         this.watchlistService = watchlistService;
         this.taskRepo = taskRepo;
         this.objectMapper = objectMapper;
+        this.portfolioRepository = portfolioRepository;
     }
 
     /** 同步筛选（兼容旧 API） */
@@ -181,8 +186,34 @@ public class AlphaSiftScreeningEngine {
         if (candidates.size() > maxResults) {
             candidates = candidates.subList(0, maxResults);
         }
+        annotateHeld(candidates);
         log.info("AlphaSift 筛选完成: strategy={}, scanned={}, hits={}", strategy, scanned, candidates.size());
         return candidates;
+    }
+
+    /** 持仓联动标注：已持有候选附 held=true 与成本价（查询失败不影响扫描结果） */
+    private void annotateHeld(List<Map<String, Object>> candidates) {
+        if (candidates.isEmpty()) {
+            return;
+        }
+        Map<String, PortfolioPosition> heldByCode = new LinkedHashMap<>();
+        try {
+            for (PortfolioPosition p : portfolioRepository.findAll()) {
+                if (p.getStockCode() != null) {
+                    heldByCode.putIfAbsent(p.getStockCode(), p);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("持仓查询失败，跳过 held 标注: {}", e.getMessage());
+            return;
+        }
+        for (Map<String, Object> item : candidates) {
+            PortfolioPosition held = heldByCode.get(String.valueOf(item.get("stock_code")));
+            if (held != null) {
+                item.put("held", true);
+                item.put("held_cost_price", held.getCostPrice());
+            }
+        }
     }
 
     private List<Map<String, String>> resolveStockPool(String market) {

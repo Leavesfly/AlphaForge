@@ -78,6 +78,9 @@ public class SopPlanner implements Planner {
                         PlanStep.Kind.DETERMINISTIC, "抽取决策信号（受质量门约束）"));
             }
 
+            case DECISION_SCORE -> steps.add(PlanStep.of("score", "run_three_lights",
+                    PlanStep.Kind.TOOL, "拉取行情并执行价/势/时三灯评估（只读）"));
+
             case STRATEGY_GENERATE -> {
                 steps.add(PlanStep.of("gen", "generate_strategy",
                         PlanStep.Kind.LLM_REASONING, "根据目标生成策略定义"));

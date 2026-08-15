@@ -2,6 +2,7 @@ package io.leavesfly.alphaforge.presentation.api;
 
 import io.leavesfly.alphaforge.application.service.task.SystemService;
 import io.leavesfly.alphaforge.application.service.loop.LoopStateManager;
+import io.leavesfly.alphaforge.application.service.system.DataSourceHealthService;
 import io.leavesfly.alphaforge.config.LlmConfig;
 import io.leavesfly.alphaforge.config.AppConfig;
 
@@ -13,6 +14,7 @@ import io.leavesfly.alphaforge.config.SearchConfig;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
@@ -35,6 +37,7 @@ public class SystemController {
     private final ScoringConfig scoringConfig;
     private final SystemService systemService;
     private final LoopStateManager loopStateManager;
+    private final DataSourceHealthService dataSourceHealthService;
 
     public SystemController(AppConfig config, LlmConfig llmConfig,
                             DataProviderConfig dataProviderConfig,
@@ -43,7 +46,8 @@ public class SystemController {
                             SearchConfig searchConfig,
                             ScoringConfig scoringConfig,
                             SystemService systemService,
-                            LoopStateManager loopStateManager) {
+                            LoopStateManager loopStateManager,
+                            DataSourceHealthService dataSourceHealthService) {
         this.config = config;
         this.llmConfig = llmConfig;
         this.dataProviderConfig = dataProviderConfig;
@@ -53,6 +57,7 @@ public class SystemController {
         this.scoringConfig = scoringConfig;
         this.systemService = systemService;
         this.loopStateManager = loopStateManager;
+        this.dataSourceHealthService = dataSourceHealthService;
     }
 
     @GetMapping("/health")
@@ -99,5 +104,16 @@ public class SystemController {
     @GetMapping("/loop/status")
     public ResponseEntity<Map<String, Object>> loopStatus() {
         return ResponseEntity.ok(loopStateManager.getHealthReport());
+    }
+
+    /**
+     * 数据源主动体检 — 逐源真实拉取探测，区分环境问题 vs 代码问题。
+     *
+     * @param force true 绕过 TTL 缓存手动触发（入口层已限流保护，避免体检加剧上游 429）
+     */
+    @GetMapping("/health/datasources")
+    public ResponseEntity<Map<String, Object>> dataSourceHealth(
+            @RequestParam(required = false, defaultValue = "false") boolean force) {
+        return ResponseEntity.ok(dataSourceHealthService.getCachedOrProbe(force));
     }
 }

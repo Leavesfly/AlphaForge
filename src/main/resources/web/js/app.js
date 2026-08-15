@@ -39,6 +39,7 @@ const HASH_ALIASES = {
   analysis: ['research', 'analysis'],
   signals: ['research', 'signals'],
   screening: ['research', 'screening'],
+  decision: ['research', 'decision'],
   watchlist: ['mine', 'watchlist'],
   'paper-trading': ['mine', 'paper-trading'],
   alerts: ['mine', 'alerts'],
@@ -53,6 +54,7 @@ const COMMAND_PAGES = [
   { label: '智能选股', page: 'research', subTab: 'screening', type: '页面' },
   { label: '智能分析', page: 'research', subTab: 'analysis', type: '页面' },
   { label: '决策信号', page: 'research', subTab: 'signals', type: '页面' },
+  { label: '决策台', page: 'research', subTab: 'decision', type: '页面' },
   { label: '策略中心', page: 'strategy-center', type: '页面' },
   { label: '回测评估', page: 'backtest', type: '页面' },
   { label: '因子进化', page: 'factor-evolution', type: '页面' },
@@ -80,6 +82,7 @@ function applyUiMode(mode) {
   try { localStorage.setItem(UI_MODE_KEY, mode); } catch(e) {}
   const isPro = mode === 'researcher';
   document.querySelectorAll('.nav-advanced').forEach(el => { el.style.display = isPro ? '' : 'none'; });
+  document.querySelectorAll('[data-pro-only]').forEach(el => { el.style.display = isPro ? '' : 'none'; });
   const advSection = document.querySelector('.nav-advanced-section');
   if (advSection) advSection.style.display = isPro ? '' : 'none';
   const label = document.getElementById('ui-mode-label');
@@ -292,10 +295,12 @@ function loadPageData(page, subTab) {
     case 'research':
       if (subTab === 'analysis') loadHistory();
       else if (subTab === 'signals') loadSignals();
+      else if (subTab === 'decision') initDecisionPanel();
       break;
     case 'analysis': loadHistory(); break;
     case 'signals': loadSignals(); break;
     case 'mine':
+      loadRiskProfile();
       if (subTab === 'watchlist') loadWatchlist();
       else if (subTab === 'paper-trading') loadPaperTrading();
       else if (subTab === 'alerts') { loadAlerts(); loadAlertTriggers(); loadAlertNotifications(); }
@@ -306,7 +311,7 @@ function loadPageData(page, subTab) {
     case 'usage': loadUsage(); break;
     case 'backtest': initBacktestPage(); break;
     case 'strategy-center': loadStrategyReview(); loadStrategyCatalog(); loadCustomStrategies(); loadStrategyTemplates(); initDebugStrategySelect(); break;
-    case 'loop-monitor': loadLoopStatus(); break;
+    case 'loop-monitor': loadLoopStatus(); loadDataSourceDoctor(false); break;
     case 'factor-evolution': loadEvolutionStatus(); break;
     case 'autonomy': loadAutonomyStatus(); break;
   }
@@ -773,6 +778,12 @@ function sendChatMessage() {
           fullText += eventData;
           bubble.innerHTML = renderMarkdown(fullText);
           chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (eventName === 'next_steps') {
+          // 链式引导：对话结束后按实际工具调用给下一步建议（未知事件的兼容降级：解析失败即忽略）
+          try {
+            const steps = JSON.parse(eventData);
+            if (Array.isArray(steps) && steps.length) appendNextSteps(contentWrapper, steps);
+          } catch(e) { /* ignore */ }
         } else if (eventName === 'done') {
           // 流式完成
         } else if (eventName === 'error') {
@@ -802,6 +813,30 @@ function sendChatMessage() {
   }).catch(err => {
     bubble.innerHTML = '抱歉，AI服务暂时不可用: ' + escapeHtml(err.message);
   });
+}
+
+/** 链式引导：在消息下方渲染"下一步"建议按钮组（点击跳转对应页面，建议可选非指令） */
+function appendNextSteps(container, steps) {
+  if (!container || !Array.isArray(steps)) return;
+  let box = container.querySelector('.next-steps');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'next-steps';
+    container.appendChild(box);
+  }
+  box.innerHTML = '<span class="next-steps-label">下一步：</span>';
+  steps.forEach(step => {
+    if (!step || !step.action) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-outline btn-sm next-step-btn';
+    btn.title = step.reason || '';
+    btn.textContent = '→ ' + (step.label || step.action);
+    btn.addEventListener('click', () => {
+      if (step.endpoint) location.hash = step.endpoint;
+    });
+    box.appendChild(btn);
+  });
+  chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 /** 发送完成后刷新会话列表项的消息数和标题 */
@@ -1141,7 +1176,10 @@ function renderScreeningResults(results) {
     const pe = r.pe || r.pe_ratio || '-';
     const pb = r.pb || r.pb_ratio || '-';
     const growth = r.revenue_growth || r.revenueGrowth || '-';
-    return `<tr><td>${i+1}</td><td><strong>${name}</strong> ${code}</td><td>${industry}</td><td><span class="badge badge-success">${score}</span></td><td>${signal}</td><td>${pe}/${pb}</td><td>${growth}</td><td>${reason}</td><td><button class="btn btn-sm btn-primary" onclick="startAnalysis('${code}')">深度分析</button></td></tr>`;
+    const heldBadge = r.held
+      ? ` <span class="badge badge-warning" title="持仓成本 ${r.held_cost_price != null ? r.held_cost_price : '-'}">已持有</span>`
+      : '';
+    return `<tr><td>${i+1}</td><td><strong>${name}</strong> ${code}${heldBadge}</td><td>${industry}</td><td><span class="badge badge-success">${score}</span></td><td>${signal}</td><td>${pe}/${pb}</td><td>${growth}</td><td>${reason}</td><td><button class="btn btn-sm btn-primary" onclick="startAnalysis('${code}')">深度分析</button></td></tr>`;
   }).join('');
 }
 
@@ -1373,6 +1411,62 @@ function submitSignalFeedback(feedback) {
     showToast('反馈提交失败', 'error');
     closeModal('modal-signal');
   });
+}
+
+/** 数据源主动体检：逐源状态灯 + 耗时 + 末根K线日期 + 错误归因徽标 */
+const DOCTOR_STATUS_META = {
+  ok: { label: '正常', color: 'var(--success)' },
+  rate_limit: { label: '被限流', color: 'var(--warning)' },
+  no_key: { label: '缺 Key', color: 'var(--warning)' },
+  network: { label: '网络不通', color: 'var(--danger)' },
+  data_error: { label: '数据异常', color: 'var(--danger)' },
+  unsupported: { label: '无探针', color: 'var(--text-dim)' }
+};
+
+function loadDataSourceDoctor(force) {
+  const wrap = document.getElementById('datasource-doctor-body');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:13px">体检中…（逐源真实拉取，串行执行）</div>';
+  fetch('/api/v1/health/datasources' + (force ? '?force=true' : ''))
+    .then(r => r.json())
+    .then(data => renderDataSourceDoctor(data))
+    .catch(() => {
+      wrap.innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px">体检请求失败（接口不可达或被限流）</div>';
+    });
+}
+
+function renderDataSourceDoctor(data) {
+  const wrap = document.getElementById('datasource-doctor-body');
+  if (!wrap) return;
+  const meta = document.getElementById('datasource-doctor-meta');
+  const s = data.summary || {};
+  if (meta) {
+    meta.textContent = (s.ok || 0) + '/' + (s.total || 0) + ' 可用 · ' + (data.cached ? '缓存命中' : '实时探测')
+      + ' · 检查于 ' + (data.checkedAt || '-') + (data.ttlSeconds ? ' · TTL ' + data.ttlSeconds + 's' : '');
+  }
+  const rows = (data.fetchers || []).map(f => {
+    const st = DOCTOR_STATUS_META[f.status] || { label: f.status, color: 'var(--text-dim)' };
+    const issueBadge = f.issueType === 'environment'
+      ? '<span class="badge badge-warning">环境问题</span>'
+      : (f.issueType === 'code' ? '<span class="badge badge-danger">疑似代码</span>' : '<span class="badge badge-success">无</span>');
+    return '<tr>'
+      + '<td><strong>' + escapeHtml(f.name || '') + '</strong><span style="color:var(--text-dim);font-size:11px"> · ' + escapeHtml(f.family || '') + '</span></td>'
+      + '<td><span style="display:inline-flex;align-items:center;gap:6px;color:' + st.color + '"><span style="width:8px;height:8px;border-radius:50%;background:' + st.color + ';display:inline-block"></span>' + st.label + '</span></td>'
+      + '<td>' + (f.latencyMs != null ? f.latencyMs + 'ms' : '-') + '</td>'
+      + '<td>' + escapeHtml(f.lastBarDate || '-') + '</td>'
+      + '<td>' + issueBadge + '</td>'
+      + '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeHtml(f.error || '') + '">' + escapeHtml(f.error || '') + '</td>'
+      + '</tr>';
+  }).join('');
+  wrap.innerHTML = rows
+    ? '<div class="table-container"><table><thead><tr><th>数据源</th><th>状态</th><th>耗时</th><th>末根K线</th><th>归因</th><th>详情</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div style="font-size:11px;color:var(--text-dim);padding:8px 4px">体检串行执行并带 TTL 缓存，不加剧上游限流；环境问题（限流/无Key/网络）换源或补配置即可，数据异常才可能是代码问题；港美股部分源同上游 Yahoo，独立上游数少于可用源数。</div>'
+    : '<div style="padding:16px;color:var(--text-dim);font-size:13px">无已注册数据源</div>';
+}
+
+function runDataSourceDoctorForce() {
+  showToast('已触发主动体检（绕过缓存，串行拉取中）…', 'info');
+  loadDataSourceDoctor(true);
 }
 
 /** Loop 循环健康状态加载 */
@@ -3257,4 +3351,242 @@ function refineStrategyAI() {
     if (resultDiv) resultDiv.innerHTML = `<div class="alert alert-danger">请求失败: ${e.message}</div>`;
     showToast('Refine 失败: ' + e.message, 'error');
   });
+}
+
+/* ===== Decision Desk (买点三灯决策台) ===== */
+// 灯色语义（决策语义色，与行情涨跌色互不混用）
+const DECISION_LIGHT_COLORS = {
+  green: { color: 'var(--success)', bg: 'var(--success-light)', label: '绿灯' },
+  yellow: { color: 'var(--warning)', bg: 'var(--warning-light)', label: '黄灯' },
+  red: { color: 'var(--danger)', bg: 'var(--danger-light)', label: '红灯' },
+  gray: { color: 'var(--text-dim)', bg: 'var(--bg)', label: '灰灯' }
+};
+const DECISION_LIGHT_META = {
+  value: { title: '价灯', subtitle: '基本面硬伤 + 估值吸引力' },
+  trend: { title: '势灯', subtitle: '趋势分 + 均线结构 + 大盘环境' },
+  timing: { title: '时灯', subtitle: '过热/回调/量价/事件风险' }
+};
+const VERDICT_STYLES = {
+  trend_entry: { color: 'var(--success)', bg: 'var(--success-light)' },
+  trend_only: { color: 'var(--success)', bg: 'var(--success-light)' },
+  wait_pullback: { color: 'var(--warning)', bg: 'var(--warning-light)' },
+  left_watch: { color: 'var(--info)', bg: 'var(--info-light)' },
+  avoid: { color: 'var(--danger)', bg: 'var(--danger-light)' },
+  reduce_risk: { color: 'var(--danger)', bg: 'var(--danger-light)' },
+  unrated: { color: 'var(--text-dim)', bg: 'var(--bg)' }
+};
+
+function initDecisionPanel() {
+  const input = document.getElementById('decision-input');
+  if (input) input.focus();
+}
+
+function runDecisionScore() {
+  const input = document.getElementById('decision-input');
+  const resultDiv = document.getElementById('decision-result');
+  if (!input || !resultDiv) return;
+  const code = input.value.trim();
+  if (!code) { showToast('请输入股票代码', 'warning'); return; }
+  const costRaw = (document.getElementById('decision-cost') || {}).value || '';
+  const costParam = costRaw.trim() ? `&cost=${encodeURIComponent(costRaw.trim())}` : '';
+
+  resultDiv.innerHTML = `<div class="empty-state">正在评估 ${escapeHtml(code)}（拉取 K 线 + 三灯计算）…</div>`;
+  fetch(`/api/v1/decision/score?code=${encodeURIComponent(code)}${costParam}`)
+    .then(r => r.json())
+    .then(resp => {
+      if (!resp.success) throw new Error(resp.error || resp.message || '评估失败');
+      renderDecisionResult(resp.data);
+      showToast(`${code} 三灯评估完成`, 'success');
+    })
+    .catch(e => {
+      resultDiv.innerHTML = `<div class="empty-state" style="color:var(--danger)">评估失败: ${escapeHtml(e.message)}</div>`;
+      showToast('三灯评估失败: ' + e.message, 'error');
+    });
+}
+
+function decisionNum(v, digits) {
+  if (v == null || isNaN(v)) return '-';
+  return Number(v).toFixed(digits == null ? 2 : digits);
+}
+
+function renderDecisionResult(d) {
+  const resultDiv = document.getElementById('decision-result');
+  if (!resultDiv) return;
+  const style = VERDICT_STYLES[d.verdict] || VERDICT_STYLES.unrated;
+  const lights = d.lights || {};
+  const decision = d.decision || {};
+
+  const lightCards = ['value', 'trend', 'timing'].map(key => {
+    const light = lights[key] || {};
+    const c = DECISION_LIGHT_COLORS[light.color] || DECISION_LIGHT_COLORS.gray;
+    const m = DECISION_LIGHT_META[key];
+    const reasons = (light.reasons || []).map(r => `<li>${escapeHtml(r)}</li>`).join('');
+    return `<div class="decision-light-card" style="border-color:${c.color}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><strong>${m.title}</strong> <span style="font-size:11px;color:var(--text-dim)">${m.subtitle}</span></div>
+        <span class="decision-light-badge" style="color:${c.color};background:${c.bg}">${c.label}</span>
+      </div>
+      <ul class="decision-light-reasons">${reasons || '<li>无显著信号</li>'}</ul>
+    </div>`;
+  }).join('');
+
+  let planHtml = '';
+  const plan = d.plan;
+  if (plan) {
+    const sz = plan.sizing;
+    planHtml = `<div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">ATR 交易计划 <span style="font-weight:400;font-size:11px;color:var(--text-dim)">风险管理参考，非订单指令</span></div>
+      <div class="decision-plan-grid">
+        <div class="decision-plan-cell"><span>入场参考</span><strong>${decisionNum(plan.entry)}</strong></div>
+        <div class="decision-plan-cell"><span>回踩参考 (MA20)</span><strong>${decisionNum(plan.pullbackRef)}</strong></div>
+        <div class="decision-plan-cell"><span>止损 (入场−2×ATR)</span><strong style="color:var(--danger)">${decisionNum(plan.stop)}</strong></div>
+        <div class="decision-plan-cell"><span>单位风险 R</span><strong>${decisionNum(plan.r)}</strong></div>
+        <div class="decision-plan-cell"><span>目标 2R</span><strong style="color:var(--success)">${decisionNum(plan.target2R)}</strong></div>
+        <div class="decision-plan-cell"><span>目标 3R</span><strong style="color:var(--success)">${decisionNum(plan.target3R)}</strong></div>
+        <div class="decision-plan-cell"><span>追价上限 (+0.5×ATR)</span><strong>${decisionNum(plan.chaseLimit)}</strong></div>
+        <div class="decision-plan-cell"><span>ATR(14)</span><strong>${decisionNum(plan.atr)}</strong></div>
+      </div>
+      ${sz ? `<div style="margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text-muted)">
+        风险预算法建议仓位：<strong style="color:var(--text)">${sz.suggestedShares} 股</strong>（${sz.lotSize} 股/手）
+        · 仓位市值 ${decisionNum(sz.positionValue)} 元（占资金 ${decisionNum(sz.positionPct * 100, 1)}%）
+        · 单笔风险预算 ${decisionNum(sz.riskPct * 100, 2)}% ≈ ${decisionNum(sz.riskAmount, 0)} 元
+      </div>` : ''}
+    </div>`;
+  }
+
+  let leftPlanHtml = '';
+  if (d.leftPlan) {
+    const lp = d.leftPlan;
+    leftPlanHtml = `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--info)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">左侧分批计划（价深绿左侧观察）</div>
+      <div style="font-size:12px;color:var(--text-muted);line-height:1.8">
+        <div>${escapeHtml(lp.reason || '')}</div>
+        <div>${escapeHtml(lp.approach || '')}</div>
+        <div>${escapeHtml(lp.positionCap || '')}</div>
+        ${(lp.stopConditions || []).map(s => `<div style="color:var(--danger)">停止条件: ${escapeHtml(s)}</div>`).join('')}
+        ${(lp.rightSideTriggers || []).length ? `<div style="margin-top:4px">右侧转右侧触发条件：${(lp.rightSideTriggers || []).map(t => escapeHtml(t)).join('；')}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  let positionHtml = '';
+  if (d.position) {
+    const p = d.position;
+    const pnl = p.pnlPct;
+    positionHtml = `<div class="card" style="margin-bottom:16px;border-left:3px solid var(--warning)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">持仓视角 <span style="font-weight:400;font-size:11px;color:var(--text-dim)">${p.source === 'manual' ? '手动成本' : '登记持仓'}</span></div>
+      <div class="decision-plan-grid">
+        <div class="decision-plan-cell"><span>持仓成本</span><strong>${decisionNum(p.cost)}</strong></div>
+        <div class="decision-plan-cell"><span>持有数量</span><strong>${p.shares != null ? p.shares : '-'}</strong></div>
+        <div class="decision-plan-cell"><span>浮动盈亏</span><strong style="color:${pnl != null && pnl >= 0 ? 'var(--success)' : 'var(--danger)'}">${pnl != null ? (pnl * 100).toFixed(2) + '%' : '-'}</strong></div>
+        <div class="decision-plan-cell"><span>止损参考位</span><strong style="color:var(--danger)">${decisionNum(p.stopRef)}</strong></div>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--text-muted)">建议：${escapeHtml(p.advice || '')}</div>
+    </div>`;
+  }
+
+  const evidenceRows = (d.evidence || []).map(e => {
+    const c = DECISION_LIGHT_COLORS[e.light] || DECISION_LIGHT_COLORS.gray;
+    return `<tr>
+      <td>${escapeHtml(e.id || '')}</td>
+      <td><span class="decision-light-badge" style="color:${c.color};background:${c.bg}">${escapeHtml(e.light || '')}</span></td>
+      <td>${escapeHtml(e.indicator || '')}</td>
+      <td>${escapeHtml(String(e.value == null ? '-' : e.value))}</td>
+      <td>${escapeHtml(String(e.threshold == null ? '-' : e.threshold))}</td>
+      <td>${e.triggered ? '✓' : '—'}</td>
+      <td>${escapeHtml(e.impact || '')}</td>
+    </tr>`;
+  }).join('');
+
+  const triggers = (decision.triggers || []);
+  const nextSteps = Array.isArray(d.next_steps) ? d.next_steps : [];
+  const nextStepsHtml = nextSteps.length ? `
+    <div class="next-steps">
+      <span class="next-steps-label">下一步：</span>
+      ${nextSteps.map(s => `<button class="btn btn-outline btn-sm next-step-btn" title="${escapeHtml(s.reason || '')}" data-endpoint="${escapeHtml(s.endpoint || '')}">${escapeHtml(s.label || s.action || '')}</button>`).join('')}
+    </div>` : '';
+  resultDiv.innerHTML = `
+    <div class="decision-verdict" style="border-color:${style.color};background:${style.bg}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:${style.color}">${escapeHtml(d.verdictCn || d.verdict || '')}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${escapeHtml(d.stockCode || '')}${d.stockName ? ' · ' + escapeHtml(d.stockName) : ''} · ${escapeHtml(d.lightsSummary || '')}${d.trendScore != null ? ' · 趋势分 ' + decisionNum(d.trendScore, 0) : ''}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">命中规则：${escapeHtml(decision.rule || '')}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);text-align:right">数据截至 ${escapeHtml(d.asof || '-')}<br>${d.nBars || 0} 根 K 线</div>
+      </div>
+      ${triggers.length ? `<div style="margin-top:10px;font-size:12px;color:var(--text-muted)">再评估触发条件：${triggers.map(t => escapeHtml(t)).join('；')}</div>` : ''}
+    </div>
+    <div class="decision-lights-grid">${lightCards}</div>
+    ${positionHtml}
+    ${planHtml}
+    ${leftPlanHtml}
+    ${nextStepsHtml}
+    <details class="card" style="margin-bottom:16px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600">证据链（${(d.evidence || []).length} 条，编号可引用）</summary>
+      <div class="table-container" style="margin-top:10px"><table>
+        <thead><tr><th>编号</th><th>灯</th><th>指标</th><th>当前值</th><th>阈值</th><th>触发</th><th>影响</th></tr></thead>
+        <tbody>${evidenceRows || '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">无证据条目</td></tr>'}</tbody>
+      </table></div>
+    </details>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.7">三灯规则为纪律预设值，未经样本外验证；价灯灰灯时结论仅基于势/时两维。本工具输出为风险管理参考，不构成投资建议。</div>`;
+  resultDiv.querySelectorAll('.next-step-btn[data-endpoint]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ep = btn.dataset.endpoint;
+      if (ep) location.hash = ep;
+    });
+  });
+}
+
+/* ===== Risk Profile (用户风险画像) ===== */
+let _profileTolerance = 'BALANCED';
+const PROFILE_TOLERANCE_META = {
+  CONSERVATIVE: { multiplier: 0.5, desc: '单笔风险预算 0.5% · 回撤容忍低' },
+  BALANCED: { multiplier: 1.0, desc: '单笔风险预算 1.0% · 风险与机会平衡' },
+  AGGRESSIVE: { multiplier: 1.5, desc: '单笔风险预算 1.5% · 可承受更大回撤' }
+};
+
+function selectRiskTolerance(t) {
+  _profileTolerance = t;
+  document.querySelectorAll('#profile-tolerance-group [data-tolerance]').forEach(btn => {
+    const active = btn.dataset.tolerance === t;
+    btn.classList.toggle('btn-primary', active);
+    btn.classList.toggle('btn-outline', !active);
+  });
+  updateProfileHint();
+}
+
+function updateProfileHint(defaulted) {
+  const hint = document.getElementById('profile-hint');
+  if (!hint) return;
+  const meta = PROFILE_TOLERANCE_META[_profileTolerance] || PROFILE_TOLERANCE_META.BALANCED;
+  hint.textContent = `仓位乘数 ×${meta.multiplier.toFixed(1)} · ${meta.desc}` + (defaulted ? '（默认档，保存后长期生效）' : '');
+}
+
+function loadRiskProfile() {
+  fetch('/api/v1/profile').then(r => r.json()).then(resp => {
+    if (!resp.success) return;
+    const p = resp.data || {};
+    if (p.riskTolerance) _profileTolerance = p.riskTolerance;
+    const capitalInput = document.getElementById('profile-capital-input');
+    if (capitalInput && p.capitalAmount != null) capitalInput.value = p.capitalAmount;
+    selectRiskTolerance(_profileTolerance);
+    updateProfileHint(p.defaulted);
+  }).catch(() => {});
+}
+
+function saveRiskProfile() {
+  const capitalRaw = (document.getElementById('profile-capital-input') || {}).value || '';
+  const body = { riskTolerance: _profileTolerance };
+  const capital = parseFloat(capitalRaw);
+  if (capitalRaw.trim() && !isNaN(capital) && capital >= 0) body.capitalAmount = capital;
+  fetch('/api/v1/profile', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(resp => {
+    if (!resp.success) throw new Error(resp.error || resp.message || '保存失败');
+    showToast('风险画像已保存，决策台建议仓位将按新乘数计算', 'success');
+    updateProfileHint(false);
+  }).catch(e => showToast('保存失败: ' + e.message, 'error'));
 }

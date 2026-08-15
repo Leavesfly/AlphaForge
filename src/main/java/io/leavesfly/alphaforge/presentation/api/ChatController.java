@@ -1,5 +1,6 @@
 package io.leavesfly.alphaforge.presentation.api;
 
+import io.leavesfly.alphaforge.application.agent.kernel.NextStep;
 import io.leavesfly.alphaforge.application.service.chat.ChatService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -118,6 +119,20 @@ public class ChatController {
                     emitter.send(SseEmitter.event().name("chunk").data(chunk));
                 } catch (IOException e) {
                     log.debug("SSE发送失败(客户端可能已断开): {}", e.getMessage());
+                }
+            }
+
+            @Override
+            public void onNextSteps(List<NextStep> steps) {
+                try {
+                    List<Map<String, Object>> payload = new ArrayList<>();
+                    for (NextStep step : steps) {
+                        payload.add(step.toMap());
+                    }
+                    emitter.send(SseEmitter.event().name("next_steps")
+                            .data(objectMapper.writeValueAsString(payload)));
+                } catch (IOException e) {
+                    log.debug("SSE发送建议事件失败: {}", e.getMessage());
                 }
             }
 

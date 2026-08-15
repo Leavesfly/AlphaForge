@@ -4,6 +4,8 @@ import io.leavesfly.alphaforge.application.agent.kernel.AgentKernel;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentResult;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentTask;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentTaskType;
+import io.leavesfly.alphaforge.application.agent.kernel.NextStep;
+import io.leavesfly.alphaforge.application.agent.kernel.NextStepAdvisor;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import io.leavesfly.alphaforge.domain.repository.chat.ChatRepository;
 import org.slf4j.Logger;
@@ -39,12 +41,15 @@ public class ChatService {
     private final LlmPort llmService;
     private final ChatRepository chatRepository;
     private final AgentKernel agentKernel;
+    private final NextStepAdvisor nextStepAdvisor;
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public ChatService(LlmPort llmService, ChatRepository chatRepository, AgentKernel agentKernel) {
+    public ChatService(LlmPort llmService, ChatRepository chatRepository, AgentKernel agentKernel,
+                       NextStepAdvisor nextStepAdvisor) {
         this.llmService = llmService;
         this.chatRepository = chatRepository;
         this.agentKernel = agentKernel;
+        this.nextStepAdvisor = nextStepAdvisor;
     }
 
     /** 优雅关闭线程池，避免应用停止时线程泄漏 */
@@ -166,9 +171,11 @@ public class ChatService {
 
         executor.execute(() -> {
             try {
+                List<String> calledTools = new ArrayList<>();
                 String fullReply = agentKernel.runChatStreaming(task, new AgentKernel.StreamListener() {
                     @Override
                     public void onToolCall(String toolName, Map<String, Object> args, String result, long durationMs) {
+                        calledTools.add(toolName);
                         callback.onToolCall(toolName, args, result, durationMs);
                     }
 
@@ -181,6 +188,18 @@ public class ChatService {
                 // 持久化 assistant 消息
                 if (sessionId != null) {
                     saveAssistantMessage(sessionId, fullReply);
+                }
+
+                // 链式引导：按本轮实际调用的工具给建议（done 之前下发，空建议不打扰）
+                if (nextStepAdvisor != null) {
+                    try {
+                        List<NextStep> steps = nextStepAdvisor.adviseForChatTools(calledTools);
+                        if (!steps.isEmpty()) {
+                            callback.onNextSteps(steps);
+                        }
+                    } catch (Exception e) {
+                        log.warn("next_steps 生成失败（不影响对话）: {}", e.getMessage());
+                    }
                 }
 
                 callback.onComplete();
@@ -240,6 +259,11 @@ public class ChatService {
     public interface StreamCallback {
         void onToolCall(String toolName, Map<String, Object> args, String result, long durationMs);
         void onChunk(String chunk);
+
+        /** 链式引导建议（done 之前回调；default 空实现保证既有回调向后兼容） */
+        default void onNextSteps(List<NextStep> steps) {
+        }
+
         void onComplete();
         void onError(String error);
     }

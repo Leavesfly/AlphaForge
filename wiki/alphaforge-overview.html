@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlphaForge 全景解读 · 锻造超额收益的 AI 量化分析平台</title>
+<style>
+:root{
+  --bg:#0b1220; --bg2:#0e1628; --panel:#121c31; --panel2:#16233d;
+  --line:#233250; --text:#dbe4f3; --muted:#8fa2c0;
+  --gold:#f5b942; --gold2:#ffd166; --blue:#4f8ef7; --green:#34d399;
+  --red:#f87171; --purple:#a78bfa; --cyan:#22d3ee;
+  --mono:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.75;font-size:15px}
+a{color:var(--gold2);text-decoration:none}
+a:hover{text-decoration:underline}
+::selection{background:rgba(245,185,66,.3)}
+
+/* ===== 顶部导航 ===== */
+nav{position:sticky;top:0;z-index:100;background:rgba(11,18,32,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .nav-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:20px;padding:0 24px;height:54px;overflow-x:auto;white-space:nowrap}
+nav .logo{font-weight:800;font-size:17px;color:var(--gold);letter-spacing:.5px;flex-shrink:0}
+nav .logo span{color:var(--text);font-weight:400}
+nav a.item{color:var(--muted);font-size:13px;padding:4px 8px;border-radius:6px;flex-shrink:0}
+nav a.item:hover{color:var(--gold2);background:rgba(245,185,66,.08);text-decoration:none}
+
+/* ===== 布局 ===== */
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+section{padding:64px 0 8px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.sec-no{font-family:var(--mono);color:var(--gold);font-size:15px;letter-spacing:2px}
+h2{font-size:28px;font-weight:800;background:linear-gradient(90deg,#fff,#c9d6ee);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.sec-sub{color:var(--muted);margin-bottom:26px;font-size:14px}
+h3{font-size:19px;margin:34px 0 14px;color:#fff;display:flex;align-items:center;gap:8px}
+h3::before{content:"";width:4px;height:18px;border-radius:2px;background:linear-gradient(180deg,var(--gold),var(--blue))}
+h4{font-size:15px;margin:20px 0 10px;color:var(--gold2)}
+p{margin-bottom:12px}
+
+/* ===== Hero ===== */
+.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
+.hero img{width:100%;height:430px;object-fit:cover;display:block;filter:brightness(.72)}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,18,32,.25) 0%,rgba(11,18,32,.55) 60%,var(--bg) 100%);display:flex;align-items:center}
+.hero-box{max-width:1200px;margin:0 auto;padding:0 24px;width:100%}
+.hero-badge{display:inline-block;border:1px solid rgba(245,185,66,.5);color:var(--gold2);font-size:12px;padding:3px 12px;border-radius:99px;margin-bottom:16px;letter-spacing:2px}
+.hero h1{font-size:52px;font-weight:900;letter-spacing:1px;color:#fff;text-shadow:0 2px 24px rgba(0,0,0,.5)}
+.hero h1 em{font-style:normal;color:var(--gold)}
+.hero .slogan{font-size:18px;color:#c8d4e8;margin-top:12px;max-width:720px;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.hero .tags{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap}
+.hero .tags span{background:rgba(18,28,49,.85);border:1px solid var(--line);color:var(--muted);font-size:12.5px;padding:4px 12px;border-radius:99px}
+
+/* ===== 统计条 ===== */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:32px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;text-align:center}
+.stat b{display:block;font-size:30px;color:var(--gold);font-family:var(--mono)}
+.stat i{font-style:normal;color:var(--muted);font-size:13px}
+
+/* ===== 卡片 ===== */
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-3px);border-color:rgba(245,185,66,.45)}
+.card .icon{font-size:22px;margin-bottom:8px}
+.card b{display:block;font-size:15px;color:#fff;margin-bottom:4px}
+.card p{font-size:13px;color:var(--muted);margin:0}
+
+/* ===== 表格 ===== */
+table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:13.5px;background:var(--panel);border-radius:12px;overflow:hidden}
+table{display:table}
+.tbl-wrap{border:1px solid var(--line);border-radius:12px;overflow-x:auto;margin:12px 0 20px}
+.tbl-wrap table{margin:0;border-radius:0}
+th{background:var(--panel2);color:var(--gold2);text-align:left;padding:10px 14px;font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 14px;border-bottom:1px solid rgba(35,50,80,.5);color:var(--text);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(79,142,247,.05)}
+code{font-family:var(--mono);font-size:12.5px;background:rgba(79,142,247,.12);color:#9cc3ff;padding:1.5px 6px;border-radius:5px}
+pre{background:#0a101d;border:1px solid var(--line);border-radius:12px;padding:16px 18px;overflow-x:auto;margin:12px 0 20px;font-size:13px;line-height:1.7}
+pre code{background:none;color:#c3d0e6;padding:0}
+.k{color:var(--purple)} .s{color:var(--green)} .c{color:#5d718f} .n{color:var(--gold2)}
+
+/* ===== 图注 & 插图 ===== */
+figure{margin:22px 0}
+figure img{width:100%;border-radius:14px;border:1px solid var(--line);display:block}
+figcaption{color:var(--muted);font-size:12.5px;text-align:center;margin-top:10px}
+.svg-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:16px 0 24px;overflow-x:auto}
+.svg-box svg{display:block;margin:0 auto;max-width:100%;height:auto}
+
+/* ===== 徽章 ===== */
+.badge{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:99px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.b-gold{background:rgba(245,185,66,.15);color:var(--gold2);border:1px solid rgba(245,185,66,.4)}
+.b-blue{background:rgba(79,142,247,.15);color:#8fbaff;border:1px solid rgba(79,142,247,.4)}
+.b-green{background:rgba(52,211,153,.13);color:var(--green);border:1px solid rgba(52,211,153,.4)}
+.b-red{background:rgba(248,113,113,.13);color:var(--red);border:1px solid rgba(248,113,113,.4)}
+.b-purple{background:rgba(167,139,250,.15);color:var(--purple);border:1px solid rgba(167,139,250,.4)}
+.b-gray{background:rgba(143,162,192,.12);color:var(--muted);border:1px solid rgba(143,162,192,.3)}
+
+/* ===== 提示框 ===== */
+.note{border-left:4px solid var(--gold);background:rgba(245,185,66,.06);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:13.5px;color:#d9c99a}
+.note.blue{border-color:var(--blue);background:rgba(79,142,247,.07);color:#a9c4f0}
+.note.green{border-color:var(--green);background:rgba(52,211,153,.06);color:#9fd9c2}
+.note.red{border-color:var(--red);background:rgba(248,113,113,.06);color:#eba7a7}
+.note b{color:inherit}
+
+/* ===== 公式 ===== */
+.formula{background:var(--panel);border:1px dashed rgba(245,185,66,.4);border-radius:12px;padding:14px 20px;margin:14px 0;font-family:var(--mono);font-size:14px;color:var(--gold2);text-align:center;letter-spacing:.5px}
+
+/* ===== 流程步骤 ===== */
+.steps{display:flex;gap:0;margin:16px 0 24px;flex-wrap:wrap}
+.step{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;position:relative}
+.step+.step{margin-left:22px}
+.step+.step::before{content:"→";position:absolute;left:-19px;top:50%;transform:translateY(-50%);color:var(--gold);font-size:16px}
+.step b{display:block;color:var(--gold2);font-size:13px;margin-bottom:4px}
+.step p{font-size:12.5px;color:var(--muted);margin:0}
+
+/* ===== CSS 条形图 ===== */
+.bar-row{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12.5px}
+.bar-label{width:170px;flex-shrink:0;text-align:right;color:var(--muted);font-family:var(--mono);font-size:12px}
+.bar-track{flex:1;background:rgba(35,50,80,.5);border-radius:6px;height:16px;overflow:hidden}
+.bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--blue),var(--cyan))}
+.bar-fill.gold{background:linear-gradient(90deg,#c98d1e,var(--gold2))}
+.bar-fill.green{background:linear-gradient(90deg,#0f9d6e,var(--green))}
+.bar-val{width:64px;flex-shrink:0;color:var(--text);font-family:var(--mono);font-size:12px}
+
+/* ===== 目录卡片 ===== */
+.toc{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}
+.toc a{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--text);display:block;transition:all .15s}
+.toc a:hover{border-color:var(--gold);transform:translateY(-2px);text-decoration:none}
+.toc a b{display:block;color:var(--gold2);font-size:14px}
+.toc a span{font-size:12px;color:var(--muted)}
+
+footer{margin-top:80px;border-top:1px solid var(--line);padding:32px 0;color:var(--muted);font-size:13px;text-align:center}
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:40px 0}
+@media(max-width:900px){
+  .g2,.g3,.g4,.toc,.stats{grid-template-columns:repeat(2,1fr)}
+  .hero h1{font-size:36px}
+  .steps{flex-direction:column}
+  .step+.step{margin-left:0;margin-top:20px}
+  .step+.step::before{content:"↓";left:50%;top:-19px;transform:translateX(-50%)}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="nav-inner">
+  <div class="logo">Alpha<span>Forge</span></div>
+  <a class="item" href="#overview">总览</a>
+  <a class="item" href="#architecture">架构</a>
+  <a class="item" href="#pipeline">分析流水线</a>
+  <a class="item" href="#agent">Agent 系统</a>
+  <a class="item" href="#strategy">策略系统</a>
+  <a class="item" href="#backtest">回测系统</a>
+  <a class="item" href="#factor">因子进化</a>
+  <a class="item" href="#data">数据模型</a>
+  <a class="item" href="#api">API</a>
+  <a class="item" href="#deploy">部署运维</a>
+</div></nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <img src="images/hero.png" alt="AlphaForge 数字熔炉">
+  <div class="hero-overlay"><div class="hero-box">
+    <div class="hero-badge">AI · MULTI-AGENT · QUANT PLATFORM</div>
+    <h1>Alpha<em>Forge</em> 全景解读</h1>
+    <div class="slogan">一套面向个人投资者与量化研究者的股票智能分析系统——以大模型多 Agent 协作、因子自进化与真实感回测为核心，「锻造超额收益」。</div>
+    <div class="tags">
+      <span>Java 17</span><span>Spring Boot 3.2</span><span>SQLite + MyBatis</span>
+      <span>多 Agent 辩论</span><span>因子遗传进化</span><span>A 股真实感回测</span><span>信号闭环学习</span>
+    </div>
+  </div></div>
+</header>
+
+<!-- ================= 01 总览 ================= -->
+<section id="overview" class="wrap">
+  <div class="sec-head"><span class="sec-no">01</span><h2>项目总览</h2></div>
+  <p class="sec-sub">AlphaForge（原名 daily-stock-analysis）以数据驱动方式辅助投资决策，集成 LLM、多 Agent 协作、因子自进化与策略回测四大引擎。</p>
+
+  <div class="stats">
+    <div class="stat"><b>11</b><i>核心能力模块</i></div>
+    <div class="stat"><b>19</b><i>内置量化策略</i></div>
+    <div class="stat"><b>30+</b><i>分析流水线步骤</i></div>
+    <div class="stat"><b>4</b><i>Agent 模式降级链</i></div>
+  </div>
+
+  <h3>核心能力矩阵</h3>
+  <div class="grid g3">
+    <div class="card"><div class="icon">🧠</div><b>AI 多维度分析</b><p>技术面 + 基本面 + 情绪面三路 Agent 并行分析，LLM 综合裁决。</p></div>
+    <div class="card"><div class="icon">⚔️</div><b>Agent 辩论机制</b><p>三轮制辩论：独立分析 → 交叉质询 → 裁判裁决，提升信号可靠性。</p></div>
+    <div class="card"><div class="icon">🔗</div><b>结构化推理链</b><p>六步推理框架（观察→判断→假设→验证→风险→结论），强制证据支撑。</p></div>
+    <div class="card"><div class="icon">⏱️</div><b>策略回测</b><p>真实感回测仿真：T+1、涨跌停、手续费、滑点，支持参数优化。</p></div>
+    <div class="card"><div class="icon">🧬</div><b>因子自进化</b><p>LLM 驱动的因子自动发现与遗传进化，IC/IR 量化评估筛选。</p></div>
+    <div class="card"><div class="icon">🔍</div><b>智能选股 AlphaSift</b><p>全市场扫描，多策略打分筛选优质标的。</p></div>
+    <div class="card"><div class="icon">🔄</div><b>信号闭环学习</b><p>信号发出 → 事后评估 → 经验积累 → Few-shot 注入 → 分析改进。</p></div>
+    <div class="card"><div class="icon">💼</div><b>投资组合管理</b><p>多账户模拟交易、持仓跟踪、盈亏统计、公司行动处理。</p></div>
+    <div class="card"><div class="icon">🔔</div><b>告警系统</b><p>价格/技术指标/事件多维告警，邮件、Webhook、Bark 多渠道推送。</p></div>
+    <div class="card"><div class="icon">💬</div><b>AI 对话</b><p>多轮会话，结合 ReAct Agent 实现工具调用与自然语言操控。</p></div>
+    <div class="card"><div class="icon">📏</div><b>系统评估基准</b><p>六维策略质量评分（ABCD 等级）+ LLM 分析幻觉检测。</p></div>
+    <div class="card"><div class="icon">🤖</div><b>L4 纸面闭环</b><p>生成/优化 → 质量门晋升 → 信号纸面执行 → 复盘写回 → 因子周进化。</p></div>
+  </div>
+
+  <h3>技术栈</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>类别</th><th>选型</th><th>说明</th></tr>
+    <tr><td>运行时</td><td><code>Java 17</code></td><td>LTS 版本，支持 Records、模式匹配</td></tr>
+    <tr><td>核心框架</td><td><code>Spring Boot 3.2.5</code></td><td>父 POM 统一管理依赖版本</td></tr>
+    <tr><td>数据层</td><td><code>SQLite + MyBatis 3.0.3</code></td><td>嵌入式数据库，零运维部署</td></tr>
+    <tr><td>HTTP / JSON</td><td><code>OkHttp 4.12 / Jackson 2.17</code></td><td>外部数据源与 LLM 调用</td></tr>
+    <tr><td>技术指标</td><td><code>TA-Lib 0.4.0</code></td><td>MACD、KDJ、RSI、布林带等指标计算</td></tr>
+    <tr><td>安全</td><td><code>JJWT 0.12.5</code></td><td>JWT Bearer Token 认证</td></tr>
+    <tr><td>工具库</td><td><code>Guava 33.1 / Commons Lang3</code></td><td>集合、缓存与字符串工具</td></tr>
+    <tr><td>构建部署</td><td><code>Maven + Docker</code></td><td>单 JAR 构建，temurin:17-jre-alpine 镜像</td></tr>
+  </table></div>
+
+  <h3>文档导航</h3>
+  <div class="toc">
+    <a href="#architecture"><b>② 系统架构</b><span>分层架构与双轨设计</span></a>
+    <a href="#pipeline"><b>③ 分析流水线</b><span>30+ 步骤编排数据流</span></a>
+    <a href="#agent"><b>④ Agent 系统</b><span>辩论机制与推理链</span></a>
+    <a href="#strategy"><b>⑤ 策略系统</b><span>四维分类与三引擎</span></a>
+    <a href="#backtest"><b>⑥ 回测系统</b><span>真实感仿真与成本模型</span></a>
+    <a href="#factor"><b>⑦ 因子进化</b><span>LLM 遗传进化闭环</span></a>
+    <a href="#data"><b>⑧ 数据模型</b><span>23 张表与领域模型</span></a>
+    <a href="#api"><b>⑨ API 参考</b><span>REST 接口全景</span></a>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 02 架构 ================= -->
+<section id="architecture" class="wrap">
+  <div class="sec-head"><span class="sec-no">02</span><h2>系统分层架构</h2></div>
+  <p class="sec-sub">经典四层架构 + 依赖倒置端口，认知轨与功能轨双轨分离。</p>
+
+  <div class="svg-box">
+  <svg viewBox="0 0 980 470" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <defs>
+      <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#1c2b4a"/><stop offset="1" stop-color="#16233d"/>
+      </linearGradient>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#f5b942"/>
+      </marker>
+    </defs>
+    <!-- 表现层 -->
+    <rect x="40" y="14" width="900" height="86" rx="12" fill="url(#lg1)" stroke="#4f8ef7" stroke-width="1.4"/>
+    <text x="60" y="42" fill="#8fbaff" font-size="15" font-weight="700">Presentation Layer · 表现层</text>
+    <g font-size="12.5" fill="#c3d0e6">
+      <rect x="60" y="54" width="180" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="150" y="75" text-anchor="middle">REST API Controllers</text>
+      <rect x="252" y="54" width="150" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="327" y="75" text-anchor="middle">WebSocket</text>
+      <rect x="414" y="54" width="170" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="499" y="75" text-anchor="middle">Telegram Bot</text>
+      <rect x="596" y="54" width="150" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="671" y="75" text-anchor="middle">Scheduler 定时任务</text>
+      <rect x="758" y="54" width="162" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="839" y="75" text-anchor="middle">Web 前端（SPA）</text>
+    </g>
+    <line x1="490" y1="100" x2="490" y2="128" stroke="#f5b942" stroke-width="1.6" marker-end="url(#arr)"/>
+    <!-- 应用层 -->
+    <rect x="40" y="130" width="900" height="120" rx="12" fill="url(#lg1)" stroke="#f5b942" stroke-width="1.4"/>
+    <text x="60" y="158" fill="#ffd166" font-size="15" font-weight="700">Application Layer · 应用层（核心编排）</text>
+    <g font-size="12.5" fill="#c3d0e6">
+      <rect x="60" y="170" width="270" height="34" rx="8" fill="#241d0a" stroke="#f5b942"/>
+      <text x="195" y="192" text-anchor="middle" fill="#ffd166">★ AgentKernel（认知轨中枢）</text>
+      <rect x="342" y="170" width="230" height="34" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="457" y="192" text-anchor="middle">StockAnalysisPipeline</text>
+      <rect x="584" y="170" width="230" height="34" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="699" y="192" text-anchor="middle">AgentDebateOrchestrator</text>
+      <rect x="826" y="170" width="94" height="34" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="873" y="192" text-anchor="middle">AlphaSift</text>
+      <rect x="60" y="212" width="200" height="30" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="160" y="232" text-anchor="middle">BacktestSimulator</text>
+      <rect x="272" y="212" width="230" height="30" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="387" y="232" text-anchor="middle">FactorEvolutionOrchestrator</text>
+      <rect x="514" y="212" width="406" height="30" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="717" y="232" text-anchor="middle">业务 Service（Alert / Chat / Portfolio / Signal / Screening …）</text>
+    </g>
+    <line x1="490" y1="250" x2="490" y2="278" stroke="#f5b942" stroke-width="1.6" marker-end="url(#arr)"/>
+    <!-- 领域层 -->
+    <rect x="40" y="280" width="900" height="86" rx="12" fill="url(#lg1)" stroke="#34d399" stroke-width="1.4"/>
+    <text x="60" y="308" fill="#7ee7bd" font-size="15" font-weight="700">Domain Layer · 领域层（框架无关）</text>
+    <g font-size="12.5" fill="#c3d0e6">
+      <rect x="60" y="320" width="200" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="160" y="341" text-anchor="middle">实体模型 Entity</text>
+      <rect x="272" y="320" width="220" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="382" y="341" text-anchor="middle">仓储接口 Repository Port</text>
+      <rect x="504" y="320" width="210" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="609" y="341" text-anchor="middle">领域服务（TA 计算等）</text>
+      <rect x="726" y="320" width="194" height="32" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="823" y="341" text-anchor="middle">端口 Llm/Market/Notify</text>
+    </g>
+    <line x1="490" y1="366" x2="490" y2="394" stroke="#f5b942" stroke-width="1.6" marker-end="url(#arr)"/>
+    <!-- 基础设施层 -->
+    <rect x="40" y="396" width="900" height="62" rx="12" fill="url(#lg1)" stroke="#a78bfa" stroke-width="1.4"/>
+    <text x="60" y="422" fill="#c4b0f7" font-size="15" font-weight="700">Infrastructure Layer · 基础设施层</text>
+    <g font-size="12.5" fill="#c3d0e6">
+      <text x="60" y="446">DataFetcherManager（多源熔断）</text>
+      <text x="330" y="446">LlmService（多渠道切换）</text>
+      <text x="570" y="446">NotificationService（邮件/Webhook/Bark）</text>
+      <text x="855" y="446">MyBatis</text>
+    </g>
+  </svg>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <b>🧭 认知轨（经 AgentKernel）</b>
+      <p>对话（含流式）、深度分析推理、策略生成/优化、自治研判，统一走 <code>Planner → Guardrail → dispatch → Critic</code> 执行闭环。已接入任务类型：<code>CHAT</code>、<code>STOCK_ANALYSIS</code>、<code>STRATEGY_GENERATE</code>、<code>AUTONOMY_DECISION</code>。</p>
+    </div>
+    <div class="card">
+      <b>⚙️ 功能轨（直连领域服务）</b>
+      <p>CRUD、查询、事务、定时编排（如 <code>StockAnalysisPipeline</code>）直连领域服务，零 LLM 开销。其推理子步骤委托 AgentKernel 执行——内核是系统唯一的认知权威。</p>
+    </div>
+  </div>
+
+  <h3>AgentKernel 内部闭环</h3>
+  <div class="steps">
+    <div class="step"><b>① Planner</b><p>HybridPlanner = SopPlanner + LlmPlanner；SOP 骨架外置于 <code>resources/plans/*.yaml</code></p></div>
+    <div class="step"><b>② Guardrail</b><p>统一治理闸：状态变更须任务授权 + 自治开关 + 熔断校验（默认关闭即拦截）</p></div>
+    <div class="step"><b>③ Dispatch</b><p>分发到具体能力实现（AgentAnalysisService 含四级降级链）</p></div>
+    <div class="step"><b>④ Critic</b><p>结果评审（质量校验暂内置于能力实现，后续收敛至此）</p></div>
+  </div>
+
+  <h3>表现层 Controller 一览</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>Controller</th><th>路径前缀</th><th>职责</th></tr>
+    <tr><td><code>AnalysisController</code></td><td>/api/v1</td><td>股票分析、历史记录、行情查询</td></tr>
+    <tr><td><code>BacktestController</code></td><td>/api/v1/backtest</td><td>策略回测、参数优化、蒙特卡洛模拟</td></tr>
+    <tr><td><code>PortfolioController</code></td><td>/api/v1/portfolio</td><td>投资组合查询</td></tr>
+    <tr><td><code>PaperTradingController</code></td><td>/api/v1/paper-trading</td><td>模拟交易（账户、买卖、持仓）</td></tr>
+    <tr><td><code>SignalController</code></td><td>/api/v1/signal</td><td>决策信号管理</td></tr>
+    <tr><td><code>ScreeningController</code></td><td>/api/v1/screening</td><td>智能选股（AlphaSift）</td></tr>
+    <tr><td><code>AlertController</code></td><td>/api/v1/alert</td><td>告警规则管理</td></tr>
+    <tr><td><code>ChatController</code></td><td>/api/v1/chat</td><td>AI 对话会话</td></tr>
+    <tr><td><code>StrategyController</code></td><td>/api/v1/strategy</td><td>策略目录查询</td></tr>
+    <tr><td><code>WatchlistController</code></td><td>/api/v1/watchlist</td><td>自选股管理</td></tr>
+    <tr><td><code>SystemController</code></td><td>/api/v1/system</td><td>健康检查、用量统计、仪表盘</td></tr>
+    <tr><td><code>AuthController</code></td><td>/api/v1/auth</td><td>JWT 认证</td></tr>
+  </table></div>
+
+  <h3>基础设施关键设计</h3>
+  <div class="grid g2">
+    <div class="card"><b>📡 DataFetcherManager · 多源容错</b>
+      <p>AkShare / EFinance / Tushare / YFinance 自动切换；CircuitBreaker 熔断恢复、RateLimiter 防封禁流控、指数退避重试、交易日感知缓存、DataQualityValidator 数据质量校验。</p></div>
+    <div class="card"><b>🤖 LlmService · 多渠道统一调用</b>
+      <p>LlmChannelManager 支持 OpenAI / DashScope / Ollama 故障切换；含请求构建（Function Calling）、SSE 流式解析、指数退避重试、Token 费用追踪、响应缓存与 Micrometer 埋点。</p></div>
+    <div class="card"><b>📨 NotificationService · 多渠道路由</b>
+      <p>NotificationRouter 按配置分发：Email（Spring Mail）、企业微信/飞书 Webhook、iOS Bark 推送。</p></div>
+    <div class="card"><b>🧩 依赖注入策略 · 优雅降级</b>
+      <p>必须依赖走构造函数注入（启动强校验）；可选依赖（如辩论编排器）<code>@Autowired(required=false)</code>，配置不全时自动降级。</p></div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 03 流水线 ================= -->
+<section id="pipeline" class="wrap">
+  <div class="sec-head"><span class="sec-no">03</span><h2>股票分析流水线</h2></div>
+  <p class="sec-sub">StockAnalysisPipeline：功能轨确定性骨架 + 认知轨推理委托，30+ 步骤完成一次完整分析。</p>
+
+  <div class="svg-box">
+  <svg viewBox="0 0 980 560" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <defs>
+      <marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#4f8ef7"/></marker>
+      <marker id="arr3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f5b942"/></marker>
+    </defs>
+    <g font-size="13" text-anchor="middle">
+      <!-- 主链 -->
+      <rect x="370" y="10" width="240" height="40" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="490" y="35" fill="#8fbaff">用户请求 · REST API</text>
+      <line x1="490" y1="50" x2="490" y2="72" stroke="#4f8ef7" marker-end="url(#arr2)"/>
+      <rect x="370" y="74" width="240" height="40" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="490" y="99" fill="#8fbaff">TaskService 异步任务提交</text>
+      <line x1="490" y1="114" x2="490" y2="136" stroke="#4f8ef7" marker-end="url(#arr2)"/>
+      <rect x="330" y="138" width="320" height="44" rx="10" fill="#241d0a" stroke="#f5b942" stroke-width="1.6"/>
+      <text x="490" y="158" fill="#ffd166" font-weight="700">StockAnalysisPipeline</text>
+      <text x="490" y="174" fill="#d9c99a" font-size="11.5">30+ 步骤 · 功能轨确定性骨架</text>
+
+      <!-- 左侧上下文 -->
+      <line x1="330" y1="160" x2="286" y2="160" stroke="#4f8ef7" marker-end="url(#arr2)"/>
+      <rect x="60" y="128" width="226" height="34" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="173" y="150" fill="#c3d0e6" font-size="12.5">AnalysisContextBuilder（K线+指标）</text>
+      <rect x="60" y="170" width="226" height="60" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="173" y="190" fill="#c3d0e6" font-size="12.5">AnalysisContextEnhancer</text>
+      <text x="173" y="208" fill="#8fa2c0" font-size="11">筹码 · 板块 · 新闻 · 大盘</text>
+      <text x="173" y="223" fill="#8fa2c0" font-size="11">+ SignalLearningService Few-shot 注入</text>
+
+      <!-- 右侧认知轨 -->
+      <line x1="650" y1="160" x2="694" y2="160" stroke="#f5b942" marker-end="url(#arr3)"/>
+      <rect x="696" y="126" width="230" height="44" rx="8" fill="#241d0a" stroke="#f5b942"/>
+      <text x="811" y="146" fill="#ffd166" font-size="12.5" font-weight="700">AgentKernel（认知轨）</text>
+      <text x="811" y="162" fill="#d9c99a" font-size="11">Planner→Guardrail→dispatch→Critic</text>
+      <rect x="696" y="180" width="230" height="100" rx="8" fill="#0d1526" stroke="#31456e"/>
+      <text x="811" y="200" fill="#c3d0e6" font-size="12">AgentAnalysisService 四级降级链</text>
+      <text x="811" y="222" fill="#8fa2c0" font-size="11.5">debate 三轮辩论（置信度最高）</text>
+      <text x="811" y="240" fill="#8fa2c0" font-size="11.5">multi 多 Agent 并行</text>
+      <text x="811" y="258" fill="#8fa2c0" font-size="11.5">react 单 Agent 工具调用</text>
+      <text x="811" y="276" fill="#8fa2c0" font-size="11.5">llm 直接调用（最终降级）</text>
+
+      <!-- 聚合后处理 -->
+      <line x1="490" y1="182" x2="490" y2="236" stroke="#4f8ef7" marker-end="url(#arr2)"/>
+      <rect x="350" y="238" width="280" height="40" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="490" y="263" fill="#c3d0e6">AnalysisResultAggregator 结果聚合</text>
+      <line x1="490" y1="278" x2="490" y2="300" stroke="#4f8ef7" marker-end="url(#arr2)"/>
+      <rect x="330" y="302" width="320" height="64" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="490" y="326" fill="#c3d0e6">AnalysisPostProcessor 后处理</text>
+      <text x="490" y="346" fill="#8fa2c0" font-size="11.5">信号提取 · 报告存储 · 通知推送 · 幻觉拦截</text>
+
+      <!-- 信号闭环 -->
+      <line x1="490" y1="366" x2="490" y2="392" stroke="#34d399" marker-end="url(#arr2)"/>
+      <rect x="360" y="394" width="260" height="40" rx="10" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="490" y="419" fill="#7ee7bd">DecisionSignal 结构化交易信号</text>
+      <line x1="490" y1="434" x2="490" y2="458" stroke="#34d399" marker-end="url(#arr2)"/>
+      <rect x="340" y="460" width="300" height="40" rx="10" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="490" y="485" fill="#7ee7bd">SignalOutcomeEvaluator 5/10/20 天事后评估</text>
+      <line x1="490" y1="500" x2="490" y2="524" stroke="#34d399" marker-end="url(#arr2)"/>
+      <rect x="330" y="526" width="320" height="26" rx="8" fill="#0d2419" stroke="#34d399"/>
+      <text x="490" y="544" fill="#7ee7bd" font-size="12">ExperienceMemory → 下次分析 Few-shot 注入 ↺</text>
+      <!-- 回环箭头 -->
+      <path d="M 330 539 C 120 539, 100 260, 160 236" fill="none" stroke="#34d399" stroke-dasharray="5 4" marker-end="url(#arr2)"/>
+      <text x="105" y="400" fill="#7ee7bd" font-size="11" transform="rotate(-90 105 400)">经验回注（学习闭环）</text>
+    </g>
+  </svg>
+  </div>
+
+  <h3>十大编排步骤</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>#</th><th>步骤</th><th>负责组件</th></tr>
+    <tr><td>1</td><td>解析股票列表</td><td>NameToCodeResolver（名称→代码模糊匹配）</td></tr>
+    <tr><td>2</td><td>获取历史 K 线数据</td><td>DataFetcherManager（多源 + 缓存）</td></tr>
+    <tr><td>3</td><td>技术指标计算</td><td>TechnicalAnalysisService（TA-Lib）</td></tr>
+    <tr><td>4</td><td>上下文构建</td><td>AnalysisContextBuilder</td></tr>
+    <tr><td>5</td><td>上下文增强</td><td>AnalysisContextEnhancer（筹码/板块/新闻/大盘）</td></tr>
+    <tr><td>6</td><td>信号学习注入</td><td>SignalLearningService → Few-shot 经验</td></tr>
+    <tr><td>7</td><td>Agent 分析</td><td>AgentKernel 认知轨委托 AgentAnalysisService（四级降级链）</td></tr>
+    <tr><td>8</td><td>结果聚合</td><td>AnalysisResultAggregator（综合评分）</td></tr>
+    <tr><td>9</td><td>后处理</td><td>信号提取 · 报告存储 · Fallback 补全 · 通知推送</td></tr>
+    <tr><td>10</td><td>诊断记录</td><td>DiagnosticContext 运行时快照 + PipelineMetrics 指标</td></tr>
+  </table></div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 04 Agent 系统 ================= -->
+<section id="agent" class="wrap">
+  <div class="sec-head"><span class="sec-no">04</span><h2>Agent 系统详解</h2></div>
+  <p class="sec-sub">多 Agent 协作 + 三轮辩论 + 六步推理链 + 完整降级链，是 AlphaForge 的认知核心。</p>
+
+  <figure>
+    <img src="images/agent-debate.png" alt="多 Agent 辩论示意">
+    <figcaption>技术面 / 基本面 / 风控三路 Agent 独立分析，交叉质询后由裁判综合裁决</figcaption>
+  </figure>
+
+  <h3>四种模式与运行时降级链</h3>
+  <div class="svg-box">
+  <svg viewBox="0 0 940 120" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <defs><marker id="arr4" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f87171"/></marker></defs>
+    <g font-size="13" text-anchor="middle">
+      <rect x="20" y="30" width="190" height="56" rx="10" fill="#241d0a" stroke="#f5b942" stroke-width="1.6"/>
+      <text x="115" y="54" fill="#ffd166" font-weight="700">debate 三轮辩论</text>
+      <text x="115" y="74" fill="#8fa2c0" font-size="11">置信度最高 · 耗时最长</text>
+      <rect x="260" y="30" width="190" height="56" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="355" y="54" fill="#8fbaff" font-weight="700">multi 多 Agent 并行</text>
+      <text x="355" y="74" fill="#8fa2c0" font-size="11">均衡深度与速度</text>
+      <rect x="500" y="30" width="190" height="56" rx="10" fill="#16233d" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="595" y="54" fill="#c4b0f7" font-weight="700">react 工具调用</text>
+      <text x="595" y="74" fill="#8fa2c0" font-size="11">单 Agent · 适合对话</text>
+      <rect x="740" y="30" width="180" height="56" rx="10" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="830" y="54" fill="#7ee7bd" font-weight="700">llm 直接调用</text>
+      <text x="830" y="74" fill="#8fa2c0" font-size="11">最终降级 · 速度最快</text>
+      <line x1="210" y1="58" x2="252" y2="58" stroke="#f87171" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <line x1="450" y1="58" x2="492" y2="58" stroke="#f87171" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <line x1="690" y1="58" x2="732" y2="58" stroke="#f87171" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <text x="231" y="48" fill="#f87171" font-size="10.5">失败</text>
+      <text x="471" y="48" fill="#f87171" font-size="10.5">失败</text>
+      <text x="711" y="48" fill="#f87171" font-size="10.5">失败</text>
+    </g>
+  </svg>
+  </div>
+  <div class="note">降级链由内核委托的 <code>AgentAnalysisService</code> 实现：任何一级失败都会自动落到下一级，保证分析任务「永远有结果」。可选编排器缺失（未配置）时通过 <code>required=false</code> 注入在启动期即完成降级。</div>
+
+  <h3>专业化 SubAgent 体系</h3>
+  <div class="grid g3">
+    <div class="card"><b>📈 TechnicalAgent</b><p>技术面分析：均线、MACD、KDJ、量价形态。Prompt：<code>technical_agent_system.yaml</code></p></div>
+    <div class="card"><b>📊 FundamentalAgent</b><p>基本面分析：财务、估值、成长性。Prompt：<code>fundamental_agent_system.yaml</code></p></div>
+    <div class="card"><b>🛡️ RiskAgent</b><p>风险审核：OPPOSE 意见具「一票否决」权重，防止过度乐观。Prompt：<code>risk_agent_system.yaml</code></p></div>
+  </div>
+  <p style="margin-top:14px">每个 SubAgent 返回统一的 <code>AgentResult</code>：信号（buy/sell/hold）、评分（0-100）、置信度、分析文本、关键发现要点与耗时。</p>
+
+  <h3>三轮辩论流程（灵感来源：ContestTrade / FactorMAD）</h3>
+  <div class="steps">
+    <div class="step"><b>Round 1 · 独立分析</b><p>复用 MultiAgentOrchestrator，各 Agent 互不知晓他人观点，独立给出初步结论。</p></div>
+    <div class="step"><b>Round 2 · 交叉质询</b><p>所有初步结论作为上下文，LLM 模拟各 Agent 视角质询；须声明立场 SUPPORT / OPPOSE / NEUTRAL。</p></div>
+    <div class="step"><b>Round 3 · 裁判裁决</b><p>综合 Round1 结论 + Round2 论点输出最终信号，记录共识度（consensusLevel）。</p></div>
+  </div>
+  <div class="note red"><b>风控特权：</b>风控 Agent（role=risk）的 OPPOSE 在裁决阶段优先被采纳，避免系统过度乐观地给出买入信号。</div>
+
+  <h3>结构化推理链：六步法</h3>
+  <div class="grid g2">
+    <div class="card">
+      <b>单维度六步法（各专业 Agent）</b>
+      <p style="font-family:var(--mono);font-size:12.5px;color:#c3d0e6">
+      ① 观察 → 直接陈述数据事实<br>② 判断 → 基于观察的初步判断<br>③ 假设 → 提出可能的解释<br>④ 验证 → ≥2 个数据证据验证假设<br>⑤ 风险 → ≥1 个反面论点<br>⑥ 结论 → 综合给出明确结论</p>
+    </div>
+    <div class="card">
+      <b>多维度综合六步法（Orchestrator 综合）</b>
+      <p style="font-family:var(--mono);font-size:12.5px;color:#c3d0e6">
+      ① 汇总 → 各维度关键结论<br>② 一致性 → 检查结论是否一致<br>③ 权衡 → 分析一致与矛盾的权重<br>④ 综合 → 形成整体判断<br>⑤ 风险 → 识别最主要下行风险<br>⑥ 决策 → 明确交易信号与置信度</p>
+    </div>
+  </div>
+
+  <h3>ReAct 工具调用</h3>
+  <p>ReAct（Reasoning + Acting）模式按 <code>Thought → Action → Observation → … → Final Answer</code> 交替推理与行动。工具经 <code>LlmToolAdapter</code> 适配为 OpenAI Function Calling 格式，由 LLM 决定调用时机：</p>
+  <div class="tbl-wrap"><table>
+    <tr><th>工具名</th><th>功能</th></tr>
+    <tr><td><code>get_stock_data</code></td><td>获取历史 K 线数据</td></tr>
+    <tr><td><code>calculate_technical_indicators</code></td><td>计算技术指标</td></tr>
+    <tr><td><code>get_news</code></td><td>获取相关新闻</td></tr>
+    <tr><td><code>get_market_overview</code></td><td>获取大盘概况</td></tr>
+    <tr><td><code>autonomy_control</code></td><td>L4 自主交易的自然语言控制（status / set_flags / halt / resume / bind_account / audit）</td></tr>
+  </table></div>
+
+  <h3>信号闭环学习</h3>
+  <div class="svg-box">
+  <svg viewBox="0 0 940 190" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <defs><marker id="arr5" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#34d399"/></marker></defs>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="55" width="160" height="60" rx="12" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="110" y="80" fill="#8fbaff" font-weight="700">Agent 生成信号</text>
+      <text x="110" y="100" fill="#8fa2c0" font-size="11">DecisionSignal</text>
+      <rect x="240" y="55" width="170" height="60" rx="12" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="325" y="80" fill="#c3d0e6">事后评估准确率</text>
+      <text x="325" y="100" fill="#8fa2c0" font-size="11">5 / 10 / 20 天窗口</text>
+      <rect x="460" y="55" width="170" height="60" rx="12" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="545" y="80" fill="#7ee7bd">写入经验记忆</text>
+      <text x="545" y="100" fill="#8fa2c0" font-size="11">ExperienceMemory</text>
+      <rect x="680" y="55" width="230" height="60" rx="12" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="795" y="80" fill="#7ee7bd">Few-shot 注入 Prompt</text>
+      <text x="795" y="100" fill="#8fa2c0" font-size="11">相似条件检索 + 错误模式识别</text>
+      <line x1="190" y1="85" x2="232" y2="85" stroke="#34d399" marker-end="url(#arr5)"/>
+      <line x1="410" y1="85" x2="452" y2="85" stroke="#34d399" marker-end="url(#arr5)"/>
+      <line x1="630" y1="85" x2="672" y2="85" stroke="#34d399" marker-end="url(#arr5)"/>
+      <path d="M 795 115 C 795 165, 110 165, 110 123" fill="none" stroke="#34d399" stroke-dasharray="5 4" marker-end="url(#arr5)"/>
+      <text x="452" y="158" fill="#7ee7bd" font-size="11.5">产出更高质量的新信号 ↺</text>
+    </g>
+  </svg>
+  </div>
+
+  <h3>系统评估基准</h3>
+  <div class="grid g2">
+    <div class="card">
+      <b>🏅 策略质量评分（六维加权，ABCD 等级）</b>
+      <div class="bar-row"><span class="bar-label">收益能力</span><div class="bar-track"><div class="bar-fill gold" style="width:100%"></div></div><span class="bar-val">25%</span></div>
+      <div class="bar-row"><span class="bar-label">风险控制</span><div class="bar-track"><div class="bar-fill gold" style="width:100%"></div></div><span class="bar-val">25%</span></div>
+      <div class="bar-row"><span class="bar-label">胜率质量</span><div class="bar-track"><div class="bar-fill gold" style="width:60%"></div></div><span class="bar-val">15%</span></div>
+      <div class="bar-row"><span class="bar-label">稳健性</span><div class="bar-track"><div class="bar-fill gold" style="width:60%"></div></div><span class="bar-val">15%</span></div>
+      <div class="bar-row"><span class="bar-label">成本效率</span><div class="bar-track"><div class="bar-fill gold" style="width:40%"></div></div><span class="bar-val">10%</span></div>
+      <div class="bar-row"><span class="bar-label">一致性</span><div class="bar-track"><div class="bar-fill gold" style="width:40%"></div></div><span class="bar-val">10%</span></div>
+    </div>
+    <div class="card">
+      <b>🔬 LLM 分析质量评估（五维规则引擎）</b>
+      <p>数据准确性（与源数据交叉验证）· 逻辑一致性 · 完整性（技术/基本/风险）· 可操作性（入场/止损/目标价）· 风险披露。</p>
+      <p style="color:#eba7a7"><b>幻觉检测：</b>报告数值与上下文实际数据比对，发现捏造数据即 <code>blockSignal=true</code>，信号跳过落库。</p>
+    </div>
+  </div>
+
+  <h3>L4 自主交易纸面闭环</h3>
+  <p>系统在约束内可完成：<b>生成/优化 → 质量门晋升 → 信号纸面执行 → 复盘降级/写回 → 因子周进化</b>。所有自动执行开关默认关闭，仅纸面下单，绝不触达实盘。</p>
+  <div class="tbl-wrap"><table>
+    <tr><th>组件</th><th>职责</th></tr>
+    <tr><td><code>StrategyPromotionGate</code></td><td>TESTING→PUBLISHED 质量门（Grade + Walk-Forward 验证）</td></tr>
+    <tr><td><code>TradingRiskGuard</code></td><td>熔断：组合回撤 ≥15%、日亏损 ≥5% 自动停止</td></tr>
+    <tr><td><code>SignalToPortfolioExecutor</code></td><td>信号 → 仓位 → 纸面买卖（PaperOrderExecutionAdapter）</td></tr>
+    <tr><td><code>StrategyRefineLoop</code></td><td>生成 → 回测 → 改写 的自动优化循环</td></tr>
+    <tr><td><code>FactorEvolutionScheduler</code></td><td>因子周进化调度（默认每周一 20:00）</td></tr>
+  </table></div>
+  <div class="note green"><b>安全设计：</b><code>AUTONOMY_ENABLED</code> 总开关默认 false；自动执行、自动晋升默认关闭；运行时可通过 <code>POST /api/v1/autonomy/halt</code> 一键熔断，或经 AI 对话说「熔断」直接触发。</div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 05 策略系统 ================= -->
+<section id="strategy" class="wrap">
+  <div class="sec-head"><span class="sec-no">05</span><h2>策略系统详解</h2></div>
+  <p class="sec-sub">YAML 配置驱动 · 四维分类 · 三种引擎能力 · 19 个内置策略。</p>
+
+  <h3>策略四维分类</h3>
+  <div class="grid g4">
+    <div class="card" style="border-top:3px solid var(--blue)"><b>📈 技术面 technical</b><p>基于价格、成交量、技术指标的量化条件。<span class="badge b-blue">10 个策略</span></p></div>
+    <div class="card" style="border-top:3px solid var(--green)"><b>📊 基本面 fundamental</b><p>基于财务数据、估值指标的价值筛选。<span class="badge b-green">5 个策略</span></p></div>
+    <div class="card" style="border-top:3px solid var(--purple)"><b>🌡️ 情绪面 sentiment</b><p>基于市场情绪、资金流向、龙头效应。<span class="badge b-purple">3 个策略</span></p></div>
+    <div class="card" style="border-top:3px solid var(--gold)"><b>⚡ 事件驱动 event</b><p>基于公司事件、行业事件、宏观政策。<span class="badge b-gold">1 个策略</span></p></div>
+  </div>
+
+  <h3>内置策略全景（19 个）</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>分类</th><th>策略 ID</th><th>名称</th><th style="text-align:center">backtest</th><th style="text-align:center">scoring</th><th style="text-align:center">screening</th></tr>
+    <tr><td rowspan="10"><span class="badge b-blue">技术面</span></td><td><code>ma_golden_cross</code></td><td>均线金叉</td><td style="text-align:center">✓</td><td></td><td></td></tr>
+    <tr><td><code>volume_breakout</code></td><td>量价突破</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>bull_trend</code></td><td>强势趋势</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>shrink_pullback</code></td><td>缩量回调</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>box_oscillation</code></td><td>箱体震荡</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>wave_theory</code></td><td>波浪理论</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>chan_theory</code></td><td>缠论</td><td></td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>bottom_volume</code></td><td>底部放量</td><td></td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>one_yang_three_yin</code></td><td>一阳穿三线</td><td></td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>momentum</code></td><td>动量策略</td><td></td><td></td><td style="text-align:center">✓</td></tr>
+    <tr><td rowspan="5"><span class="badge b-green">基本面</span></td><td><code>growth_quality</code></td><td>成长质量</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>expectation_repricing</code></td><td>预期重估</td><td></td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>dual_low</code></td><td>双低策略</td><td></td><td></td><td style="text-align:center">✓</td></tr>
+    <tr><td><code>value_growth</code></td><td>价值成长</td><td></td><td></td><td style="text-align:center">✓</td></tr>
+    <tr><td><code>dividend</code></td><td>高股息</td><td></td><td></td><td style="text-align:center">✓</td></tr>
+    <tr><td rowspan="3"><span class="badge b-purple">情绪面</span></td><td><code>dragon_head</code></td><td>龙头效应</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>emotion_cycle</code></td><td>情绪周期</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><code>hot_theme</code></td><td>热门主题</td><td></td><td style="text-align:center">✓</td><td></td></tr>
+    <tr><td><span class="badge b-gold">事件驱动</span></td><td><code>event_driven</code></td><td>事件驱动</td><td style="text-align:center">✓</td><td style="text-align:center">✓</td><td></td></tr>
+  </table></div>
+
+  <h3>三种引擎能力</h3>
+  <div class="grid g3">
+    <div class="card"><b>⏪ BacktestSignalEngine</b><p>历史 K 线回测，逐日生成买卖信号序列（返回 1/0/-1）。</p></div>
+    <div class="card"><b>🎯 CompositeScoringEngine</b><p>综合分析时对策略命中情况加权评分，输出 0-100 综合总分。</p></div>
+    <div class="card"><b>🔍 ScreeningScoreEngine</b><p>被 AlphaSift 调用，对全市场股票逐一打分排序取 Top N。</p></div>
+  </div>
+
+  <h3>策略 YAML 定义示例（均线金叉）</h3>
+  <pre><code><span class="k">id</span>: <span class="s">ma_golden_cross</span>
+<span class="k">name</span>: <span class="s">均线金叉策略</span>
+<span class="k">category</span>: <span class="s">technical</span>
+
+<span class="c"># 回测配置块</span>
+<span class="k">backtest</span>:
+  <span class="k">position_size</span>: <span class="n">0.95</span>          <span class="c"># 仓位比例（留 5% 现金作手续费缓冲）</span>
+  <span class="k">entry_conditions</span>:             <span class="c"># 全部满足则买入</span>
+    - <span class="k">type</span>: <span class="s">ma_cross</span>
+      <span class="k">fast</span>: <span class="n">5</span>
+      <span class="k">slow</span>: <span class="n">20</span>
+      <span class="k">direction</span>: <span class="s">golden</span>
+  <span class="k">exit_conditions</span>:              <span class="c"># 任一满足则卖出</span>
+    - <span class="k">type</span>: <span class="s">ma_cross</span>
+      <span class="k">direction</span>: <span class="s">dead</span>
+    - <span class="k">type</span>: <span class="s">stop_loss</span>
+      <span class="k">pct</span>: <span class="n">0.07</span>                  <span class="c"># 7% 止损</span>
+
+<span class="c"># 评分配置块 / 选股配置块（conditions + weight 加权）</span>
+<span class="k">scoring</span>:
+  <span class="k">conditions</span>:
+    - <span class="k">type</span>: <span class="s">ma_cross</span>
+      <span class="k">weight</span>: <span class="n">30</span></code></pre>
+
+  <h3>支持的回测条件类型</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>条件类型</th><th>说明</th><th>条件类型</th><th>说明</th></tr>
+    <tr><td><code>ma_cross</code></td><td>均线交叉（金叉/死叉）</td><td><code>rsi</code></td><td>RSI 超买超卖</td></tr>
+    <tr><td><code>ma_position</code></td><td>价格在均线上/下</td><td><code>macd_cross</code></td><td>MACD 金叉/死叉</td></tr>
+    <tr><td><code>volume_ratio</code></td><td>量比（当日量/N日均量）</td><td><code>stop_loss</code></td><td>固定百分比止损</td></tr>
+    <tr><td><code>price_change</code></td><td>涨跌幅范围</td><td><code>stop_profit</code></td><td>固定百分比止盈</td></tr>
+    <tr><td colspan="2"><code>holding_days</code> — 持仓天数触发</td><td colspan="2">加载：<code>StrategyCatalogLoader</code> 启动注册，支持 <code>reload()</code> 热更新</td></tr>
+  </table></div>
+
+  <h3>参数寻优三件套</h3>
+  <div class="steps">
+    <div class="step"><b>ParameterOptimizer</b><p>网格搜索参数空间（如 fast∈[3,5,10] × slow∈[20,30,60]），按夏普比率排序返回最优组合。</p></div>
+    <div class="step"><b>WalkForwardValidator</b><p>滚动「训练→测试」窗口前向验证，识别过拟合，确认样本外有效性。</p></div>
+    <div class="step"><b>MonteCarloSimulator</b><p>收益序列 1000 次随机重排，输出回撤/收益的 95%/5% 分位数区间，评估统计稳健性。</p></div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 06 回测系统 ================= -->
+<section id="backtest" class="wrap">
+  <div class="sec-head"><span class="sec-no">06</span><h2>回测系统详解</h2></div>
+  <p class="sec-sub">BacktestSimulator：专为 A 股约束设计的真实感仿真器。</p>
+
+  <figure>
+    <img src="images/backtest.png" alt="回测仿真概念图">
+    <figcaption>历史行情回放 + 权益曲线仿真 + 交易成本精算</figcaption>
+  </figure>
+
+  <h3>回测执行流程</h3>
+  <div class="steps">
+    <div class="step"><b>① 预热</b><p>warmupDays = 最长均线周期，保证指标有效</p></div>
+    <div class="step"><b>② 逐日推演</b><p>NEXT_OPEN 先执行上一根挂单 → 更新组合市值与回撤 → 信号引擎产出 1/0/-1</p></div>
+    <div class="step"><b>③ 约束成交</b><p>BarTradability 判断涨跌停/停牌/T+1，不可成交则计入诊断</p></div>
+    <div class="step"><b>④ 结算</b><p>结束强制平仓，finalizeMetrics 计算全部绩效指标</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <b>🗓️ NEXT_OPEN 模式（推荐）</b>
+      <p>信号触发后次日开盘成交。贴近 A 股现实：T+1 限制、开盘跳空使买卖价更真实。</p>
+    </div>
+    <div class="card">
+      <b>⚡ CLOSE 模式</b>
+      <p>信号当日收盘成交，用于测试策略收益的理论上限。</p>
+    </div>
+  </div>
+
+  <h3>交易成本模型（TradeCostCalculator）</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>费用项</th><th>公式</th><th>典型值</th></tr>
+    <tr><td>买入佣金</td><td>成交额 × commissionRate，不低于最低佣金</td><td>万分之三，最低 5 元</td></tr>
+    <tr><td>卖出佣金</td><td>同买入佣金</td><td>同上</td></tr>
+    <tr><td>印花税</td><td>成交额 × stampTaxRate（<b>仅卖出收取</b>）</td><td>千分之一</td></tr>
+    <tr><td>买入滑点</td><td>成交额 × slippageRate（成本增加）</td><td>可配置（默认万分之五）</td></tr>
+    <tr><td>卖出滑点</td><td>成交额 × slippageRate（收益减少）</td><td>同上</td></tr>
+  </table></div>
+
+  <h3>A 股特色约束</h3>
+  <div class="grid g3">
+    <div class="card"><b>🚦 涨跌停</b><p>买入遇涨停 → <code>skippedBuys++</code>；卖出遇跌停 → <code>skippedSells++</code>（阈值 ±9.9%）。</p></div>
+    <div class="card"><b>⏭️ T+1</b><p>当日买入不可当日卖出，冲突时 <code>t1BlockedSells++</code> 并顺延。</p></div>
+    <div class="card"><b>📦 整手交易</b><p>买入股数对 <code>lotSize=100</code> 取整，避免零股。</p></div>
+  </div>
+
+  <h3>绩效指标（finalizeMetrics）</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>指标</th><th>计算方式</th><th>指标</th><th>计算方式</th></tr>
+    <tr><td>总收益率</td><td>(期末-期初)/期初 × 100</td><td>夏普比率</td><td>(日均收益×252 − 3%) / (日波动×√252)</td></tr>
+    <tr><td>年化收益率</td><td>totalReturn × 252 / 交易日数</td><td>胜率</td><td>wins / completedTrades</td></tr>
+    <tr><td>最大回撤</td><td>逐日 (peak − current) / peak</td><td>盈亏比</td><td>grossProfit / grossLoss</td></tr>
+    <tr><td>Alpha</td><td>totalReturn − benchmarkReturn</td><td>平均持仓天数</td><td>totalHoldDays / completedTrades</td></tr>
+  </table></div>
+  <div class="note blue"><b>权益曲线：</b>每日记录 <code>BacktestDailySnapshot</code>（组合市值 / 基准市值 / 当日回撤 / 收盘价），经 <code>GET /backtest/{id}/visualization</code> 输出供前端绘图；完整诊断（佣金、印花税、滑点、跳过统计）写入 <code>result.diagnostics</code>。</div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 07 因子进化 ================= -->
+<section id="factor" class="wrap">
+  <div class="sec-head"><span class="sec-no">07</span><h2>因子自进化系统</h2></div>
+  <p class="sec-sub">基于论文 FactorMiner / AlphaAgentEvo：LLM 驱动的遗传算法自动发现、评估、进化量化因子——「AI 锻造 Alpha」。</p>
+
+  <figure>
+    <img src="images/factor-evolution.png" alt="因子遗传进化概念图">
+    <figcaption>因子 DNA：生成 → 评估 → 选择 → 变异 → 下一代，优质因子逐代晋升</figcaption>
+  </figure>
+
+  <h3>架构组件</h3>
+  <div class="grid g4">
+    <div class="card"><b>🎨 FactorGeneratorAgent</b><p>调用 LLM 根据历史经验生成因子表达式。</p></div>
+    <div class="card"><b>⚖️ FactorEvaluator</b><p>表达式执行引擎 + IC/IR 计算 + 多空回测验证。</p></div>
+    <div class="card"><b>🧠 FactorEvolutionMemory</b><p>持久化跨代进化记录，经验传承。</p></div>
+    <div class="card"><b>📦 EvolvableFactorLibrary</b><p>管理已验证的优质因子（生产因子库）。</p></div>
+  </div>
+
+  <h3>进化闭环流程</h3>
+  <div class="svg-box">
+  <svg viewBox="0 0 940 250" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <defs><marker id="arr6" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#a78bfa"/></marker></defs>
+    <g font-size="12.5" text-anchor="middle">
+      <rect x="30" y="30" width="150" height="56" rx="12" fill="#1b1430" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="105" y="54" fill="#c4b0f7" font-weight="700">第 0 代初始种群</text>
+      <text x="105" y="74" fill="#8fa2c0" font-size="11">LLM 生成因子表达式</text>
+      <rect x="230" y="30" width="150" height="56" rx="12" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="305" y="54" fill="#8fbaff" font-weight="700">评估</text>
+      <text x="305" y="74" fill="#8fa2c0" font-size="11">IC/IR + 多空回测</text>
+      <rect x="430" y="30" width="150" height="56" rx="12" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="505" y="54" fill="#c3d0e6" font-weight="700">选择 Top K</text>
+      <text x="505" y="74" fill="#8fa2c0" font-size="11">按综合评分排序</text>
+      <rect x="630" y="30" width="150" height="56" rx="12" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="705" y="54" fill="#7ee7bd" font-weight="700">晋升生产库</text>
+      <text x="705" y="74" fill="#8fa2c0" font-size="11">promoteValidated</text>
+      <rect x="810" y="30" width="110" height="56" rx="12" fill="#241d0a" stroke="#f5b942" stroke-width="1.5"/>
+      <text x="865" y="54" fill="#ffd166" font-weight="700">收敛检查</text>
+      <text x="865" y="74" fill="#8fa2c0" font-size="11">→ EvolutionResult</text>
+      <line x1="180" y1="58" x2="222" y2="58" stroke="#a78bfa" marker-end="url(#arr6)"/>
+      <line x1="380" y1="58" x2="422" y2="58" stroke="#a78bfa" marker-end="url(#arr6)"/>
+      <line x1="580" y1="58" x2="622" y2="58" stroke="#a78bfa" marker-end="url(#arr6)"/>
+      <line x1="780" y1="58" x2="802" y2="58" stroke="#a78bfa" marker-end="url(#arr6)"/>
+      <!-- 变异回环 -->
+      <rect x="330" y="150" width="360" height="66" rx="12" fill="#1b1430" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="510" y="176" fill="#c4b0f7" font-weight="700">未收敛 → 变异进入下一代</text>
+      <text x="510" y="198" fill="#8fa2c0" font-size="11.5">参数变异 · 因子杂交 · 逆向变异 · 表达式变异</text>
+      <path d="M 865 86 C 865 183, 760 183, 698 183" fill="none" stroke="#a78bfa" marker-end="url(#arr6)"/>
+      <path d="M 330 183 C 200 183, 105 150, 105 94" fill="none" stroke="#a78bfa" stroke-dasharray="5 4" marker-end="url(#arr6)"/>
+      <text x="150" y="165" fill="#c4b0f7" font-size="11">记忆注入（正向 few-shot + 失败模式负向约束）</text>
+    </g>
+  </svg>
+  </div>
+
+  <h3>因子生命周期</h3>
+  <div class="steps">
+    <div class="step"><b>CANDIDATE</b><p>候选因子提交评估</p></div>
+    <div class="step"><b>EVALUATING</b><p>IC/IR + 回测计算中</p></div>
+    <div class="step"><b>VALIDATED</b><p>通过阈值 → PROMOTED 晋升生产库</p></div>
+    <div class="step"><b>DEPRECATED</b><p>未通过 → 提取失败模式，作为下一代负向约束</p></div>
+  </div>
+
+  <h3>七种变异类型</h3>
+  <p style="margin-bottom:10px">
+    <span class="badge b-purple">INITIAL 初始生成</span>
+    <span class="badge b-blue">PARAM_MUTATE 参数变异</span>
+    <span class="badge b-blue">EXPR_MUTATE 表达式变异</span>
+    <span class="badge b-gold">CROSSBREED 因子杂交</span>
+    <span class="badge b-red">INVERSE_MUTATE 逆向变异</span>
+    <span class="badge b-green">CONDITION_SPECIALIZE 条件特化</span>
+    <span class="badge b-gray">COMBINE 因子组合</span>
+  </p>
+
+  <h3>评估指标</h3>
+  <div class="grid g2">
+    <div class="card">
+      <b>IC 信息系数</b>
+      <div class="formula">IC = Spearman( f<sub>t</sub> , r<sub>t+5</sub> )</div>
+      <p style="font-size:13px;color:var(--muted)">第 t 日因子值截面排序与 5 日后收益率截面排序的相关性；|IC| &gt; 0.03 认为有显著预测力。</p>
+    </div>
+    <div class="card">
+      <b>IR 信息比率</b>
+      <div class="formula">IR = IC均值 / IC标准差</div>
+      <p style="font-size:13px;color:var(--muted)">衡量因子预测力的稳定性；IR &gt; 0.5 认为因子质量良好。综合评分 = w₁×IC均值 + w₂×IR + w₃×夏普 + w₄×覆盖率 + w₅×换手率得分。</p>
+    </div>
+  </div>
+
+  <h3>因子表达式 DSL</h3>
+  <pre><code><span class="c"># 量价动量因子</span>
+momentum_vol_20d = (close - delay(close, <span class="n">20</span>)) / delay(close, <span class="n">20</span>) * volume_sum(<span class="n">20</span>)
+
+<span class="c"># 组合因子</span>
+quality_growth = roe * (<span class="n">1</span> - debt_ratio) / pe
+
+<span class="c"># 支持算子：价格(close/open/high/low) · 量额(volume/amount/turnover)</span>
+<span class="c"># 时序(delay/ts_mean/ts_std) · 截面(rank/normalize/winsorize) · 数学(+−×÷/log/abs/sign)</span></code></pre>
+
+  <div class="note"><b>双轨经验注入：</b>FactorEvolutionMemory 提供因子级经验（高分表达式 few-shot + 失败模式 + 变异成功率统计）；ExperienceMemory 提供信号级经验，经 FactorExperienceBridge 桥接——高胜率信号背后的因子获得额外奖励权重。</div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 08 数据模型 ================= -->
+<section id="data" class="wrap">
+  <div class="sec-head"><span class="sec-no">08</span><h2>数据模型与数据库</h2></div>
+  <p class="sec-sub">SQLite 嵌入式存储（~/.alphaforge/data/stock_analysis.db），schema.sql 幂等初始化，23 张表分 10 组。</p>
+
+  <h3>表结构总览</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>分组</th><th>表</th><th>分组</th><th>表</th></tr>
+    <tr><td rowspan="2"><span class="badge b-blue">分析系统</span></td><td><code>analysis_report</code> AI 分析报告</td><td rowspan="3"><span class="badge b-green">投资组合</span></td><td><code>portfolio_accounts / positions / trades</code></td></tr>
+    <tr><td><code>analysis_tasks</code> 异步分析任务</td><td><code>cash_ledger</code> · <code>corporate_actions</code></td></tr>
+    <tr><td rowspan="3"><span class="badge b-gold">决策信号</span></td><td><code>decision_signals</code> 交易信号</td><td rowspan="2"><span class="badge b-red">告警系统</span></td><td><code>alert_rules / triggers / notifications</code></td></tr>
+    <tr><td><code>decision_signal_outcomes</code> 事后评估</td><td rowspan="2"><span class="badge b-gray">其他</span></td><td><code>stock_daily_data</code> · <code>watchlist</code></td></tr>
+    <tr><td><code>decision_signal_feedback</code> 用户反馈</td><td><code>chat_sessions</code> · <code>chat_messages</code> · <code>llm_usage_daily</code></td></tr>
+    <tr><td><span class="badge b-purple">回测</span></td><td><code>backtest_records</code></td><td><span class="badge b-purple">因子进化</span></td><td><code>factor_candidates / evaluations / evolution_memory / failure_patterns / evolved_factor_registry</code></td></tr>
+  </table></div>
+
+  <h3>领域模型关系（ER）</h3>
+  <div class="svg-box">
+  <svg viewBox="0 0 940 330" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC',sans-serif">
+    <g font-size="12.5" text-anchor="middle">
+      <!-- 分析-信号链 -->
+      <rect x="30" y="30" width="170" height="46" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="115" y="58" fill="#8fbaff">AnalysisReport</text>
+      <rect x="270" y="30" width="170" height="46" rx="10" fill="#241d0a" stroke="#f5b942" stroke-width="1.5"/>
+      <text x="355" y="58" fill="#ffd166">DecisionSignal</text>
+      <rect x="510" y="30" width="200" height="46" rx="10" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="610" y="58" fill="#7ee7bd">SignalOutcome (5/10/20d)</text>
+      <rect x="750" y="30" width="160" height="46" rx="10" fill="#0d2419" stroke="#34d399" stroke-width="1.5"/>
+      <text x="830" y="58" fill="#7ee7bd">SignalFeedback</text>
+      <line x1="200" y1="53" x2="266" y2="53" stroke="#4f8ef7"/>
+      <text x="233" y="45" fill="#8fa2c0" font-size="11">1 : N</text>
+      <line x1="440" y1="53" x2="506" y2="53" stroke="#34d399"/>
+      <text x="473" y="45" fill="#8fa2c0" font-size="11">1 : N</text>
+      <line x1="710" y1="53" x2="746" y2="53" stroke="#34d399"/>
+      <text x="728" y="45" fill="#8fa2c0" font-size="11">1 : 1</text>
+      <!-- 组合链 -->
+      <rect x="30" y="130" width="170" height="46" rx="10" fill="#16233d" stroke="#4f8ef7" stroke-width="1.5"/>
+      <text x="115" y="158" fill="#8fbaff">PortfolioAccount</text>
+      <rect x="270" y="110" width="180" height="36" rx="9" fill="#0d1526" stroke="#31456e"/>
+      <text x="360" y="133" fill="#c3d0e6">PortfolioPosition (N)</text>
+      <rect x="270" y="152" width="180" height="36" rx="9" fill="#0d1526" stroke="#31456e"/>
+      <text x="360" y="175" fill="#c3d0e6">PortfolioTrade (N)</text>
+      <rect x="270" y="194" width="180" height="36" rx="9" fill="#0d1526" stroke="#31456e"/>
+      <text x="360" y="217" fill="#c3d0e6">CashLedger / CorpAction (N)</text>
+      <line x1="200" y1="140" x2="266" y2="128" stroke="#4f8ef7"/>
+      <line x1="200" y1="153" x2="266" y2="170" stroke="#4f8ef7"/>
+      <line x1="200" y1="166" x2="266" y2="212" stroke="#4f8ef7"/>
+      <!-- 告警链 -->
+      <rect x="510" y="130" width="130" height="46" rx="10" fill="#2a1517" stroke="#f87171" stroke-width="1.5"/>
+      <text x="575" y="158" fill="#f5a3a3">AlertRule</text>
+      <rect x="680" y="130" width="130" height="46" rx="10" fill="#2a1517" stroke="#f87171"/>
+      <text x="745" y="158" fill="#f5a3a3">AlertTrigger</text>
+      <line x1="640" y1="153" x2="676" y2="153" stroke="#f87171"/>
+      <text x="658" y="145" fill="#8fa2c0" font-size="11">1 : N</text>
+      <!-- 因子链 -->
+      <rect x="30" y="260" width="170" height="46" rx="10" fill="#1b1430" stroke="#a78bfa" stroke-width="1.5"/>
+      <text x="115" y="288" fill="#c4b0f7">FactorCandidate</text>
+      <rect x="270" y="260" width="180" height="46" rx="10" fill="#1b1430" stroke="#a78bfa"/>
+      <text x="360" y="288" fill="#c4b0f7">FactorEvaluation (1:1)</text>
+      <rect x="510" y="260" width="200" height="46" rx="10" fill="#1b1430" stroke="#a78bfa"/>
+      <text x="610" y="288" fill="#c4b0f7">EvolutionMemory / FailurePatterns</text>
+      <rect x="750" y="260" width="160" height="46" rx="10" fill="#0d2419" stroke="#34d399"/>
+      <text x="830" y="288" fill="#7ee7bd">EvolvedFactorRegistry</text>
+      <line x1="200" y1="283" x2="266" y2="283" stroke="#a78bfa"/>
+      <line x1="450" y1="283" x2="506" y2="283" stroke="#a78bfa"/>
+      <line x1="710" y1="283" x2="746" y2="283" stroke="#34d399"/>
+    </g>
+  </svg>
+  </div>
+
+  <h3>核心表结构亮点</h3>
+  <div class="grid g2">
+    <div class="card"><b>📄 analysis_report</b><p>综合评分、信号（strong_buy…strong_sell）、置信度、三路分析全文、Agent 模式、LLM 模型、耗时与 Token 用量——完整可回溯。</p></div>
+    <div class="card"><b>🎯 decision_signals</b><p>系统最核心输出：动作、置信度、评分、期限、入场价区间、止损/目标价、失效条件、证据链 JSON、计划质量与状态机。</p></div>
+  </div>
+
+  <h3>持久化架构取舍</h3>
+  <div class="note blue"><b>约定：</b>领域 Repository 接口直接标注 MyBatis <code>@Mapper</code>（端口即适配器，全库约 20 个），SQL 集中在 <code>mapper/*.xml</code>。代价（领域层编译期依赖 MyBatis 注解）被明确接受；约束：仅仓储接口可含 MyBatis 注解，领域实体与领域服务保持纯净；未来多实现/换技术栈时再升级为独立适配器层。</div>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 09 API ================= -->
+<section id="api" class="wrap">
+  <div class="sec-head"><span class="sec-no">09</span><h2>REST API 全景</h2></div>
+  <p class="sec-sub">JWT Bearer Token 认证（POST /api/v1/auth/login 获取）；错误由 GlobalExceptionHandler 统一处理。</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <b>📊 分析与行情 <code>/api/v1</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      POST /analysis/run　异步触发分析<br>
+      GET /analysis/tasks/{id}　任务进度<br>
+      GET /history　分析历史 / GET /history/{id} 详情<br>
+      GET /stocks/{code}/quote　实时行情<br>
+      GET /market/overview　大盘概况</p>
+    </div>
+    <div class="card">
+      <b>⏱️ 回测 <code>/api/v1/backtest</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      POST /run　运行回测<br>
+      GET /history　回测历史<br>
+      GET /{id}/visualization　权益曲线<br>
+      POST /parameter-optimize　参数优化<br>
+      POST /walk-forward · /monte-carlo · /portfolio</p>
+    </div>
+    <div class="card">
+      <b>🎯 信号与选股 <code>/api/v1/signal · /screening</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      GET /signal/list · /signal/{id}<br>
+      POST /signal/{id}/feedback　用户反馈<br>
+      POST /screening/run　全市场扫描选股<br>
+      GET /screening/tasks/{id}　任务状态</p>
+    </div>
+    <div class="card">
+      <b>💼 组合与模拟交易 <code>/portfolio · /paper-trading</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      GET /portfolio/accounts[/{id}]<br>
+      POST /paper-trading/accounts　创建账户<br>
+      POST .../{id}/buy · /sell　模拟买卖<br>
+      GET .../{id}/positions　持仓</p>
+    </div>
+    <div class="card">
+      <b>🔔 告警与对话 <code>/alert · /chat</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      POST/GET/PUT/DELETE /alert/rules<br>
+      GET /alert/triggers　触发历史<br>
+      POST /chat/sessions　创建会话<br>
+      POST/GET .../{sessionId}/messages　消息收发</p>
+    </div>
+    <div class="card">
+      <b>🚦 三灯决策与系统 <code>/decision · /system</code></b>
+      <p style="font-family:var(--mono);font-size:12px;color:#c3d0e6">
+      GET /decision/score　价/势/时三灯 + 七态结论 + ATR 交易计划<br>
+      GET/PUT /profile　用户风险画像<br>
+      GET /system/health · /usage · /dashboard<br>
+      GET /health/datasources　数据源主动体检</p>
+    </div>
+  </div>
+
+  <h3>买点三灯决策（特色能力）</h3>
+  <p><code>GET /api/v1/decision/score?code=600519&cost=150.0</code> 基于价/势/时三个正交维度输出三灯评估、七态行动结论（trend_entry / trend_only / wait_pullback / left_watch / avoid / reduce_risk / unrated）、ATR 交易计划（入场/止损/2R/3R/建议仓位）与结构化证据链；风险画像（保守×0.5 / 平衡×1.0 / 激进×1.5）影响建议仓位。</p>
+
+  <h3>L4 自主控制 API</h3>
+  <p style="font-family:var(--mono);font-size:12.5px;color:#c3d0e6">
+    GET /api/v1/autonomy/status　·　POST /api/v1/autonomy/halt | resume　·　POST /api/v1/autonomy/bind-paper-account
+  </p>
+
+  <h3>Actuator 监控端点</h3>
+  <p><code>/actuator/health</code> · <code>/actuator/info</code> · <code>/actuator/metrics</code> · <code>/actuator/prometheus</code>（需授权）。</p>
+</section>
+
+<div class="wrap"><div class="divider"></div></div>
+
+<!-- ================= 10 部署 ================= -->
+<section id="deploy" class="wrap">
+  <div class="sec-head"><span class="sec-no">10</span><h2>部署与运维</h2></div>
+  <p class="sec-sub">单 JAR 交付 · Docker 容器化 · 环境变量驱动配置，运行时数据统一存放于 ~/.alphaforge/。</p>
+
+  <h3>运行环境要求</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>项目</th><th>规格</th><th>项目</th><th>规格</th></tr>
+    <tr><td>Java</td><td>JDK 17+</td><td>磁盘</td><td>≥ 2GB（含行情缓存）</td></tr>
+    <tr><td>内存</td><td>最低 512MB，推荐 1GB+</td><td>网络</td><td>可访问 LLM API + A 股行情源</td></tr>
+  </table></div>
+
+  <h3>快速启动</h3>
+  <pre><code><span class="c"># 1. 配置环境变量（必填：LLM_API / LLM_API_KEY / LLM_MODEL / JWT_SECRET）</span>
+cp .env.example .env
+
+<span class="c"># 2. 本地启动</span>
+mvn clean package -DskipTests
+java -jar target/alphaforge-1.0.0.jar        <span class="c"># 或 mvn spring-boot:run</span>
+
+<span class="c"># 3. Docker 部署</span>
+docker build -t alphaforge:latest .
+docker run -d --name alphaforge -p <span class="n">8000</span>:<span class="n">8000</span> \
+  -v ~/.alphaforge:/root/.alphaforge --env-file .env alphaforge:latest
+<span class="c"># 或一键：docker-compose up -d（基础镜像 eclipse-temurin:17-jre-alpine）</span></code></pre>
+
+  <h3>关键环境变量</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>变量</th><th>默认</th><th>说明</th></tr>
+    <tr><td><code>SERVER_PORT / SERVER_HOST</code></td><td>8000 / 0.0.0.0</td><td>服务监听地址</td></tr>
+    <tr><td><code>AGENT_MODE</code></td><td>react</td><td>single / react / multi / debate</td></tr>
+    <tr><td><code>LLM_API_2 / LLM_API_KEY_2 / LLM_MODEL_2</code></td><td>—</td><td>第二 LLM 渠道，故障自动切换</td></tr>
+    <tr><td><code>DATA_PROVIDER_PRIMARY / FALLBACK</code></td><td>akshare / eastmoney</td><td>行情数据源优先级</td></tr>
+    <tr><td><code>MAIL_* / WEBHOOK_URL / BARK_URL</code></td><td>—</td><td>邮件 / 企业微信飞书 / iOS 通知</td></tr>
+    <tr><td><code>TELEGRAM_BOT_TOKEN / CHAT_ID</code></td><td>—</td><td>Telegram Bot 接入</td></tr>
+    <tr><td><code>AUTONOMY_*</code></td><td>全部关闭</td><td>L4 自主交易开关组（见 Agent 章节）</td></tr>
+  </table></div>
+
+  <h3>内置定时任务</h3>
+  <div class="steps">
+    <div class="step"><b>定时分析</b><p>工作日 15:30，对自选股批量执行分析</p></div>
+    <div class="step"><b>告警检查</b><p>每 5 分钟扫描告警规则触发情况</p></div>
+    <div class="step"><b>信号评估</b><p>每日 20:00，对 5/10/20 天前信号事后评估</p></div>
+    <div class="step"><b>因子周进化</b><p>每周一 20:00（可配 CRON）</p></div>
+  </div>
+
+  <h3>性能调优建议</h3>
+  <div class="tbl-wrap"><table>
+    <tr><th>场景</th><th>建议</th></tr>
+    <tr><td>LLM 调用慢</td><td>开启 LlmResponseCache（开发/测试环境），或换更快模型</td></tr>
+    <tr><td>全市场选股耗时长</td><td>缩小 AlphaSift 扫描 Universe 范围</td></tr>
+    <tr><td>回测数据拉取慢</td><td>预拉取并缓存历史行情，或缩短回测区间</td></tr>
+    <tr><td>内存占用高</td><td>减小 druid.max-active 与 Agent 并发线程数</td></tr>
+    <tr><td>因子进化耗时</td><td>减少评估 Universe 股票数，缩短 IC 前瞻天数</td></tr>
+  </table></div>
+
+  <div class="note green"><b>运行时数据目录：</b><code>~/.alphaforge/</code> —— data/stock_analysis.db（SQLite 主库）· cache/（行情缓存）· reports/（报告导出）· logs/（Logback 日志）。容器部署时挂载此目录即可持久化。</div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p style="font-size:16px;color:var(--gold)"><b>AlphaForge</b> · 锻造超额收益</p>
+    <p>本文档基于 wiki/ 目录下 9 篇技术文档自动汇编生成 · Java 17 · Spring Boot 3.2.5 · SQLite</p>
+    <p>内容覆盖：总览 · 分层架构 · 分析流水线 · Agent 系统 · 策略系统 · 回测系统 · 因子进化 · 数据模型 · API · 部署运维</p>
+  </div>
+</footer>
+</body>
+</html>

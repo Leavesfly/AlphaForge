@@ -552,6 +552,15 @@ CREATE TABLE IF NOT EXISTS custom_strategies (
     updated_at TIMESTAMP
 );
 
+-- 用户风险画像表：单行记录（id 恒为 1，UPSERT 语义），驱动建议仓位因人而异
+CREATE TABLE IF NOT EXISTS user_risk_profile (
+    id INTEGER PRIMARY KEY,                            -- 恒为 1
+    risk_tolerance VARCHAR(20) NOT NULL,               -- 档位: CONSERVATIVE/BALANCED/AGGRESSIVE
+    capital_amount DOUBLE,                             -- 总资金规模（万元），可空
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
 -- 策略版本历史表：记录每次策略修改的历史快照，支持回滚
 CREATE TABLE IF NOT EXISTS custom_strategy_versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

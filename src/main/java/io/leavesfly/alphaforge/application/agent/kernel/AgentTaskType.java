@@ -14,6 +14,9 @@ public enum AgentTaskType {
     /** 个股综合研判（技术面/基本面/舆情） */
     STOCK_ANALYSIS,
 
+    /** 买点三灯评分（价/势/时 → 七态行动结论，只读） */
+    DECISION_SCORE,
+
     /** 策略生成 */
     STRATEGY_GENERATE,
 

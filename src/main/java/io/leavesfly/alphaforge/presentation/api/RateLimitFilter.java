@@ -41,6 +41,8 @@ public class RateLimitFilter implements Filter {
         pathLimiters.put("/api/analysis", RateLimiter.create(5.0));
         pathLimiters.put("/api/analysis/run", RateLimiter.create(2.0));
         pathLimiters.put("/api/screening", RateLimiter.create(3.0));
+        // 数据源体检：真实拉取探测，force 触发限 5 秒 1 次（TTL 内命中缓存不受影响）
+        pathLimiters.put("/api/v1/health/datasources", RateLimiter.create(0.2));
     }
 
     @Override

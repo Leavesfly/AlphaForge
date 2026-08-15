@@ -4,10 +4,12 @@ import io.leavesfly.alphaforge.application.agent.LlmToolAdapter;
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.application.pipeline.DiagnosticContext;
 import io.leavesfly.alphaforge.application.service.AgentAnalysisService;
+import io.leavesfly.alphaforge.application.service.decision.DecisionScoreService;
 import io.leavesfly.alphaforge.application.strategy.generator.StrategyRefineLoop;
 import io.leavesfly.alphaforge.application.autonomy.SignalToPortfolioExecutor;
 import io.leavesfly.alphaforge.domain.model.entity.analysis.AnalysisResult;
 import io.leavesfly.alphaforge.domain.model.entity.signal.DecisionSignal;
+import io.leavesfly.alphaforge.domain.service.decision.LightsResult;
 import io.leavesfly.alphaforge.domain.service.port.LlmPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +50,12 @@ public class AgentKernel {
     /** 可选依赖：信号纸面执行器（未启用时为 null） */
     private final SignalToPortfolioExecutor signalToPortfolioExecutor;
 
+    /** 可选依赖：买点三灯评分服务（未启用时为 null） */
+    private final DecisionScoreService decisionScoreService;
+
+    /** 可选依赖：链式引导顾问（未启用时为 null，不影响主结果） */
+    private final NextStepAdvisor nextStepAdvisor;
+
     @Autowired
     public AgentKernel(Planner planner,
                        AgentGuardrail guardrail,
@@ -56,7 +64,9 @@ public class AgentKernel {
                        ReActAgent reactAgent,
                        LlmPort llmPort,
                        ObjectProvider<StrategyRefineLoop> strategyRefineLoop,
-                       ObjectProvider<SignalToPortfolioExecutor> signalToPortfolioExecutor) {
+                       ObjectProvider<SignalToPortfolioExecutor> signalToPortfolioExecutor,
+                       ObjectProvider<DecisionScoreService> decisionScoreService,
+                       ObjectProvider<NextStepAdvisor> nextStepAdvisor) {
         this.planner = planner;
         this.guardrail = guardrail;
         this.critic = critic;
@@ -65,6 +75,8 @@ public class AgentKernel {
         this.llmPort = llmPort;
         this.strategyRefineLoop = strategyRefineLoop.getIfAvailable();
         this.signalToPortfolioExecutor = signalToPortfolioExecutor.getIfAvailable();
+        this.decisionScoreService = decisionScoreService.getIfAvailable();
+        this.nextStepAdvisor = nextStepAdvisor.getIfAvailable();
     }
 
     /** 测试用构造器：无策略精修/信号执行等可选协作者 */
@@ -82,6 +94,8 @@ public class AgentKernel {
         this.llmPort = llmPort;
         this.strategyRefineLoop = null;
         this.signalToPortfolioExecutor = null;
+        this.decisionScoreService = null;
+        this.nextStepAdvisor = null;
     }
 
     /**
@@ -99,7 +113,35 @@ public class AgentKernel {
         log.info("[kernel] task={} plan={} steps", task.getType(), plan.getSteps().size());
 
         AgentResult draft = dispatch(task, context, plan, start);
-        return critic.review(context, draft);
+        AgentResult reviewed = critic.review(context, draft);
+        return appendNextSteps(reviewed);
+    }
+
+    /** 链式引导：Critic 评审之后统一填充建议（失败结果也给修复建议）；Advisor 异常不影响主结果 */
+    private AgentResult appendNextSteps(AgentResult result) {
+        if (nextStepAdvisor == null || result == null) {
+            return result;
+        }
+        try {
+            List<NextStep> steps = nextStepAdvisor.advise(result);
+            if (steps.isEmpty()) {
+                return result;
+            }
+            AgentResult.Builder builder = new AgentResult.Builder()
+                    .success(result.isSuccess())
+                    .taskType(result.getTaskType())
+                    .output(result.getOutput())
+                    .toolCallLog(result.getToolCallLog())
+                    .toolCalls(result.getToolCalls())
+                    .durationMs(result.getDurationMs())
+                    .error(result.getError())
+                    .nextSteps(steps);
+            result.getData().forEach(builder::data);
+            return builder.build();
+        } catch (Exception e) {
+            log.warn("[kernel] next_steps 生成失败（不影响主结果）: {}", e.getMessage());
+            return result;
+        }
     }
 
     // ==================== 分派 ====================
@@ -108,6 +150,7 @@ public class AgentKernel {
         try {
             return switch (task.getType()) {
                 case STOCK_ANALYSIS -> runStockAnalysis(task, context, plan, start);
+                case DECISION_SCORE -> runDecisionScore(task, context, plan, start);
                 case CHAT -> runChat(task, context, plan, start);
                 case STRATEGY_GENERATE -> runStrategyGenerate(task, context, plan, start);
                 case AUTONOMY_DECISION -> runAutonomyDecision(task, context, plan, start);
@@ -151,6 +194,45 @@ public class AgentKernel {
                 .data("diagnostics", diag.getRecords())
                 .durationMs(duration)
                 .build();
+    }
+
+    /** DECISION_SCORE：委托 DecisionScoreService 执行买点三灯评估（只读任务）。 */
+    private AgentResult runDecisionScore(AgentTask task, AgentContext context,
+                                         AgentPlan plan, long start) {
+        enforceGuardrail(task, plan);
+
+        if (decisionScoreService == null) {
+            return AgentResult.fail(task.getType(), "DecisionScoreService 未启用");
+        }
+        String stockCode = task.inputString("stockCode");
+        if (stockCode == null || stockCode.isBlank()) {
+            return AgentResult.fail(task.getType(), "缺少 stockCode");
+        }
+        Double cost = task.input("cost") instanceof Number n ? n.doubleValue() : null;
+
+        LightsResult result = decisionScoreService.score(stockCode.trim(), cost);
+        context.trace("decision_score done: verdict=" + result.getVerdict());
+
+        long duration = System.currentTimeMillis() - start;
+        return AgentResult.ok(task.getType())
+                .output(summarizeDecision(result))
+                .data("decisionResult", result.toMap())
+                .durationMs(duration)
+                .build();
+    }
+
+    /** 决策评分结果的规范摘要（三灯速览 + 结论 + 免责声明，供 Agent 转述） */
+    private String summarizeDecision(LightsResult result) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("%s %s 买点三灯：%s → %s%n", result.getStockCode(),
+                result.getStockName() != null ? result.getStockName() : "",
+                result.lightsSummary(), result.getVerdict().getCn()));
+        sb.append(result.getDecision().rule()).append('\n');
+        if (result.getPosition() != null) {
+            sb.append("持仓视角：").append(result.getPosition().get("advice")).append('\n');
+        }
+        sb.append("（三灯规则为纪律预设值，未经样本外验证；供决策参考，不构成投资建议）");
+        return sb.toString();
     }
 
     /** CHAT：复用 ReActAgent 工具循环；无工具调用时回退到普通对话。 */

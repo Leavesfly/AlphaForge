@@ -534,7 +534,43 @@ GET /api/v1/strategy/catalog
 
 ---
 
+## 买点三灯决策模块 `/api/v1/decision`
+
+### 买点三灯评估
+
+```http
+GET /api/v1/decision/score?code=600519&cost=150.0
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| code | string | 是 | 股票代码 |
+| cost | number | 否 | 持仓成本（手动覆盖；缺省时自动取登记持仓成本，均无则纯买点视角） |
+
+返回 `data` 含：`verdict`（七态：trend_entry/trend_only/wait_pullback/left_watch/avoid/reduce_risk/unrated）、`verdictCn`、`lights`（价/势/时三灯 color+reasons+detail）、`plan`（ATR 交易计划：入场/止损/2R/3R/建议仓位）、`position`（持仓联动视角，可空）、`evidence`（结构化证据链）、`next_steps`（链式引导建议：action/label/endpoint/reason）。
+
+估值数据不可用时价灯为灰灯（gray），结论仅基于势/时两维并明示；K 线不足 250 根返回 unrated。
+
+### 用户风险画像
+
+```http
+GET /api/v1/profile
+PUT /api/v1/profile   # body: {"riskTolerance": "BALANCED", "capitalAmount": 20.0}
+```
+
+riskTolerance 可选 CONSERVATIVE（乘数×0.5）/ BALANCED（×1.0）/ AGGRESSIVE（×1.5），影响三灯建议仓位；无记录时返回默认档并标注 `defaulted=true`。
+
+---
+
 ## 系统模块 `/api/v1/system`
+
+### 数据源主动体检
+
+```http
+GET /api/v1/health/datasources?force=false
+```
+
+逐源真实拉取探测，返回耗时/末根K线日期/错误分类（rate_limit/no_key/network/data_error）与归因（environment=环境问题，code=疑似代码问题）。结果带 TTL 缓存（默认 300s）；`force=true` 绕过缓存重新探测（限流保护：5 秒 1 次）。Loop 监控页内置同名卡片。
 
 ### 健康检查
 
