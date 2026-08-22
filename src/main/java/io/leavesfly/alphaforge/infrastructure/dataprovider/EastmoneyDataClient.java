@@ -106,6 +106,8 @@ public class EastmoneyDataClient {
                 result.add(d);
             }
             return result;
+        } catch (DataSourceUnavailableException e) {
+            throw e; // 传输层故障上抛，由故障切换器计入失败并熔断
         } catch (Exception e) {
             log.error("东财历史K线获取失败[{}]: {} - {}", sourceTag, stockCode, e.getMessage());
             return Collections.emptyList();
@@ -153,6 +155,8 @@ public class EastmoneyDataClient {
             quote.put("limit_down", data.path("f52").asDouble() / divisor);
             quote.put("float_market_cap", data.path("f117").asDouble());
             return quote;
+        } catch (DataSourceUnavailableException e) {
+            throw e; // 传输层故障上抛，由故障切换器计入失败并熔断
         } catch (Exception e) {
             log.error("东财实时行情失败[{}]: {}", sourceTag, e.getMessage());
             return Collections.emptyMap();
@@ -199,6 +203,8 @@ public class EastmoneyDataClient {
                 result.add(bar);
             }
             return result;
+        } catch (DataSourceUnavailableException e) {
+            throw e; // 传输层故障上抛，由故障切换器计入失败并熔断
         } catch (Exception e) {
             log.error("东财分钟K线获取失败[{}]: {} - {}", sourceTag, stockCode, e.getMessage());
             return Collections.emptyList();
@@ -207,14 +213,42 @@ public class EastmoneyDataClient {
 
     // ==================== 内部工具 ====================
 
-    private JsonNode get(String url) throws java.io.IOException {
+    /**
+     * 发起 GET 并解析 JSON。
+     *
+     * @return 解析后的 JSON；非 2xx（非 5xx/429）或空响应体时返回 {@code null} 表示无数据
+     * @throws DataSourceUnavailableException 传输层故障或源侧 5xx/429，需触发熔断与换源
+     */
+    private JsonNode get(String url) {
         Request request = new Request.Builder().url(url)
                 .header("User-Agent", UA)
                 .header("Referer", REFERER)
                 .build();
         try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful() || response.body() == null) return null;
+            if (!response.isSuccessful()) {
+                // 5xx 与 429 属源侧故障/限流，需触发熔断；其余非 2xx 视为无数据
+                int code = response.code();
+                if (code >= 500 || code == 429) {
+                    throw new DataSourceUnavailableException(
+                            "东财接口 HTTP " + code + ": " + hostOf(url));
+                }
+                return null;
+            }
+            if (response.body() == null) return null;
             return objectMapper.readTree(response.body().string());
+        } catch (java.io.IOException e) {
+            // 连接重置/超时/DNS 失败等传输层故障：上抛以便熔断，不得隐形降级为空结果
+            throw new DataSourceUnavailableException(
+                    "东财接口不可达 " + hostOf(url) + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** 仅取主机名用于日志/异常信息，避免把带参长 URL 写进日志 */
+    private static String hostOf(String url) {
+        try {
+            return java.net.URI.create(url).getHost();
+        } catch (Exception ignored) {
+            return url;
         }
     }
 

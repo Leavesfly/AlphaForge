@@ -42,24 +42,49 @@ public class TechnicalIndicatorCalculator {
     }
 
     /**
-     * RSI 指标核心算法（基于收盘价差，全局唯一实现）。
+     * RSI 指标根据回测口径返回：数据不足时降级为中性值 50。
      *
      * <p>供实例方法 {@link #rsi(double[], int)} 与需要静态调用的场景（如
-     * 回测条件求值、策略引擎）统一复用，避免 RSI 口径分叉。</p>
+     * 回测条件求值、策略引擎）使用——这些场景需要一个可直接参与比较的
+     * 数值，不区分“数据不足”与“确实中性”。</p>
+     *
+     * <p><b>口径差异提醒</b>：决策链（三灯评估）需要区分两者，数据不足必须
+     * 不下结论，因此改用 {@link #rsiOrNaN(double[], int)}。两个方法共用同一核心
+     * 算法，仅缺失值约定不同；请勿将二者合并。</p>
      *
      * @param closes 收盘价序列（按时间升序），使用最后 {@code period} 个区间
      * @param period 周期
      * @return RSI 值 [0,100]，数据不足返回中性值 50
      */
     public static double rsiFromCloses(double[] closes, int period) {
+        double rsi = rsiOrNaN(closes, period);
+        return Double.isNaN(rsi) ? 50 : rsi;
+    }
+
+    /**
+     * RSI 指标核心算法（全局唯一实现）—— 数据不足时返回 {@code NaN}。
+     *
+     * <p>供需要区分“无法计算”与“计算为中性”的调用方使用（如决策三灯），
+     * 调用方应以 {@code Double.isNaN} 守卫后再参与阈值判断。</p>
+     *
+     * <p>完全无波动的序列（涨跌幅均为 0，如停牌、一字板）返回中性值 50；
+     * 仅当区间内有涨无跌时才返回 100。</p>
+     *
+     * @param closes 收盘价序列（按时间升序），使用最后 {@code period} 个区间
+     * @param period 周期
+     * @return RSI 值 [0,100]；数据不足返回 {@code Double.NaN}
+     */
+    public static double rsiOrNaN(double[] closes, int period) {
         int len = closes.length;
-        if (len <= period) return 50;
+        if (len <= period) return Double.NaN;
         double gainSum = 0, lossSum = 0;
         for (int i = len - period; i < len; i++) {
             double change = closes[i] - closes[i - 1];
             if (change > 0) gainSum += change;
             else lossSum += Math.abs(change);
         }
+        // 完全无波动：无涨也无跌，属中性而非超买
+        if (gainSum == 0 && lossSum == 0) return 50;
         if (lossSum == 0) return 100;
         double rs = gainSum / lossSum;
         return 100 - (100 / (1 + rs));

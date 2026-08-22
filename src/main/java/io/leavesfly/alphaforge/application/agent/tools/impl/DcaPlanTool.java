@@ -1,8 +1,11 @@
 package io.leavesfly.alphaforge.application.agent.tools.impl;
 
+import io.leavesfly.alphaforge.application.agent.skills.SkillBridgeEnabledCondition;
 import io.leavesfly.alphaforge.application.agent.skills.SkillCliBridge;
 import io.leavesfly.alphaforge.application.agent.skills.SkillResult;
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +19,8 @@ import java.util.Map;
  * <p>现金流账本 + XIRR 真实年化，支持定期定额/均线智能/超跌加码/价值平均等模式，
  * 并与一次性投入基准对比，补齐 AlphaForge 原生缺失的定投能力。</p>
  */
+@Component
+@Conditional(SkillBridgeEnabledCondition.class)
 public class DcaPlanTool implements Tool {
 
     private final SkillCliBridge bridge;

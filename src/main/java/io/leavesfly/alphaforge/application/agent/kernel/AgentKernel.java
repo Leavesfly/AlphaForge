@@ -2,8 +2,7 @@ package io.leavesfly.alphaforge.application.agent.kernel;
 
 import io.leavesfly.alphaforge.application.agent.LlmToolAdapter;
 import io.leavesfly.alphaforge.application.agent.ReActAgent;
-import io.leavesfly.alphaforge.application.pipeline.DiagnosticContext;
-import io.leavesfly.alphaforge.application.service.AgentAnalysisService;
+import io.leavesfly.alphaforge.application.diagnostics.DiagnosticContext;
 import io.leavesfly.alphaforge.application.service.decision.DecisionScoreService;
 import io.leavesfly.alphaforge.application.strategy.generator.StrategyRefineLoop;
 import io.leavesfly.alphaforge.application.autonomy.SignalToPortfolioExecutor;
@@ -40,7 +39,7 @@ public class AgentKernel {
     private final Planner planner;
     private final AgentGuardrail guardrail;
     private final Critic critic;
-    private final AgentAnalysisService agentAnalysisService;
+    private final StockAnalysisCapability agentAnalysisService;
     private final ReActAgent reactAgent;
     private final LlmPort llmPort;
 
@@ -60,7 +59,7 @@ public class AgentKernel {
     public AgentKernel(Planner planner,
                        AgentGuardrail guardrail,
                        Critic critic,
-                       AgentAnalysisService agentAnalysisService,
+                       StockAnalysisCapability agentAnalysisService,
                        ReActAgent reactAgent,
                        LlmPort llmPort,
                        ObjectProvider<StrategyRefineLoop> strategyRefineLoop,
@@ -83,7 +82,7 @@ public class AgentKernel {
     public AgentKernel(Planner planner,
                        AgentGuardrail guardrail,
                        Critic critic,
-                       AgentAnalysisService agentAnalysisService,
+                       StockAnalysisCapability agentAnalysisService,
                        ReActAgent reactAgent,
                        LlmPort llmPort) {
         this.planner = planner;

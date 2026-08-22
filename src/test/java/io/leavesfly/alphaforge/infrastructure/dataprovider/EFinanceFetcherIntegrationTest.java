@@ -4,6 +4,7 @@ package io.leavesfly.alphaforge.infrastructure.dataprovider;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,9 @@ import static org.mockito.Mockito.mock;
  * 直接调用东方财富 HTTP API，验证返回数据的真实性与结构正确性。
  * 测试股票: 600519（贵州茅台）— A股蓝筹，数据覆盖完整。
  *
- * 注意: 此测试需要网络连接，东财 API 偶尔会风控（返回空数据），
- * 测试中使用 assumeTrue 做前置判断，数据为空时跳过而非失败。
+ * 注意: 此测试需要网络连接，东财 API 偶尔会风控（返回空数据）或主机不可达，
+ * 测试使用 {@link Assumptions} 做前置判断，数据不可得时跳过（SKIPPED）而非失败，
+ * 使“上游不可用”不会误报为代码缺陷；但一旦拿到数据，后续结构断言仍严格执行。
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @DisplayName("EFinanceFetcher 真实数据集成测试")
@@ -41,6 +43,22 @@ class EFinanceFetcherIntegrationTest {
                 new io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient(http, mapper));
     }
 
+    /**
+     * 取历史 K 线；主机不可达时将本例标记为跳过而非失败。
+     *
+     * <p>传输层故障现已由 {@code EastmoneyDataClient} 以
+     * {@link DataSourceUnavailableException} 上抛（为了让熔断器生效），
+     * 集成测试直调 fetcher 时需自行区分“源挂了”与“确实无数据”。</p>
+     */
+    private List<StockDailyData> fetchHistoryOrSkip(String code, LocalDate start, LocalDate end) {
+        try {
+            return fetcher.getHistoryData(code, start, end);
+        } catch (DataSourceUnavailableException e) {
+            Assumptions.abort("东财 K 线主机不可达，跳过: " + e.getMessage());
+            return List.of(); // 不可达，abort 已抛异常
+        }
+    }
+
     // ========== 行情层 ==========
 
     @Nested
@@ -53,10 +71,11 @@ class EFinanceFetcherIntegrationTest {
             LocalDate end = LocalDate.now();
             LocalDate start = end.minusDays(30);
 
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, start, end);
+            List<StockDailyData> data = fetchHistoryOrSkip(STOCK_CODE, start, end);
 
             assertNotNull(data);
-            assertFalse(data.isEmpty(), "应返回至少一条K线数据");
+            Assumptions.assumeFalse(data.isEmpty(),
+                    "东财未返回 K 线（风控或无数据），跳过结构断言");
 
             StockDailyData first = data.get(0);
             assertNotNull(first.getTradeDate(), "交易日期不应为空");
@@ -84,7 +103,7 @@ class EFinanceFetcherIntegrationTest {
         @DisplayName("OHLC数据应满足一致性: high >= max(open,close) >= min(open,close) >= low")
         void ohlcShouldBeConsistent() {
             LocalDate end = LocalDate.now();
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, end.minusDays(10), end);
+            List<StockDailyData> data = fetchHistoryOrSkip(STOCK_CODE, end.minusDays(10), end);
             if (data == null || data.isEmpty()) return;
 
             for (StockDailyData d : data) {
@@ -108,10 +127,17 @@ class EFinanceFetcherIntegrationTest {
         @Test
         @DisplayName("应获取贵州茅台实时行情")
         void shouldGetRealtimeQuote() {
-            Map<String, Object> quote = fetcher.getRealtimeQuote(STOCK_CODE);
+            Map<String, Object> quote;
+            try {
+                quote = fetcher.getRealtimeQuote(STOCK_CODE);
+            } catch (DataSourceUnavailableException e) {
+                Assumptions.abort("东财实时行情主机不可达，跳过: " + e.getMessage());
+                return;
+            }
 
             assertNotNull(quote);
-            assertFalse(quote.isEmpty(), "实时行情不应为空");
+            Assumptions.assumeFalse(quote.isEmpty(),
+                    "东财返回空行情（风控），跳过结构断言");
 
             assertNotNull(quote.get("stock_code"), "股票代码不应为空");
             assertNotNull(quote.get("current_price"), "当前价不应为空");

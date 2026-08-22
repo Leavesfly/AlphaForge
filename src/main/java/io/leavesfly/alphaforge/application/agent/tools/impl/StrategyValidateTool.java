@@ -1,8 +1,11 @@
 package io.leavesfly.alphaforge.application.agent.tools.impl;
 
+import io.leavesfly.alphaforge.application.agent.skills.SkillBridgeEnabledCondition;
 import io.leavesfly.alphaforge.application.agent.skills.SkillCliBridge;
 import io.leavesfly.alphaforge.application.agent.skills.SkillResult;
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +19,8 @@ import java.util.Map;
  * <p>走步样本外（walk-forward OOS）+ PBO 过拟合概率（CSCV），补齐 AlphaForge
  * 原生 WalkForwardValidator 缺失的过拟合统计诊断；与策略晋升质量门理念一致。</p>
  */
+@Component
+@Conditional(SkillBridgeEnabledCondition.class)
 public class StrategyValidateTool implements Tool {
 
     private final SkillCliBridge bridge;

@@ -4,6 +4,7 @@ import io.leavesfly.alphaforge.application.agent.kernel.AgentKernel;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentResult;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentTask;
 import io.leavesfly.alphaforge.application.agent.kernel.AgentTaskType;
+import io.leavesfly.alphaforge.application.diagnostics.DiagnosticContext;
 import io.leavesfly.alphaforge.config.LlmConfig;
 import io.leavesfly.alphaforge.config.AppConfig;
 
@@ -466,5 +467,5 @@ public class StockAnalysisPipeline {
         return analyzeStock(stockCode, loadDailyMarketContext(), dryRun, debug);
     }
 
-    // DiagnosticContext 已提取为独立类: io.leavesfly.alphaforge.application.pipeline.DiagnosticContext
+    // DiagnosticContext 已提取为独立共享类: io.leavesfly.alphaforge.application.diagnostics.DiagnosticContext
 }

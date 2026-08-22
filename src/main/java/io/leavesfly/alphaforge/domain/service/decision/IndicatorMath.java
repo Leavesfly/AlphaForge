@@ -1,17 +1,22 @@
 package io.leavesfly.alphaforge.domain.service.decision;
 
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
+import io.leavesfly.alphaforge.domain.service.TechnicalIndicatorCalculator;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 三灯引擎自含指标计算 — 纯静态函数，无外部依赖。
+ * 三灯引擎自含指标计算 — 纯静态函数，无 IO 与框架依赖。
  *
  * <p>domain 层不依赖 application 层（如 BarPatternConditions），因此引擎自带
  * 与 skill 口径一致的指标实现：ATR(14) 含当日 TR 均值、Wilder RSI(14)、
  * Kaufman 效率比 ER(20)、滚动年化波动率（60 日，√252）。</p>
+ *
+ * <p>其中 RSI 委派给同层的 {@link io.leavesfly.alphaforge.domain.service.TechnicalIndicatorCalculator}
+ * 核心算法，避免口径分叉；本类对外保持“数据不足返回 NaN”的约定，供
+ * 决策链以 {@code isNaN} 守卫后再下结论。</p>
  */
 public final class IndicatorMath {
 
@@ -79,23 +84,11 @@ public final class IndicatorMath {
         if (data.size() < period + 1) {
             return Double.NaN;
         }
-        double avgGain = 0;
-        double avgLoss = 0;
-        for (int i = data.size() - period; i < data.size(); i++) {
-            double diff = data.get(i).getClosePrice() - data.get(i - 1).getClosePrice();
-            if (diff >= 0) {
-                avgGain += diff;
-            } else {
-                avgLoss -= diff;
-            }
+        double[] closes = new double[data.size()];
+        for (int i = 0; i < data.size(); i++) {
+            closes[i] = data.get(i).getClosePrice();
         }
-        avgGain /= period;
-        avgLoss /= period;
-        if (avgLoss == 0) {
-            return avgGain == 0 ? 50.0 : 100.0;
-        }
-        double rs = avgGain / avgLoss;
-        return 100.0 - 100.0 / (1.0 + rs);
+        return TechnicalIndicatorCalculator.rsiOrNaN(closes, period);
     }
 
     /** ATR（近 window 日 TR 简单均值，含当日；无高低价时退化为收盘价差） */

@@ -4,9 +4,10 @@ import io.leavesfly.alphaforge.application.agent.ReActAgent;
 import io.leavesfly.alphaforge.application.agent.MultiAgentOrchestrator;
 import io.leavesfly.alphaforge.application.agent.debate.AgentDebateOrchestrator;
 import io.leavesfly.alphaforge.application.agent.debate.DebateResult;
+import io.leavesfly.alphaforge.application.agent.kernel.StockAnalysisCapability;
 import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQuality;
 import io.leavesfly.alphaforge.application.evaluation.LlmAnalysisQualityAssessor;
-import io.leavesfly.alphaforge.application.pipeline.DiagnosticContext;
+import io.leavesfly.alphaforge.application.diagnostics.DiagnosticContext;
 import io.leavesfly.alphaforge.application.prompt.PromptManager;
 import io.leavesfly.alphaforge.application.service.feedback.SignalLearningService;
 import io.leavesfly.alphaforge.application.service.signal.SignalExtractionService;
@@ -32,9 +33,10 @@ import java.util.Map;
  * 设计原则：
  * - Pipeline 只负责编排，不关心具体分析实现
  * - 降级链 debate → multi → react → llm 全部封装在此类中
+ * - 实现内核侧定义的 {@link StockAnalysisCapability}，使认知轨内核依赖抽象而非本类
  */
 @Service
-public class AgentAnalysisService {
+public class AgentAnalysisService implements StockAnalysisCapability {
 
     private static final Logger log = LoggerFactory.getLogger(AgentAnalysisService.class);
 
@@ -96,6 +98,7 @@ public class AgentAnalysisService {
      * @param diag      诊断上下文（可为 null）
      * @return 分析结果
      */
+    @Override
     public AnalysisResult analyze(String stockCode, String stockName, Map<String, Object> context, DiagnosticContext diag) {
 
         String agentMode = schedulerAuthConfig.getAgentMode();

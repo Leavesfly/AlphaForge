@@ -4,6 +4,7 @@ package io.leavesfly.alphaforge.infrastructure.dataprovider;
 import io.leavesfly.alphaforge.domain.model.entity.market.StockDailyData;
 import io.leavesfly.alphaforge.domain.service.TradingCalendar;
 import io.leavesfly.alphaforge.infrastructure.dataprovider.impl.EFinanceFetcher;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -42,13 +43,29 @@ class DataQualityValidatorIntegrationTest {
                 new io.leavesfly.alphaforge.infrastructure.dataprovider.EastmoneyDataClient(http, mapper));
     }
 
+    /**
+     * 取历史 K 线；上游主机不可达时将本例标记为跳过而非失败。
+     *
+     * <p>传输层故障由 {@code EastmoneyDataClient} 以
+     * {@link DataSourceUnavailableException} 上抛（以便生产侧熔断器生效），
+     * 本类直调 fetcher，故需自行区分“源挂了”与“确实无数据”。</p>
+     */
+    private List<StockDailyData> fetchHistoryOrSkip(LocalDate start, LocalDate end) {
+        try {
+            return fetcher.getHistoryData(STOCK_CODE, start, end);
+        } catch (DataSourceUnavailableException e) {
+            Assumptions.abort("东财 K 线主机不可达，跳过: " + e.getMessage());
+            return List.of(); // 不可达，abort 已抛异常
+        }
+    }
+
     @Test
     @DisplayName("真实K线数据应通过质量校验或仅有少量问题")
     void realDataShouldPassQualityCheck() {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(30);
 
-        List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, start, end);
+        List<StockDailyData> data = fetchHistoryOrSkip(start, end);
         if (data == null || data.isEmpty()) {
             System.out.println("⚠ 无法获取K线数据（可能网络问题），跳过");
             return;
@@ -83,7 +100,7 @@ class DataQualityValidatorIntegrationTest {
         @DisplayName("真实数据的OHLC应满足 high >= max(open,close) >= low")
         void realDataOHLCShouldBeConsistent() {
             LocalDate end = LocalDate.now();
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, end.minusDays(10), end);
+            List<StockDailyData> data = fetchHistoryOrSkip(end.minusDays(10), end);
             if (data == null || data.isEmpty()) return;
 
             int violations = 0;
@@ -118,7 +135,7 @@ class DataQualityValidatorIntegrationTest {
             LocalDate end = LocalDate.now();
             LocalDate start = end.minusDays(20);
 
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, start, end);
+            List<StockDailyData> data = fetchHistoryOrSkip(start, end);
             if (data == null || data.isEmpty()) return;
 
             DataQualityValidator.ValidationResult result = validator.validate(data, STOCK_CODE);
@@ -149,7 +166,7 @@ class DataQualityValidatorIntegrationTest {
         @DisplayName("真实数据不应有零价或负价")
         void realDataShouldNotHaveZeroPrice() {
             LocalDate end = LocalDate.now();
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, end.minusDays(10), end);
+            List<StockDailyData> data = fetchHistoryOrSkip(end.minusDays(10), end);
             if (data == null || data.isEmpty()) return;
 
             for (StockDailyData d : data) {
@@ -177,7 +194,7 @@ class DataQualityValidatorIntegrationTest {
         @DisplayName("真实数据涨跌幅应在合理范围内（A股±22%）")
         void realDataChangePctShouldBeReasonable() {
             LocalDate end = LocalDate.now();
-            List<StockDailyData> data = fetcher.getHistoryData(STOCK_CODE, end.minusDays(30), end);
+            List<StockDailyData> data = fetchHistoryOrSkip(end.minusDays(30), end);
             if (data == null || data.size() < 2) return;
 
             int anomalies = 0;

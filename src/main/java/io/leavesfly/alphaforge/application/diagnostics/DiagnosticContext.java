@@ -1,12 +1,15 @@
-package io.leavesfly.alphaforge.application.pipeline;
+package io.leavesfly.alphaforge.application.diagnostics;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 诊断上下文 — 记录分析流程每步执行情况
+ * 诊断上下文 — 记录分析流程每步执行情况。
  *
- * 从 StockAnalysisPipeline 提取为独立类，供 Pipeline 和 AgentAnalysisService 共享。
+ * <p>由 StockAnalysisPipeline（功能轨）、AgentKernel（认知轨）与 AgentAnalysisService
+ * 三方共享。置于无外部依赖的独立共享包，使三者依赖同一叶子类型而非互相引用，
+ * 避免 pipeline ↔ agent.kernel ↔ service 形成包环（与 application.simulation
+ * 打破 strategy ↔ backtest 环的做法一致）。</p>
  */
 public class DiagnosticContext {
     private final String stockCode;

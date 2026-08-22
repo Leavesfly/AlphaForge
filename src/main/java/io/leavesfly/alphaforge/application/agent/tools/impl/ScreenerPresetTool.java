@@ -1,8 +1,11 @@
 package io.leavesfly.alphaforge.application.agent.tools.impl;
 
+import io.leavesfly.alphaforge.application.agent.skills.SkillBridgeEnabledCondition;
 import io.leavesfly.alphaforge.application.agent.skills.SkillCliBridge;
 import io.leavesfly.alphaforge.application.agent.skills.SkillResult;
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +19,8 @@ import java.util.Map;
  * <p>八套经典投资方法论预设（十倍股/百倍股/猛兽股/打折高质量/超级强势股/费雪/
  * 纳维里尔/红利左侧），补齐 AlphaForge AlphaSift 通用打分之外的"方法论即产品"筛选。</p>
  */
+@Component
+@Conditional(SkillBridgeEnabledCondition.class)
 public class ScreenerPresetTool implements Tool {
 
     /** 转述候选时的最大条数 */

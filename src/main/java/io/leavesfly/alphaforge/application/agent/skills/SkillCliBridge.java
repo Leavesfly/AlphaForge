@@ -4,8 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.leavesfly.alphaforge.application.agent.tools.ToolException;
 import io.leavesfly.alphaforge.config.EnvVarProvider;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -33,6 +36,8 @@ import java.util.concurrent.TimeUnit;
  *   <li>首次使用须对 skill 仓库预热 {@code uv sync}，否则首跑会同步安装依赖远超超时预算。</li>
  * </ul>
  */
+@Component
+@Conditional(SkillBridgeEnabledCondition.class)
 public class SkillCliBridge {
 
     private static final Logger log = LoggerFactory.getLogger(SkillCliBridge.class);
@@ -60,6 +65,12 @@ public class SkillCliBridge {
         this.scriptsDir = scriptsDir;
         this.uvBin = uvBin.isEmpty() ? "uv" : uvBin;
         this.timeoutSeconds = Math.max(10, timeoutSeconds);
+    }
+
+    /** 装配完成后声明桥接已启用，替代原 SkillBridgeConfig @Bean 方法中的启用日志。 */
+    @PostConstruct
+    void logActivation() {
+        log.info("alpha-forge-skill CLI 桥接已启用: {}", scriptsDir);
     }
 
     /** skill 仓库是否已配置且 scripts/ 目录存在 */

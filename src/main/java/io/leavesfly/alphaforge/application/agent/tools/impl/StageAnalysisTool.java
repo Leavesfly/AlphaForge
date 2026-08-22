@@ -1,8 +1,11 @@
 package io.leavesfly.alphaforge.application.agent.tools.impl;
 
+import io.leavesfly.alphaforge.application.agent.skills.SkillBridgeEnabledCondition;
 import io.leavesfly.alphaforge.application.agent.skills.SkillCliBridge;
 import io.leavesfly.alphaforge.application.agent.skills.SkillResult;
 import io.leavesfly.alphaforge.application.agent.tools.Tool;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,6 +19,8 @@ import java.util.Map;
  * <p>箱体（平台）识别 + 位置分位 + 均线结构 → 筑底/突破/推进/派发/破位/下降七态，
  * 补齐 AlphaForge 原生缺失的阶段语义（box_oscillation 仅为形态策略）。</p>
  */
+@Component
+@Conditional(SkillBridgeEnabledCondition.class)
 public class StageAnalysisTool implements Tool {
 
     private final SkillCliBridge bridge;
